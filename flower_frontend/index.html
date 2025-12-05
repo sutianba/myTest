@@ -247,39 +247,31 @@
         
         <div class="main-content">
             <div class="upload-section">
-                <div class="drop-zone" id="dropZone">
-                    <i>📁</i>
-                    <p>拖拽图片到此处或点击选择文件</p>
-                </div>
-                <input type="file" id="fileInput" accept="image/*">
-                <button class="upload-btn" id="uploadBtn">选择花卉图片</button>
+            <div class="drop-zone" id="dropZone">
+                <i>📁</i>
+                <p>拖拽图片到此处或点击选择文件（支持多选）</p>
             </div>
+            <input type="file" id="fileInput" accept="image/*" multiple>
+            <button class="upload-btn" id="uploadBtn">选择花卉图片</button>
+        </div>
 
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p>正在识别中，请稍候...</p>
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在识别中，请稍候...</p>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+            <h2 style="text-align: center; margin-bottom: 20px; color: #333;">识别结果</h2>
+            <div id="allResults"></div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <button class="upload-btn" id="uploadAnotherBtn">上传更多图片</button>
             </div>
-
-            <div class="results-section" id="resultsSection">
-                <h2 style="text-align: center; margin-bottom: 20px; color: #333;">识别结果</h2>
-                
-                <div class="image-container">
-                    <img id="previewImage" src="" alt="花卉预览">
-                </div>
-
-                <div class="detection-results">
-                    <h3 style="margin-bottom: 20px; color: #444;">检测到的花卉:</h3>
-                    <div id="resultsList"></div>
-                </div>
-
-                <div style="text-align: center; margin-top: 30px;">
-                    <button class="upload-btn" id="uploadAnotherBtn">上传另一张图片</button>
-                </div>
-            </div>
+        </div>
         </div>
 
         <div class="footer">
-            <p>© 2024 花卉识别AI系统 | 基于YOLOv5深度学习框架</p>
+            <p>© 植物花卉识别系统</p>
         </div>
     </div>
 
@@ -307,9 +299,9 @@
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.remove('dragover');
-            const files = e.dataTransfer.files;
+            const files = Array.from(e.dataTransfer.files);
             if (files.length > 0) {
-                handleFile(files[0]);
+                handleMultipleFiles(files);
             }
         });
 
@@ -324,16 +316,18 @@
 
         // 文件选择事件处理
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFile(e.target.files[0]);
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                handleMultipleFiles(files);
             }
         });
 
-        // 处理上传的文件
-        function handleFile(file) {
-            // 检查文件类型
-            if (!file.type.startsWith('image/')) {
-                alert('请上传图片文件！');
+        // 处理多个上传的文件
+        function handleMultipleFiles(files) {
+            // 过滤出图片文件
+            const imageFiles = files.filter(file => file.type.startsWith('image/'));
+            if (imageFiles.length === 0) {
+                alert('请选择图片文件！');
                 return;
             }
 
@@ -341,20 +335,51 @@
             loading.classList.add('active');
             resultsSection.classList.remove('active');
 
-            // 显示图片预览
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                previewImage.src = e.target.result;
+            // 处理所有图片
+            processAllImages(imageFiles);
+        }
+
+        // 处理所有图片
+        async function processAllImages(imageFiles) {
+            try {
+                const allResults = [];
                 
-                // 调用花卉识别API
-                callRecognitionAPI(e.target.result);
-            };
-            reader.readAsDataURL(file);
+                // 依次处理每个图片
+                for (const file of imageFiles) {
+                    const imageData = await readFileAsDataURL(file);
+                    const result = await callRecognitionAPI(imageData);
+                    allResults.push({
+                        file: file,
+                        imageData: imageData,
+                        detections: result.detections,
+                        date: result.date
+                    });
+                }
+                
+                // 显示所有结果
+                displayAllResults(allResults);
+            } catch (error) {
+                console.error('处理图片时发生错误:', error);
+                alert('处理图片时发生错误');
+            } finally {
+                // 隐藏加载状态
+                loading.classList.remove('active');
+            }
+        }
+
+        // 读取文件为DataURL
+        function readFileAsDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
         }
 
         // 调用花卉识别API
         function callRecognitionAPI(imageData) {
-            fetch('http://localhost:5000/api/detect', {
+            return fetch('http://localhost:5000/api/detect', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -365,49 +390,104 @@
             })
             .then(response => response.json())
             .then(data => {
-                // 隐藏加载状态
-                loading.classList.remove('active');
-                
                 if (data.success) {
-                    // 显示识别结果
-                    displayResults(data.results);
+                    // 从API响应中获取识别结果和日期信息
+                    return {
+                        detections: data.results.detections,
+                        date: data.results.date
+                    };
                 } else {
-                    alert('识别失败: ' + data.error);
+                    throw new Error('识别失败: ' + data.error);
                 }
             })
             .catch(error => {
-                loading.classList.remove('active');
                 console.error('API调用错误:', error);
-                alert('识别过程中发生错误，请检查服务器是否正常运行');
+                throw error;
             });
         }
 
-        // 显示识别结果
-        function displayResults(results) {
-            resultsList.innerHTML = '';
+        // 显示所有识别结果
+        function displayAllResults(allResults) {
+            const allResultsDiv = document.getElementById('allResults');
+            allResultsDiv.innerHTML = '';
 
-            results.forEach(result => {
-                const resultItem = document.createElement('div');
-                resultItem.className = 'result-item';
+            allResults.forEach((item, index) => {
+                // 创建单个图片结果容器
+                const resultContainer = document.createElement('div');
+                resultContainer.className = 'single-result';
+                resultContainer.style.marginBottom = '40px';
+                resultContainer.style.padding = '20px';
+                resultContainer.style.border = '1px solid #e0e0e0';
+                resultContainer.style.borderRadius = '15px';
+                resultContainer.style.backgroundColor = '#fafafa';
 
-                // 根据置信度设置不同的颜色
-                let confidenceClass = 'high';
-                if (result.confidence < 0.7) confidenceClass = 'low';
-                else if (result.confidence < 0.85) confidenceClass = 'medium';
+                // 添加图片预览
+                const imagePreview = document.createElement('img');
+                imagePreview.src = item.imageData;
+                imagePreview.style.maxWidth = '100%';
+                imagePreview.style.maxHeight = '400px';
+                imagePreview.style.borderRadius = '10px';
+                imagePreview.style.marginBottom = '20px';
+                imagePreview.style.display = 'block';
+                imagePreview.style.marginLeft = 'auto';
+                imagePreview.style.marginRight = 'auto';
 
-                resultItem.innerHTML = `
-                    <div class="flower-name">${result.name}</div>
-                    <div class="confidence ${confidenceClass}">${(result.confidence * 100).toFixed(1)}%</div>
-                `;
+                // 添加图片日期信息
+                const dateDiv = document.createElement('div');
+                dateDiv.style.textAlign = 'center';
+                dateDiv.style.marginBottom = '20px';
+                dateDiv.style.fontSize = '1.1em';
+                dateDiv.style.color = '#666';
+                dateDiv.innerHTML = `<strong>拍摄日期：</strong>${item.date}`;
 
-                resultsList.appendChild(resultItem);
+                // 创建结果列表
+                const resultsList = document.createElement('div');
+                resultsList.style.marginTop = '20px';
+
+                if (item.detections && item.detections.length > 0) {
+                    item.detections.forEach(result => {
+                        const resultItem = document.createElement('div');
+                        resultItem.className = 'result-item';
+                        resultItem.style.marginBottom = '10px';
+
+                        // 根据置信度设置不同的颜色
+                        let confidenceClass = 'high';
+                        if (result.confidence < 0.7) confidenceClass = 'low';
+                        else if (result.confidence < 0.85) confidenceClass = 'medium';
+
+                        resultItem.innerHTML = `
+                            <div class="flower-name">${result.name}</div>
+                            <div class="confidence ${confidenceClass}">${(result.confidence * 100).toFixed(1)}%</div>
+                        `;
+
+                        resultsList.appendChild(resultItem);
+                    });
+                } else {
+                    resultsList.innerHTML = '<p style="text-align: center; color: #666;">未检测到花卉</p>';
+                }
+
+                // 添加标题
+                const title = document.createElement('h3');
+                title.textContent = `图片 ${index + 1}`;
+                title.style.color = '#444';
+                title.style.marginBottom = '15px';
+                title.style.textAlign = 'center';
+
+                // 组装结果容器
+                resultContainer.appendChild(title);
+                resultContainer.appendChild(imagePreview);
+                resultContainer.appendChild(dateDiv);
+                resultContainer.appendChild(resultsList);
+
+                // 添加到所有结果区域
+                allResultsDiv.appendChild(resultContainer);
             });
 
             // 显示结果区域
             resultsSection.classList.add('active');
         }
 
-        // 上传另一张图片
+        // 上传更多图片
         uploadAnotherBtn.addEventListener('click', () => {
             resultsSection.classList.remove('active');
             fileInput.value = '';
