@@ -61,7 +61,7 @@ pip install ultralytics
   <img width="100%" src="https://raw.githubusercontent.com/ultralytics/assets/refs/heads/main/yolo/performance-comparison.png" alt="Ultralytics YOLO 性能比较"></a>
 </div>
 
-## 📚 文档 
+## 📚 文档
 
 请参阅 [YOLOv5 文档](https://docs.ultralytics.com/yolov5/)，了解有关训练、测试和部署的完整文档。请参阅下方的快速入门示例。
 
