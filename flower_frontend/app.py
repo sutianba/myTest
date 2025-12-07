@@ -40,6 +40,11 @@ def index():
     """返回前端页面"""
     return send_from_directory(BASE_DIR, 'index.html')
 
+@app.route('/<path:filename>')
+def serve_file(filename):
+    """返回指定的文件"""
+    return send_from_directory(BASE_DIR, filename)
+
 @app.route('/api/detect', methods=['POST'])
 def detect_flower():
     """花卉识别API接口"""
@@ -71,7 +76,7 @@ def detect_flower():
 
     except Exception as e:
         print(f"识别过程中发生错误: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 def convert_to_decimal(coord, ref):
