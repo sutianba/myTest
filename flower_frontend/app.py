@@ -8,8 +8,6 @@ import io
 import random
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from flask import send_from_directory
-import os
 
 # 导入图片日期提取所需模块
 from PIL import Image
