@@ -198,6 +198,94 @@
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
         }
 
+        /* 图片查看器样式 */
+        .image-viewer {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .image-viewer.active {
+            display: flex;
+        }
+        
+        .viewer-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+        }
+        
+        .viewer-image {
+            max-width: 100%;
+            max-height: 80vh;
+            cursor: zoom-in;
+            transition: transform 0.2s;
+        }
+        
+        .viewer-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .viewer-btn {
+            background-color: rgba(255, 255, 255, 0.3);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        
+        .viewer-btn:hover {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .viewer-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+        
+        .nav-btn {
+            background-color: rgba(255, 255, 255, 0.3);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            font-size: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        
+        .nav-btn:hover {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+
         /* 空状态 */
         .empty-state {
             text-align: center;
@@ -255,10 +343,30 @@
                 <button class="back-btn" onclick="goBack()">返回识别页面</button>
             </div>
         </div>
+        
+        <!-- 图片查看器 -->
+        <div class="image-viewer" id="imageViewer">
+            <div class="viewer-content">
+                <div class="viewer-controls">
+                    <button class="viewer-btn" onclick="closeViewer()">×</button>
+                    <button class="viewer-btn" onclick="resetZoom()">⟲</button>
+                </div>
+                <div class="viewer-nav">
+                    <button class="nav-btn" onclick="prevImage()">‹</button>
+                    <button class="nav-btn" onclick="nextImage()">›</button>
+                </div>
+                <img class="viewer-image" id="viewerImage" src="" alt="查看图片">
+            </div>
+        </div>
 
     <script>
         // 获取从主页面传递的识别结果
         let allResults = [];
+        let currentImages = []; // 当前分类下的所有图片
+        let currentImageIndex = 0; // 当前查看的图片索引
+        let zoomLevel = 1; // 当前缩放级别
+        let isDragging = false; // 是否正在拖动
+        let startX, startY, translateX = 0, translateY = 0; // 拖动相关变量
         
         // 页面加载时获取数据
         window.addEventListener('DOMContentLoaded', () => {
@@ -392,6 +500,9 @@
                 }
             });
 
+            // 保存当前分类下的所有图片，用于查看器导航
+            currentImages = Object.values(tagGroups).flat();
+            
             // 显示分组结果
             displayClassificationResults(tagGroups, '花卉种类');
         }
@@ -408,6 +519,9 @@
                 showEmptyState();
                 return;
             }
+            
+            // 保存当前分类下的所有图片，用于查看器导航
+            currentImages = Object.values(groups).flat();
             
             // 创建并添加分类项
             Object.keys(groups).forEach(groupKey => {
@@ -446,6 +560,10 @@
             const img = document.createElement('img');
             img.src = result.thumbnailData;
             img.alt = '花卉图片';
+            // 添加点击事件，打开图片查看器
+            img.addEventListener('click', () => {
+                openViewer(result);
+            });
             imageCard.appendChild(img);
             
             // 创建图片信息
@@ -485,6 +603,171 @@
                 '</div>';
         }
 
+        // 打开图片查看器
+        function openViewer(result) {
+            const viewer = document.getElementById('imageViewer');
+            const viewerImage = document.getElementById('viewerImage');
+            
+            // 设置图片源
+            viewerImage.src = result.thumbnailData;
+            
+            // 重置缩放和位置
+            resetZoom();
+            
+            // 记录当前图片索引
+            currentImageIndex = currentImages.findIndex(item => item.file.name === result.file.name);
+            
+            // 显示查看器
+            viewer.classList.add('active');
+            
+            // 添加事件监听
+            viewerImage.addEventListener('wheel', handleWheel);
+            viewerImage.addEventListener('mousedown', handleMouseDown);
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+        
+        // 关闭图片查看器
+        function closeViewer() {
+            const viewer = document.getElementById('imageViewer');
+            const viewerImage = document.getElementById('viewerImage');
+            
+            // 隐藏查看器
+            viewer.classList.remove('active');
+            
+            // 移除事件监听
+            viewerImage.removeEventListener('wheel', handleWheel);
+            viewerImage.removeEventListener('mousedown', handleMouseDown);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        }
+        
+        // 页面加载完成后，添加点击背景关闭查看器的功能
+        document.addEventListener('DOMContentLoaded', () => {
+            const viewer = document.getElementById('imageViewer');
+            const viewerContent = viewer.querySelector('.viewer-content');
+            
+            // 点击查看器背景关闭查看器
+            viewer.addEventListener('click', (e) => {
+                if (e.target === viewer) {
+                    closeViewer();
+                }
+            });
+            
+            // 添加键盘事件支持
+            document.addEventListener('keydown', (e) => {
+                if (viewer.classList.contains('active')) {
+                    switch (e.key) {
+                        case 'Escape':
+                            closeViewer();
+                            break;
+                        case 'ArrowLeft':
+                            prevImage();
+                            break;
+                        case 'ArrowRight':
+                            nextImage();
+                            break;
+                        case 'r':
+                        case 'R':
+                            resetZoom();
+                            break;
+                    }
+                }
+            });
+        });
+        
+        // 重置缩放
+        function resetZoom() {
+            const viewerImage = document.getElementById('viewerImage');
+            zoomLevel = 1;
+            translateX = 0;
+            translateY = 0;
+            viewerImage.style.transform = 'scale(1) translate(0, 0)';
+            viewerImage.style.cursor = 'zoom-in';
+        }
+        
+        // 处理鼠标滚轮缩放
+        function handleWheel(e) {
+            e.preventDefault();
+            
+            const viewerImage = document.getElementById('viewerImage');
+            const rect = viewerImage.getBoundingClientRect();
+            const centerX = e.clientX - rect.left;
+            const centerY = e.clientY - rect.top;
+            
+            // 计算缩放比例
+            const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            const newZoomLevel = Math.max(0.5, Math.min(zoomLevel * scaleFactor, 5));
+            
+            // 计算缩放后的位置偏移
+            const scaleChange = newZoomLevel / zoomLevel;
+            translateX = centerX - (centerX - translateX) * scaleChange;
+            translateY = centerY - (centerY - translateY) * scaleChange;
+            
+            // 更新缩放级别和位置
+            zoomLevel = newZoomLevel;
+            viewerImage.style.transform = `scale(${zoomLevel}) translate(${translateX}px, ${translateY}px)`;
+            
+            // 更新鼠标样式
+            viewerImage.style.cursor = zoomLevel > 1 ? 'grab' : 'zoom-in';
+        }
+        
+        // 处理鼠标按下事件
+        function handleMouseDown(e) {
+            if (zoomLevel <= 1) return;
+            
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            const viewerImage = document.getElementById('viewerImage');
+            viewerImage.style.cursor = 'grabbing';
+        }
+        
+        // 处理鼠标移动事件
+        function handleMouseMove(e) {
+            if (!isDragging) return;
+            
+            const viewerImage = document.getElementById('viewerImage');
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            
+            // 更新位置
+            translateX += deltaX;
+            translateY += deltaY;
+            
+            // 应用变换
+            viewerImage.style.transform = `scale(${zoomLevel}) translate(${translateX}px, ${translateY}px)`;
+            
+            // 更新起始位置
+            startX = e.clientX;
+            startY = e.clientY;
+        }
+        
+        // 处理鼠标释放事件
+        function handleMouseUp() {
+            isDragging = false;
+            
+            const viewerImage = document.getElementById('viewerImage');
+            viewerImage.style.cursor = zoomLevel > 1 ? 'grab' : 'zoom-in';
+        }
+        
+        // 查看上一张图片
+        function prevImage() {
+            if (currentImages.length === 0) return;
+            
+            currentImageIndex = (currentImageIndex - 1 + currentImages.length) % currentImages.length;
+            openViewer(currentImages[currentImageIndex]);
+        }
+        
+        // 查看下一张图片
+        function nextImage() {
+            if (currentImages.length === 0) return;
+            
+            currentImageIndex = (currentImageIndex + 1) % currentImages.length;
+            openViewer(currentImages[currentImageIndex]);
+        }
+        
         // 返回主页面
         function goBack() {
             window.location.href = 'index.html';
