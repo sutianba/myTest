@@ -11,3 +11,5 @@ requests>=2.32.2
 scipy>=1.4.1
 tqdm>=4.66.3
 ultralytics>=8.2.64
+exifread>=3.0.0
+geopy>=2.4.0

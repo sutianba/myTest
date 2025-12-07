@@ -352,7 +352,7 @@
                         file: file,
                         imageData: imageData,
                         detections: result.detections,
-                        date: result.date
+                        exif_info: result.exif_info
                     });
                 }
                 
@@ -391,10 +391,10 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // 从API响应中获取识别结果和日期信息
+                    // 从API响应中获取识别结果和EXIF信息
                     return {
                         detections: data.results.detections,
-                        date: data.results.date
+                        exif_info: data.results.exif_info
                     };
                 } else {
                     throw new Error('识别失败: ' + data.error);
@@ -432,13 +432,103 @@
                 imagePreview.style.marginLeft = 'auto';
                 imagePreview.style.marginRight = 'auto';
 
-                // 添加图片日期信息
-                const dateDiv = document.createElement('div');
-                dateDiv.style.textAlign = 'center';
-                dateDiv.style.marginBottom = '20px';
-                dateDiv.style.fontSize = '1.1em';
-                dateDiv.style.color = '#666';
-                dateDiv.innerHTML = `<strong>拍摄日期：</strong>${item.date}`;
+                // 添加图片EXIF信息展示区域
+                const exifDiv = document.createElement('div');
+                exifDiv.style.backgroundColor = '#ffffff';
+                exifDiv.style.borderRadius = '10px';
+                exifDiv.style.padding = '20px';
+                exifDiv.style.marginBottom = '20px';
+                exifDiv.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
+                
+                // 添加EXIF信息标题
+                const exifTitle = document.createElement('h3');
+                exifTitle.textContent = '图片信息';
+                exifTitle.style.marginTop = '0';
+                exifTitle.style.marginBottom = '15px';
+                exifTitle.style.color = '#333';
+                exifTitle.style.fontSize = '1.2em';
+                exifDiv.appendChild(exifTitle);
+                
+                // 创建信息表格
+                const infoTable = document.createElement('table');
+                infoTable.style.width = '100%';
+                infoTable.style.borderCollapse = 'collapse';
+                
+                // 添加拍摄时间信息
+                const dateRow = document.createElement('tr');
+                const dateLabel = document.createElement('td');
+                dateLabel.textContent = '拍摄时间：';
+                dateLabel.style.padding = '8px 12px';
+                dateLabel.style.fontWeight = 'bold';
+                dateLabel.style.color = '#555';
+                const dateValue = document.createElement('td');
+                dateValue.textContent = item.exif_info.date_time;
+                dateValue.style.padding = '8px 12px';
+                dateValue.style.color = '#666';
+                dateRow.appendChild(dateLabel);
+                dateRow.appendChild(dateValue);
+                infoTable.appendChild(dateRow);
+                
+                // 添加相机信息
+                const cameraRow = document.createElement('tr');
+                cameraRow.style.backgroundColor = '#f8f9fa';
+                const cameraLabel = document.createElement('td');
+                cameraLabel.textContent = '相机型号：';
+                cameraLabel.style.padding = '8px 12px';
+                cameraLabel.style.fontWeight = 'bold';
+                cameraLabel.style.color = '#555';
+                const cameraValue = document.createElement('td');
+                cameraValue.textContent = `${item.exif_info.camera_info.make} ${item.exif_info.camera_info.model}`;
+                cameraValue.style.padding = '8px 12px';
+                cameraValue.style.color = '#666';
+                cameraRow.appendChild(cameraLabel);
+                cameraRow.appendChild(cameraValue);
+                infoTable.appendChild(cameraRow);
+                
+                // 添加图片尺寸信息
+                const sizeRow = document.createElement('tr');
+                const sizeLabel = document.createElement('td');
+                sizeLabel.textContent = '图片尺寸：';
+                sizeLabel.style.padding = '8px 12px';
+                sizeLabel.style.fontWeight = 'bold';
+                sizeLabel.style.color = '#555';
+                const sizeValue = document.createElement('td');
+                sizeValue.textContent = `${item.exif_info.image_details.width} × ${item.exif_info.image_details.height}`;
+                sizeValue.style.padding = '8px 12px';
+                sizeValue.style.color = '#666';
+                sizeRow.appendChild(sizeLabel);
+                sizeRow.appendChild(sizeValue);
+                infoTable.appendChild(sizeRow);
+                
+                // 添加GPS位置信息
+                const locationRow = document.createElement('tr');
+                locationRow.style.backgroundColor = '#f8f9fa';
+                const locationLabel = document.createElement('td');
+                locationLabel.textContent = '拍摄位置：';
+                locationLabel.style.padding = '8px 12px';
+                locationLabel.style.fontWeight = 'bold';
+                locationLabel.style.color = '#555';
+                const locationValue = document.createElement('td');
+                
+                if (item.exif_info.location.has_location) {
+                    locationValue.innerHTML = `
+                        <div>地址：${item.exif_info.location.formatted_address}</div>
+                        <div style="margin-top: 5px; font-size: 0.9em; color: #888;">
+                            经纬度：${item.exif_info.location.latitude.toFixed(6)}, ${item.exif_info.location.longitude.toFixed(6)}
+                        </div>
+                    `;
+                } else {
+                    locationValue.textContent = item.exif_info.location.formatted_address;
+                }
+                
+                locationValue.style.padding = '8px 12px';
+                locationValue.style.color = '#666';
+                locationRow.appendChild(locationLabel);
+                locationRow.appendChild(locationValue);
+                infoTable.appendChild(locationRow);
+                
+                // 将表格添加到EXIF信息区域
+                exifDiv.appendChild(infoTable);
 
                 // 创建结果列表
                 const resultsList = document.createElement('div');
@@ -476,7 +566,7 @@
                 // 组装结果容器
                 resultContainer.appendChild(title);
                 resultContainer.appendChild(imagePreview);
-                resultContainer.appendChild(dateDiv);
+                resultContainer.appendChild(exifDiv);
                 resultContainer.appendChild(resultsList);
 
                 // 添加到所有结果区域

@@ -9,9 +9,13 @@ import random
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
-# 导入图片日期提取所需模块
+# 导入图片EXIF信息提取所需模块
 from PIL import Image
 from PIL.ExifTags import TAGS
+import exifread
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+import time
 
 app = Flask(__name__)
 CORS(app)  # 启用CORS以允许前端访问
@@ -71,6 +75,100 @@ def detect_flower():
         return jsonify({'error': str(e)}), 500
 
 
+def convert_to_decimal(coord, ref):
+    """将EXIF格式的经纬度转换为十进制格式"""
+    # coord通常是一个包含三个元素的列表：度、分、秒
+    d, m, s = 0, 0, 0
+    
+    # 处理exifread返回的格式
+    if hasattr(coord, 'values'):
+        coord_values = coord.values
+    else:
+        coord_values = coord
+    
+    if len(coord_values) >= 3:
+        # 处理度
+        if hasattr(coord_values[0], 'num') and hasattr(coord_values[0], 'den'):
+            d = coord_values[0].num / coord_values[0].den
+        else:
+            d = float(coord_values[0])
+        
+        # 处理分
+        if hasattr(coord_values[1], 'num') and hasattr(coord_values[1], 'den'):
+            m = coord_values[1].num / coord_values[1].den
+        else:
+            m = float(coord_values[1])
+        
+        # 处理秒
+        if hasattr(coord_values[2], 'num') and hasattr(coord_values[2], 'den'):
+            s = coord_values[2].num / coord_values[2].den
+        else:
+            s = float(coord_values[2])
+    
+    # 计算十进制坐标
+    decimal = d + (m / 60.0) + (s / 3600.0)
+    
+    # 根据参考方向调整符号
+    if ref in ['S', 'W']:
+        decimal = -decimal
+    
+    return decimal
+
+
+def get_address_from_coordinates(lat, lon, max_retries=3):
+    """
+    通过经纬度获取地址信息
+    使用geopy和Nominatim服务进行逆地理编码
+    """
+    geolocator = Nominatim(user_agent="flower_recognition_app", timeout=10)
+    
+    # 重试机制
+    for attempt in range(max_retries):
+        try:
+            location = geolocator.reverse((lat, lon), language='zh-CN')
+            if location:
+                return location.raw.get('address', {})
+            return None
+        except GeocoderTimedOut:
+            print(f"地理编码请求超时，第 {attempt + 1} 次尝试...")
+            time.sleep(1)
+        except GeocoderServiceError as e:
+            print(f"地理编码服务错误: {e}，第 {attempt + 1} 次尝试...")
+            time.sleep(1)
+        except Exception as e:
+            print(f"获取地址信息时出错: {e}")
+            break
+    
+    print("多次尝试后仍无法获取地址信息")
+    return None
+
+
+def format_address(address):
+    """格式化地址信息，提取关键部分"""
+    if not address:
+        return "地址信息不可用"
+    
+    # 尝试提取关键地址组件
+    country = address.get('country', '未知国家')
+    province = address.get('state', '') or address.get('province', '') or '未知省份'
+    city = address.get('city', '') or address.get('district', '') or '未知城市'
+    town = address.get('town', '') or address.get('county', '') or ''
+    street = address.get('road', '') or address.get('street', '') or ''
+    number = address.get('house_number', '')
+    
+    # 构建完整地址
+    address_parts = [country, province, city]
+    if town:
+        address_parts.append(town)
+    if street:
+        address_parts.append(street)
+        if number:
+            address_parts.append(number)
+    
+    # 移除空字符串并连接
+    return '，'.join(filter(None, address_parts))
+
+
 def process_single_image(image_data):
     """处理单个图片的识别"""
     # 移除base64头部
@@ -83,30 +181,88 @@ def process_single_image(image_data):
     # 调整图片大小以提高处理速度
     image = image.resize((640, 640))
     
-    # 提取图片日期信息
-    image_date = "未知"
+    # 提取图片EXIF信息
+    image_info = {
+        'date_time': "未知",
+        'location': {
+            'has_location': False,
+            'latitude': None,
+            'longitude': None,
+            'formatted_address': "无GPS信息",
+            'raw_gps': None
+        },
+        'camera_info': {
+            'make': "未知",
+            'model': "未知"
+        },
+        'image_details': {
+            'width': image.width,
+            'height': image.height
+        }
+    }
+    
     try:
         # 创建临时文件保存图片
         temp_file_path = "temp_image.jpg"
         with open(temp_file_path, "wb") as temp_file:
             temp_file.write(image_bytes)
         
-        # 使用Pillow提取EXIF信息
-        with Image.open(temp_file_path) as img:
-            exif_data = img._getexif()
-            if exif_data:
-                # 获取所有EXIF标签
-                for tag, value in exif_data.items():
-                    tag_name = TAGS.get(tag, tag)
-                    if tag_name == 'DateTimeOriginal' or tag_name == 'DateTime':
-                        image_date = str(value)
-                        break
+        # 使用exifread提取EXIF信息
+        with open(temp_file_path, 'rb') as f:
+            exif_tags = exifread.process_file(f)
+            
+            # 获取拍摄时间
+            if 'Image DateTime' in exif_tags:
+                image_info['date_time'] = str(exif_tags['Image DateTime'])
+            elif 'EXIF DateTimeOriginal' in exif_tags:
+                image_info['date_time'] = str(exif_tags['EXIF DateTimeOriginal'])
+            elif 'EXIF DateTimeDigitized' in exif_tags:
+                image_info['date_time'] = str(exif_tags['EXIF DateTimeDigitized'])
+        
+        # 获取相机信息
+        if 'Image Make' in exif_tags:
+            image_info['camera_info']['make'] = str(exif_tags['Image Make'])
+        if 'Image Model' in exif_tags:
+            image_info['camera_info']['model'] = str(exif_tags['Image Model'])
+        
+        # 获取GPS位置信息
+        if all(key in exif_tags for key in ['GPS GPSLongitudeRef', 'GPS GPSLongitude', 
+                                           'GPS GPSLatitudeRef', 'GPS GPSLatitude']):
+            try:
+                # 获取原始的经纬度信息
+                lon_ref = exif_tags['GPS GPSLongitudeRef'].printable
+                lon = exif_tags['GPS GPSLongitude']
+                lat_ref = exif_tags['GPS GPSLatitudeRef'].printable
+                lat = exif_tags['GPS GPSLatitude']
+                
+                # 转换为十进制格式
+                dec_lat = convert_to_decimal(lat, lat_ref)
+                dec_lon = convert_to_decimal(lon, lon_ref)
+                
+                # 获取地址信息
+                address = get_address_from_coordinates(dec_lat, dec_lon)
+                formatted_address = format_address(address)
+                
+                # 更新位置信息
+                image_info['location'] = {
+                    'has_location': True,
+                    'latitude': dec_lat,
+                    'longitude': dec_lon,
+                    'formatted_address': formatted_address,
+                    'raw_gps': {
+                        'lat_ref': lat_ref,
+                        'lat': str(lat),
+                        'lon_ref': lon_ref,
+                        'lon': str(lon)
+                    }
+                }
+            except Exception as e:
+                print(f"处理GPS信息时出错: {e}")
         
         # 删除临时文件
         os.remove(temp_file_path)
     except Exception as e:
-        print(f"提取图片日期失败: {e}")
-        image_date = "未知"
+        print(f"提取图片EXIF信息失败: {e}")
 
     # 使用YOLOv5模型进行花卉识别
     model_results = flower_model(image)
@@ -140,10 +296,10 @@ def process_single_image(image_data):
         # 如果没有识别到任何结果，返回空列表
         detection_results = []
     
-    # 返回包含识别结果和日期信息的响应
+    # 返回包含识别结果和EXIF信息的响应
     return {
         'detections': detection_results,
-        'date': image_date
+        'exif_info': image_info
     }
 
 if __name__ == '__main__':
