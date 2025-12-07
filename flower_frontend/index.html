@@ -184,22 +184,47 @@
 
         .loading {
             display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             text-align: center;
             margin: 30px 0;
         }
 
         .loading.active {
-            display: block;
+            display: flex;
         }
 
         .spinner {
+            width: 50px;
+            height: 50px;
             border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 40px;
-            height: 40px;
             border-radius: 50%;
             border-left-color: #4a90e2;
             animation: spin 1s linear infinite;
             margin: 0 auto 15px;
+        }
+
+        .progress-container {
+            width: 80%;
+            max-width: 500px;
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 8px;
+            background: linear-gradient(90deg, #4a90e2 0%, #357abd 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            margin-bottom: 8px;
+        }
+
+        .progress-text {
+            font-size: 0.9em;
+            color: #666;
+            margin: 0;
+            text-align: center;
         }
 
         @keyframes spin {
@@ -258,6 +283,10 @@
         <div class="loading" id="loading">
             <div class="spinner"></div>
             <p>正在识别中，请稍候...</p>
+            <div class="progress-container">
+                <div class="progress-bar" id="progressBar"></div>
+                <p class="progress-text" id="progressText">0% (0/0)</p>
+            </div>
         </div>
 
         <div class="results-section" id="resultsSection">
@@ -276,141 +305,210 @@
     </div>
 
     <script>
-        // 获取DOM元素
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const loading = document.getElementById('loading');
-        const resultsSection = document.getElementById('resultsSection');
-        const previewImage = document.getElementById('previewImage');
-        const resultsList = document.getElementById('resultsList');
-        const uploadAnotherBtn = document.getElementById('uploadAnotherBtn');
+        // ==========================================
+        // DOM元素获取 - 初始化阶段
+        // ==========================================
+        const dropZone = document.getElementById('dropZone');          // 拖拽上传区域
+        const fileInput = document.getElementById('fileInput');          // 文件输入框
+        const uploadBtn = document.getElementById('uploadBtn');          // 上传按钮
+        const loading = document.getElementById('loading');              // 加载状态容器
+        const resultsSection = document.getElementById('resultsSection'); // 结果展示区域
+        const previewImage = document.getElementById('previewImage');    // 图片预览
+        const resultsList = document.getElementById('resultsList');      // 结果列表
+        const uploadAnotherBtn = document.getElementById('uploadAnotherBtn'); // 上传更多按钮
 
+        // ==========================================
         // 拖拽事件处理
+        // ==========================================
+        // 拖拽悬停事件 - 添加视觉反馈
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropZone.classList.add('dragover');
         });
 
+        // 拖拽离开事件 - 移除视觉反馈
         dropZone.addEventListener('dragleave', () => {
             dropZone.classList.remove('dragover');
         });
 
+        // 拖拽释放事件 - 处理上传的文件
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.remove('dragover');
-            const files = Array.from(e.dataTransfer.files);
+            const files = Array.from(e.dataTransfer.files); // 将FileList转换为数组
             if (files.length > 0) {
                 handleMultipleFiles(files);
             }
         });
 
-        // 点击上传区域触发文件选择
+        // ==========================================
+        // 点击事件处理
+        // ==========================================
+        // 点击上传区域 - 触发文件选择对话框
         dropZone.addEventListener('click', () => {
             fileInput.click();
         });
 
+        // 点击上传按钮 - 触发文件选择对话框
         uploadBtn.addEventListener('click', () => {
             fileInput.click();
         });
 
-        // 文件选择事件处理
+        // 文件选择完成事件 - 处理选择的文件
         fileInput.addEventListener('change', (e) => {
-            const files = Array.from(e.target.files);
+            const files = Array.from(e.target.files); // 将FileList转换为数组
             if (files.length > 0) {
                 handleMultipleFiles(files);
             }
         });
 
-        // 处理多个上传的文件
+        // ==========================================
+        // 文件上传处理函数
+        // ==========================================
+        /**
+         * 处理多个上传的文件
+         * @param {File[]} files - 上传的文件数组
+         */
         function handleMultipleFiles(files) {
-            // 过滤出图片文件
+            // 过滤出图片文件 (MIME类型以image/开头)
             const imageFiles = files.filter(file => file.type.startsWith('image/'));
+            
+            // 验证是否有图片文件
             if (imageFiles.length === 0) {
                 alert('请选择图片文件！');
                 return;
             }
 
-            // 显示加载状态
+            // 更新UI状态 - 显示加载动画和进度条
             loading.classList.add('active');
             resultsSection.classList.remove('active');
 
-            // 处理所有图片
+            // 开始处理所有图片
             processAllImages(imageFiles);
         }
 
-        // 处理所有图片
+        // ==========================================
+        // 图片处理主函数
+        // ==========================================
+        /**
+         * 处理所有图片 - 核心处理函数
+         * @param {File[]} imageFiles - 图片文件数组
+         */
         async function processAllImages(imageFiles) {
             try {
                 const allResults = [];
+                const totalFiles = imageFiles.length;
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
                 
-                // 依次处理每个图片
-                for (const file of imageFiles) {
+                // 初始化进度条状态
+                progressBar.style.width = '0%';
+                progressText.textContent = `0% (0/${totalFiles})`;
+                
+                // 依次处理每个图片 (异步循环)
+                for (let i = 0; i < imageFiles.length; i++) {
+                    const file = imageFiles[i];
+                    
+                    // 1. 读取文件为DataURL格式
                     const imageData = await readFileAsDataURL(file);
+                    
+                    // 2. 调用花卉识别API
                     const result = await callRecognitionAPI(imageData);
+                    
+                    // 3. 保存结果到数组
                     allResults.push({
-                        file: file,
-                        imageData: imageData,
-                        detections: result.detections,
-                        exif_info: result.exif_info
+                        file: file,               // 原始文件对象
+                        imageData: imageData,     // DataURL格式的图片数据
+                        detections: result.detections, // 花卉识别结果
+                        exif_info: result.exif_info    // EXIF元信息
                     });
+                    
+                    // 4. 更新进度条
+                    const progress = ((i + 1) / totalFiles) * 100;
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `${Math.round(progress)}% (${i + 1}/${totalFiles})`;
                 }
                 
-                // 显示所有结果
+                // 所有图片处理完成后，显示结果
                 displayAllResults(allResults);
+                
             } catch (error) {
+                // 错误处理
                 console.error('处理图片时发生错误:', error);
                 alert('处理图片时发生错误');
             } finally {
-                // 隐藏加载状态
+                // 无论成功失败，都隐藏加载状态
                 loading.classList.remove('active');
             }
         }
 
-        // 读取文件为DataURL
+        // ==========================================
+        // 文件读取工具函数
+        // ==========================================
+        /**
+         * 将文件读取为DataURL格式
+         * @param {File} file - 要读取的文件
+         * @returns {Promise<string>} DataURL格式的文件内容
+         */
         function readFileAsDataURL(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
+                reader.onload = (e) => resolve(e.target.result); // 读取成功回调
+                reader.onerror = reject; // 读取失败回调
+                reader.readAsDataURL(file); // 开始读取文件
             });
         }
 
-        // 调用花卉识别API
+        // ==========================================
+        // API调用函数
+        // ==========================================
+        /**
+         * 调用花卉识别API
+         * @param {string} imageData - DataURL格式的图片数据
+         * @returns {Promise<Object>} 识别结果和EXIF信息
+         */
         function callRecognitionAPI(imageData) {
             return fetch('http://localhost:5000/api/detect', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json' // 设置请求头
                 },
                 body: JSON.stringify({
-                    image: imageData
+                    image: imageData // 请求体 - 图片数据
                 })
             })
-            .then(response => response.json())
+            .then(response => response.json()) // 解析JSON响应
             .then(data => {
                 if (data.success) {
-                    // 从API响应中获取识别结果和EXIF信息
+                    // API调用成功 - 提取识别结果和EXIF信息
                     return {
-                        detections: data.results.detections,
-                        exif_info: data.results.exif_info
+                        detections: data.results.detections, // 花卉识别结果列表
+                        exif_info: data.results.exif_info    // EXIF元信息
                     };
                 } else {
+                    // API调用失败 - 抛出错误
                     throw new Error('识别失败: ' + data.error);
                 }
             })
             .catch(error => {
+                // 网络或其他错误处理
                 console.error('API调用错误:', error);
                 throw error;
             });
         }
 
-        // 显示所有识别结果
+        // ==========================================
+        // 结果显示函数
+        // ==========================================
+        /**
+         * 显示所有识别结果
+         * @param {Array} allResults - 所有图片的识别结果数组
+         */
         function displayAllResults(allResults) {
             const allResultsDiv = document.getElementById('allResults');
-            allResultsDiv.innerHTML = '';
+            allResultsDiv.innerHTML = ''; // 清空之前的结果
 
+            // 遍历每个识别结果
             allResults.forEach((item, index) => {
                 // 创建单个图片结果容器
                 const resultContainer = document.createElement('div');
