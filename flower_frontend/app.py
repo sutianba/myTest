@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-
+# 你可以在 http://127.0.0.1:5000 网站进行查看
 import os
 import sys
 import base64
 import io
-import random
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
