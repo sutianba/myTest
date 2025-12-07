@@ -1,497 +1,501 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>花卉识别AI系统</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-        body {
-            font-family: 'Microsoft YaHei', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+      body {
+        font-family: "Microsoft YaHei", Arial, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
 
-        .header {
-            background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
+      .header {
+        background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      .header p {
+        font-size: 1.1em;
+        opacity: 0.9;
+      }
+
+      .main-content {
+        padding: 30px;
+      }
+
+      .upload-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 40px;
+      }
+
+      .drop-zone {
+        width: 100%;
+        max-width: 600px;
+        height: 200px;
+        border: 3px dashed #4a90e2;
+        border-radius: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        background: #f8f9fa;
+      }
+
+      .drop-zone:hover {
+        border-color: #357abd;
+        background: #e9ecef;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      }
+
+      .drop-zone.dragover {
+        border-color: #2ecc71;
+        background: #d4edda;
+      }
+
+      .drop-zone i {
+        font-size: 4em;
+        color: #4a90e2;
+        margin-bottom: 15px;
+      }
+
+      .drop-zone p {
+        font-size: 1.1em;
+        color: #666;
+      }
+
+      #fileInput {
+        display: none;
+      }
+
+      .upload-btn {
+        background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        font-size: 1.1em;
+        border-radius: 25px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+      }
+
+      .upload-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(46, 204, 113, 0.4);
+      }
+
+      .results-section {
+        display: none;
+        margin-top: 40px;
+      }
+
+      .results-section.active {
+        display: block;
+      }
+
+      .image-container {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 30px;
+      }
+
+      #previewImage {
+        max-width: 100%;
+        max-height: 500px;
+        border-radius: 15px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      }
+
+      .detection-results {
+        background: #f8f9fa;
+        border-radius: 15px;
+        padding: 30px;
+        margin-top: 20px;
+      }
+
+      .result-item {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .flower-name {
+        font-size: 1.3em;
+        font-weight: bold;
+        color: #333;
+      }
+
+      .confidence {
+        background: #4a90e2;
+        color: white;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+      }
+
+      .confidence.high {
+        background: #2ecc71;
+      }
+
+      .confidence.medium {
+        background: #f39c12;
+      }
+
+      .confidence.low {
+        background: #e74c3c;
+      }
+
+      .loading {
+        display: none;
+        text-align: center;
+        margin: 30px 0;
+      }
+
+      .loading.active {
+        display: block;
+      }
+
+      .spinner {
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border-left-color: #4a90e2;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 15px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .footer {
+        background: #333;
+        color: white;
+        text-align: center;
+        padding: 20px;
+        margin-top: 40px;
+      }
+
+      .footer p {
+        opacity: 0.8;
+      }
+
+      @media (max-width: 768px) {
+        .main-content {
+          padding: 20px;
         }
 
         .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-
-        .main-content {
-            padding: 30px;
-        }
-
-        .upload-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-bottom: 40px;
+          font-size: 2em;
         }
 
         .drop-zone {
-            width: 100%;
-            max-width: 600px;
-            height: 200px;
-            border: 3px dashed #4a90e2;
-            border-radius: 15px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            background: #f8f9fa;
-        }
-
-        .drop-zone:hover {
-            border-color: #357abd;
-            background: #e9ecef;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-        }
-
-        .drop-zone.dragover {
-            border-color: #2ecc71;
-            background: #d4edda;
+          height: 150px;
         }
 
         .drop-zone i {
-            font-size: 4em;
-            color: #4a90e2;
-            margin-bottom: 15px;
+          font-size: 3em;
         }
-
-        .drop-zone p {
-            font-size: 1.1em;
-            color: #666;
-        }
-
-        #fileInput {
-            display: none;
-        }
-
-        .upload-btn {
-            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            font-size: 1.1em;
-            border-radius: 25px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
-        }
-
-        .upload-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(46, 204, 113, 0.4);
-        }
-
-        .results-section {
-            display: none;
-            margin-top: 40px;
-        }
-
-        .results-section.active {
-            display: block;
-        }
-
-        .image-container {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 30px;
-        }
-
-        #previewImage {
-            max-width: 100%;
-            max-height: 500px;
-            border-radius: 15px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-        }
-
-        .detection-results {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 30px;
-            margin-top: 20px;
-        }
-
-        .result-item {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .flower-name {
-            font-size: 1.3em;
-            font-weight: bold;
-            color: #333;
-        }
-
-        .confidence {
-            background: #4a90e2;
-            color: white;
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-weight: bold;
-        }
-
-        .confidence.high {
-            background: #2ecc71;
-        }
-
-        .confidence.medium {
-            background: #f39c12;
-        }
-
-        .confidence.low {
-            background: #e74c3c;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            margin: 30px 0;
-        }
-
-        .loading.active {
-            display: block;
-        }
-
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border-left-color: #4a90e2;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .footer {
-            background: #333;
-            color: white;
-            text-align: center;
-            padding: 20px;
-            margin-top: 40px;
-        }
-
-        .footer p {
-            opacity: 0.8;
-        }
-
-        @media (max-width: 768px) {
-            .main-content {
-                padding: 20px;
-            }
-
-            .header h1 {
-                font-size: 2em;
-            }
-
-            .drop-zone {
-                height: 150px;
-            }
-
-            .drop-zone i {
-                font-size: 3em;
-            }
-        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <div class="header">
-            <h1>🌸 花卉识别AI系统</h1>
-            <p>上传花卉图片，系统将自动识别花卉种类</p>
-        </div>
-        
-        <div class="main-content">
-            <div class="upload-section">
-            <div class="drop-zone" id="dropZone">
-                <i>📁</i>
-                <p>拖拽图片到此处或点击选择文件（支持多选）</p>
-            </div>
-            <input type="file" id="fileInput" accept="image/*" multiple>
-            <button class="upload-btn" id="uploadBtn">选择花卉图片</button>
+      <div class="header">
+        <h1>🌸 花卉识别AI系统</h1>
+        <p>上传花卉图片，系统将自动识别花卉种类</p>
+      </div>
+
+      <div class="main-content">
+        <div class="upload-section">
+          <div class="drop-zone" id="dropZone">
+            <i>📁</i>
+            <p>拖拽图片到此处或点击选择文件（支持多选）</p>
+          </div>
+          <input type="file" id="fileInput" accept="image/*" multiple />
+          <button class="upload-btn" id="uploadBtn">选择花卉图片</button>
         </div>
 
         <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>正在识别中，请稍候...</p>
+          <div class="spinner"></div>
+          <p>正在识别中，请稍候...</p>
         </div>
 
         <div class="results-section" id="resultsSection">
-            <h2 style="text-align: center; margin-bottom: 20px; color: #333;">识别结果</h2>
-            <div id="allResults"></div>
+          <h2 style="text-align: center; margin-bottom: 20px; color: #333">识别结果</h2>
+          <div id="allResults"></div>
 
-            <div style="text-align: center; margin-top: 30px;">
-                <button class="upload-btn" id="uploadAnotherBtn">上传更多图片</button>
-            </div>
+          <div style="text-align: center; margin-top: 30px">
+            <button class="upload-btn" id="uploadAnotherBtn">上传更多图片</button>
+          </div>
         </div>
-        </div>
+      </div>
 
-        <div class="footer">
-            <p>© 植物花卉识别系统</p>
-        </div>
+      <div class="footer">
+        <p>© 植物花卉识别系统</p>
+      </div>
     </div>
 
     <script>
-        // 获取DOM元素
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const loading = document.getElementById('loading');
-        const resultsSection = document.getElementById('resultsSection');
-        const previewImage = document.getElementById('previewImage');
-        const resultsList = document.getElementById('resultsList');
-        const uploadAnotherBtn = document.getElementById('uploadAnotherBtn');
+      // 获取DOM元素
+      const dropZone = document.getElementById("dropZone");
+      const fileInput = document.getElementById("fileInput");
+      const uploadBtn = document.getElementById("uploadBtn");
+      const loading = document.getElementById("loading");
+      const resultsSection = document.getElementById("resultsSection");
+      const previewImage = document.getElementById("previewImage");
+      const resultsList = document.getElementById("resultsList");
+      const uploadAnotherBtn = document.getElementById("uploadAnotherBtn");
 
-        // 拖拽事件处理
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
+      // 拖拽事件处理
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("dragover");
+      });
 
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('dragover');
-        });
+      dropZone.addEventListener("dragleave", () => {
+        dropZone.classList.remove("dragover");
+      });
 
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            const files = Array.from(e.dataTransfer.files);
-            if (files.length > 0) {
-                handleMultipleFiles(files);
-            }
-        });
-
-        // 点击上传区域触发文件选择
-        dropZone.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        uploadBtn.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        // 文件选择事件处理
-        fileInput.addEventListener('change', (e) => {
-            const files = Array.from(e.target.files);
-            if (files.length > 0) {
-                handleMultipleFiles(files);
-            }
-        });
-
-        // 处理多个上传的文件
-        function handleMultipleFiles(files) {
-            // 过滤出图片文件
-            const imageFiles = files.filter(file => file.type.startsWith('image/'));
-            if (imageFiles.length === 0) {
-                alert('请选择图片文件！');
-                return;
-            }
-
-            // 显示加载状态
-            loading.classList.add('active');
-            resultsSection.classList.remove('active');
-
-            // 处理所有图片
-            processAllImages(imageFiles);
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+          handleMultipleFiles(files);
         }
+      });
+
+      // 点击上传区域触发文件选择
+      dropZone.addEventListener("click", () => {
+        fileInput.click();
+      });
+
+      uploadBtn.addEventListener("click", () => {
+        fileInput.click();
+      });
+
+      // 文件选择事件处理
+      fileInput.addEventListener("change", (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length > 0) {
+          handleMultipleFiles(files);
+        }
+      });
+
+      // 处理多个上传的文件
+      function handleMultipleFiles(files) {
+        // 过滤出图片文件
+        const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+        if (imageFiles.length === 0) {
+          alert("请选择图片文件！");
+          return;
+        }
+
+        // 显示加载状态
+        loading.classList.add("active");
+        resultsSection.classList.remove("active");
 
         // 处理所有图片
-        async function processAllImages(imageFiles) {
-            try {
-                const allResults = [];
-                
-                // 依次处理每个图片
-                for (const file of imageFiles) {
-                    const imageData = await readFileAsDataURL(file);
-                    const result = await callRecognitionAPI(imageData);
-                    allResults.push({
-                        file: file,
-                        imageData: imageData,
-                        detections: result.detections,
-                        date: result.date
-                    });
-                }
-                
-                // 显示所有结果
-                displayAllResults(allResults);
-            } catch (error) {
-                console.error('处理图片时发生错误:', error);
-                alert('处理图片时发生错误');
-            } finally {
-                // 隐藏加载状态
-                loading.classList.remove('active');
+        processAllImages(imageFiles);
+      }
+
+      // 处理所有图片
+      async function processAllImages(imageFiles) {
+        try {
+          const allResults = [];
+
+          // 依次处理每个图片
+          for (const file of imageFiles) {
+            const imageData = await readFileAsDataURL(file);
+            const result = await callRecognitionAPI(imageData);
+            allResults.push({
+              file: file,
+              imageData: imageData,
+              detections: result.detections,
+              date: result.date,
+            });
+          }
+
+          // 显示所有结果
+          displayAllResults(allResults);
+        } catch (error) {
+          console.error("处理图片时发生错误:", error);
+          alert("处理图片时发生错误");
+        } finally {
+          // 隐藏加载状态
+          loading.classList.remove("active");
+        }
+      }
+
+      // 读取文件为DataURL
+      function readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // 调用花卉识别API
+      function callRecognitionAPI(imageData) {
+        return fetch("http://localhost:5000/api/detect", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            image: imageData,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              // 从API响应中获取识别结果和日期信息
+              return {
+                detections: data.results.detections,
+                date: data.results.date,
+              };
+            } else {
+              throw new Error("识别失败: " + data.error);
             }
-        }
+          })
+          .catch((error) => {
+            console.error("API调用错误:", error);
+            throw error;
+          });
+      }
 
-        // 读取文件为DataURL
-        function readFileAsDataURL(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        }
+      // 显示所有识别结果
+      function displayAllResults(allResults) {
+        const allResultsDiv = document.getElementById("allResults");
+        allResultsDiv.innerHTML = "";
 
-        // 调用花卉识别API
-        function callRecognitionAPI(imageData) {
-            return fetch('http://localhost:5000/api/detect', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    image: imageData
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // 从API响应中获取识别结果和日期信息
-                    return {
-                        detections: data.results.detections,
-                        date: data.results.date
-                    };
-                } else {
-                    throw new Error('识别失败: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('API调用错误:', error);
-                throw error;
-            });
-        }
+        allResults.forEach((item, index) => {
+          // 创建单个图片结果容器
+          const resultContainer = document.createElement("div");
+          resultContainer.className = "single-result";
+          resultContainer.style.marginBottom = "40px";
+          resultContainer.style.padding = "20px";
+          resultContainer.style.border = "1px solid #e0e0e0";
+          resultContainer.style.borderRadius = "15px";
+          resultContainer.style.backgroundColor = "#fafafa";
 
-        // 显示所有识别结果
-        function displayAllResults(allResults) {
-            const allResultsDiv = document.getElementById('allResults');
-            allResultsDiv.innerHTML = '';
+          // 添加图片预览
+          const imagePreview = document.createElement("img");
+          imagePreview.src = item.imageData;
+          imagePreview.style.maxWidth = "100%";
+          imagePreview.style.maxHeight = "400px";
+          imagePreview.style.borderRadius = "10px";
+          imagePreview.style.marginBottom = "20px";
+          imagePreview.style.display = "block";
+          imagePreview.style.marginLeft = "auto";
+          imagePreview.style.marginRight = "auto";
 
-            allResults.forEach((item, index) => {
-                // 创建单个图片结果容器
-                const resultContainer = document.createElement('div');
-                resultContainer.className = 'single-result';
-                resultContainer.style.marginBottom = '40px';
-                resultContainer.style.padding = '20px';
-                resultContainer.style.border = '1px solid #e0e0e0';
-                resultContainer.style.borderRadius = '15px';
-                resultContainer.style.backgroundColor = '#fafafa';
+          // 添加图片日期信息
+          const dateDiv = document.createElement("div");
+          dateDiv.style.textAlign = "center";
+          dateDiv.style.marginBottom = "20px";
+          dateDiv.style.fontSize = "1.1em";
+          dateDiv.style.color = "#666";
+          dateDiv.innerHTML = `<strong>拍摄日期：</strong>${item.date}`;
 
-                // 添加图片预览
-                const imagePreview = document.createElement('img');
-                imagePreview.src = item.imageData;
-                imagePreview.style.maxWidth = '100%';
-                imagePreview.style.maxHeight = '400px';
-                imagePreview.style.borderRadius = '10px';
-                imagePreview.style.marginBottom = '20px';
-                imagePreview.style.display = 'block';
-                imagePreview.style.marginLeft = 'auto';
-                imagePreview.style.marginRight = 'auto';
+          // 创建结果列表
+          const resultsList = document.createElement("div");
+          resultsList.style.marginTop = "20px";
 
-                // 添加图片日期信息
-                const dateDiv = document.createElement('div');
-                dateDiv.style.textAlign = 'center';
-                dateDiv.style.marginBottom = '20px';
-                dateDiv.style.fontSize = '1.1em';
-                dateDiv.style.color = '#666';
-                dateDiv.innerHTML = `<strong>拍摄日期：</strong>${item.date}`;
+          if (item.detections && item.detections.length > 0) {
+            item.detections.forEach((result) => {
+              const resultItem = document.createElement("div");
+              resultItem.className = "result-item";
+              resultItem.style.marginBottom = "10px";
 
-                // 创建结果列表
-                const resultsList = document.createElement('div');
-                resultsList.style.marginTop = '20px';
+              // 根据置信度设置不同的颜色
+              let confidenceClass = "high";
+              if (result.confidence < 0.7) confidenceClass = "low";
+              else if (result.confidence < 0.85) confidenceClass = "medium";
 
-                if (item.detections && item.detections.length > 0) {
-                    item.detections.forEach(result => {
-                        const resultItem = document.createElement('div');
-                        resultItem.className = 'result-item';
-                        resultItem.style.marginBottom = '10px';
-
-                        // 根据置信度设置不同的颜色
-                        let confidenceClass = 'high';
-                        if (result.confidence < 0.7) confidenceClass = 'low';
-                        else if (result.confidence < 0.85) confidenceClass = 'medium';
-
-                        resultItem.innerHTML = `
+              resultItem.innerHTML = `
                             <div class="flower-name">${result.name}</div>
                             <div class="confidence ${confidenceClass}">${(result.confidence * 100).toFixed(1)}%</div>
                         `;
 
-                        resultsList.appendChild(resultItem);
-                    });
-                } else {
-                    resultsList.innerHTML = '<p style="text-align: center; color: #666;">未检测到花卉</p>';
-                }
-
-                // 添加标题
-                const title = document.createElement('h3');
-                title.textContent = `图片 ${index + 1}`;
-                title.style.color = '#444';
-                title.style.marginBottom = '15px';
-                title.style.textAlign = 'center';
-
-                // 组装结果容器
-                resultContainer.appendChild(title);
-                resultContainer.appendChild(imagePreview);
-                resultContainer.appendChild(dateDiv);
-                resultContainer.appendChild(resultsList);
-
-                // 添加到所有结果区域
-                allResultsDiv.appendChild(resultContainer);
+              resultsList.appendChild(resultItem);
             });
+          } else {
+            resultsList.innerHTML = '<p style="text-align: center; color: #666;">未检测到花卉</p>';
+          }
 
-            // 显示结果区域
-            resultsSection.classList.add('active');
-        }
+          // 添加标题
+          const title = document.createElement("h3");
+          title.textContent = `图片 ${index + 1}`;
+          title.style.color = "#444";
+          title.style.marginBottom = "15px";
+          title.style.textAlign = "center";
 
-        // 上传更多图片
-        uploadAnotherBtn.addEventListener('click', () => {
-            resultsSection.classList.remove('active');
-            fileInput.value = '';
+          // 组装结果容器
+          resultContainer.appendChild(title);
+          resultContainer.appendChild(imagePreview);
+          resultContainer.appendChild(dateDiv);
+          resultContainer.appendChild(resultsList);
+
+          // 添加到所有结果区域
+          allResultsDiv.appendChild(resultContainer);
         });
+
+        // 显示结果区域
+        resultsSection.classList.add("active");
+      }
+
+      // 上传更多图片
+      uploadAnotherBtn.addEventListener("click", () => {
+        resultsSection.classList.remove("active");
+        fileInput.value = "";
+      });
     </script>
-</body>
+  </body>
 </html>
