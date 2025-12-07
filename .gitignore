@@ -6,13 +6,16 @@
 *.tif
 *.tiff
 *.heic
-*.JPG
 *.JPEG
 *.PNG
 *.BMP
 *.TIF
 *.TIFF
 *.HEIC
+
+# Allow .jpg images in Example_IMG folder
+!Example_IMG/**/*.jpg
+
 *.mp4
 *.mov
 *.MOV
