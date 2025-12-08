@@ -20,11 +20,23 @@
 ## 安装和运行
 
 ### 1. 安装后端依赖
+如果安装速度的太慢，可以使用pip的镜像进行下载。速度嗖嗖
+常见镜像网址
+```
+阿里云：https://mirrors.aliyun.com/pypi/simple/
+清华大学：https://pypi.tuna.tsinghua.edu.cn/simple/
+豆瓣：https://pypi.doubanio.com/simple/
+华中师大：https://pypi.hustunique.com/simple/
+```
 
 在项目根目录下运行：
 
 ```bash
 pip install -r requirements.txt
+```
+阿里云镜像版本
+```bash
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
 
 ### 2. 安装前端API依赖
@@ -33,6 +45,10 @@ pip install -r requirements.txt
 
 ```bash
 pip install -r requirements.txt
+```
+阿里云镜像版本
+```bash
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
 
 ### 3. 启动Flask服务器
