@@ -30,6 +30,7 @@
 ```
 
 在项目根目录下运行：
+根目录就是mytest目录
 
 ```bash
 pip install -r requirements.txt
@@ -42,13 +43,17 @@ pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ### 2. 安装前端API依赖
 
 在`flower_frontend`目录下运行：
-
+进入flower_frontend目录
+```
+cd ./flower_frontend
+```
+./ 表示当前目录下的flower_frontend目录
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-frontend.txt
 ```
 阿里云镜像版本
 ```bash
-pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+pip install -r requirements-frontend.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
 
 ### 3. 启动Flask服务器
@@ -84,10 +89,10 @@ http://localhost:5000
 
 ```
 flower_frontend/
-├── index.html          # 前端主页面
-├── app.py             # Flask后端API
-├── requirements.txt   # 后端依赖
-└── README.md          # 项目说明
+├── index.html                 # 前端主页面
+├── app.py                    # Flask后端API
+├── requirements-frontend.txt  # 前端应用依赖
+└── README.md                 # 项目说明
 ```
 
 ## 注意事项
