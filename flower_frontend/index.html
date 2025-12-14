@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>花卉识别AI系统</title>
+    <title>园艺相册自动分类工具</title>
     <style>
         * {
             margin: 0;
@@ -255,7 +255,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌸 花卉识别AI系统</h1>
+            <h1>🌸 园艺相册自动分类工具</h1>
             <p>上传花卉图片，系统将自动识别花卉种类</p>
         </div>
         
@@ -690,6 +690,11 @@
                 if (item.exif_info.location.has_location) {
                     locationValue.innerHTML = `
                         <div>地址：${item.exif_info.location.formatted_address}</div>
+                        <div style="margin-top: 5px;">
+                            省份：${item.exif_info.location.province}<br>
+                            城市：${item.exif_info.location.city}<br>
+                            区：${item.exif_info.location.district}
+                        </div>
                         <div style="margin-top: 5px; font-size: 0.9em; color: #888;">
                             经纬度：${item.exif_info.location.latitude.toFixed(6)}, ${item.exif_info.location.longitude.toFixed(6)}
                         </div>
