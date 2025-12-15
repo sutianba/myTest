@@ -9,9 +9,13 @@ def test_register():
     print("\n1. 测试正常注册新用户...")
     register_url = "http://127.0.0.1:5000/api/register"
     
+    # 使用随机用户名避免冲突
+    import uuid
+    random_username = "testuser_" + str(uuid.uuid4())[:8]
+    
     # 测试数据：新用户
     new_user = {
-        "username": "newtestuser",
+        "username": random_username,
         "password": "test1234"
     }
     

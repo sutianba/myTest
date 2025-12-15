@@ -5,12 +5,12 @@ import os
 import sys
 import base64
 import io
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for
 from flask_cors import CORS
 import hashlib
 import secrets
-import pymysql
-import pymysql.cursors
 
 # 导入图片EXIF信息提取所需模块
 from PIL import Image # 用于打开和处理图片
@@ -26,23 +26,69 @@ CORS(app)  # 启用CORS以允许前端访问
 # 设置密钥用于会话管理
 app.secret_key = secrets.token_hex(16)
 
+# 配置线程池用于异步处理
+thread_pool = ThreadPoolExecutor(max_workers=4)  # 根据系统CPU核心数调整
+
 # 定义静态文件目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 数据库连接配置
-DB_CONFIG = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '123456',  # MySQL密码，与init_db.py保持一致
-    'db': 'flower_recognition',
-    'charset': 'utf8mb4',
-    'cursorclass': pymysql.cursors.DictCursor
-}
+# 使用SQLite数据库
+import sqlite3
+
+# SQLite数据库路径
+DATABASE_PATH = os.path.join(BASE_DIR, 'flower_recognition.db')
+
+# 初始化SQLite数据库
+def init_sqlite_db():
+    try:
+        print("[调试] 开始执行init_sqlite_db函数")
+        print("正在尝试连接到SQLite数据库...")
+        
+        # 连接到SQLite数据库（如果不存在则创建）
+        connection = sqlite3.connect(DATABASE_PATH)
+        cursor = connection.cursor()
+        
+        print("成功连接到SQLite数据库")
+        
+        print("正在检查或创建users表...")
+        
+        # 创建users表
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username VARCHAR(50) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            role VARCHAR(20) DEFAULT 'user',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+        
+        connection.commit()
+        print("数据库表初始化成功")
+        connection.close()
+    except Exception as e:
+        print(f"数据库初始化失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("请检查SQLite数据库配置")
 
 # 获取数据库连接
 def get_db_connection():
-    connection = pymysql.connect(**DB_CONFIG)
-    return connection
+    try:
+        connection = sqlite3.connect(DATABASE_PATH)
+        # 设置返回结果为字典类型
+        connection.row_factory = sqlite3.Row
+        return connection
+    except Exception as e:
+        print(f"获取数据库连接失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+# 初始化数据库
+# 启用SQLite数据库初始化功能
+init_sqlite_db()
 
 # 加载YOLOv5模型
 import torch
@@ -57,10 +103,28 @@ except Exception as e:
     print(f"无法加载YOLOv5模型: {e}")
     raise RuntimeError("无法加载YOLOv5模型，请检查模型文件是否存在") from e
 
+# 路由保护装饰器
+def login_required(f):
+    """检查用户是否已登录的装饰器"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            # 用户未登录，重定向到登录页面
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/')
+@login_required
 def index():
     """返回前端页面"""
     return send_from_directory(BASE_DIR, 'index.html')
+
+@app.route('/login.html')
+def login_page():
+    """返回登录页面"""
+    return send_from_directory(BASE_DIR, 'login.html')
 
 @app.route('/<path:filename>')
 def serve_file(filename):
@@ -84,7 +148,7 @@ def login():
         cursor = connection.cursor()
         
         # 查询用户
-        query = "SELECT * FROM users WHERE username = %s AND password_hash = %s"
+        query = "SELECT * FROM users WHERE username = ? AND password_hash = ?"
         cursor.execute(query, (username, hashed_password))
         user = cursor.fetchone()
         
@@ -94,11 +158,14 @@ def login():
         if user:
             # 登录成功，设置会话
             session['username'] = username
-            return jsonify({'success': True, 'message': '登录成功'})
+            session['role'] = user['role']
+            return jsonify({'success': True, 'message': '登录成功', 'role': user['role']})
         else:
             return jsonify({'success': False, 'error': '用户名或密码错误'})
     except Exception as e:
-        print(f"登录过程中发生错误: {str(e)}")
+        print(f"登录过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': '登录失败，请稍后重试'})
 
 @app.route('/api/logout', methods=['POST'])
@@ -107,6 +174,7 @@ def logout():
     try:
         # 清除会话
         session.pop('username', None)
+        session.pop('role', None)
         return jsonify({'success': True, 'message': '登出成功'})
     except Exception as e:
         print(f"登出过程中发生错误: {str(e)}")
@@ -130,7 +198,7 @@ def register():
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        check_query = "SELECT * FROM users WHERE username = %s"
+        check_query = "SELECT * FROM users WHERE username = ?"
         cursor.execute(check_query, (username,))
         existing_user = cursor.fetchone()
         
@@ -142,9 +210,9 @@ def register():
         # 密码哈希处理
         hashed_password = hashlib.sha256(password.encode()).hexdigest()
         
-        # 插入新用户
-        insert_query = "INSERT INTO users (username, password_hash) VALUES (%s, %s)"
-        cursor.execute(insert_query, (username, hashed_password))
+        # 插入新用户，默认为user角色
+        insert_query = "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)"
+        cursor.execute(insert_query, (username, hashed_password, 'user'))
         connection.commit()
         
         cursor.close()
@@ -152,7 +220,9 @@ def register():
         
         return jsonify({'success': True, 'message': '注册成功，请登录'})
     except Exception as e:
-        print(f"注册过程中发生错误: {str(e)}")
+        print(f"注册过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': '注册失败，请稍后重试'})
 
 
@@ -160,7 +230,7 @@ def register():
 def check_login():
     """检查用户是否已登录"""
     if 'username' in session:
-        return jsonify({'success': True, 'username': session['username']})
+        return jsonify({'success': True, 'username': session['username'], 'role': session.get('role', 'user')})
     else:
         return jsonify({'success': False, 'error': '未登录'})
 
@@ -178,16 +248,32 @@ def detect_flower():
             results = process_single_image(image_data)
             return jsonify({'success': True, 'results': results})
         elif 'images' in data:
-            # 多图片请求
+            # 多图片请求 - 使用线程池异步处理
             images_data = data['images']
-            all_results = []
             
+            # 使用线程池并行处理多张图片
+            futures = []
             for i, image_data in enumerate(images_data):
-                results = process_single_image(image_data)
-                all_results.append({
-                    'image_index': i,
-                    'results': results
-                })
+                # 提交任务到线程池
+                future = thread_pool.submit(process_single_image, image_data)
+                futures.append((i, future))
+            
+            # 收集所有结果
+            all_results = []
+            for i, future in futures:
+                try:
+                    results = future.result()  # 获取任务结果
+                    all_results.append({
+                        'image_index': i,
+                        'results': results
+                    })
+                except Exception as e:
+                    print(f"处理第 {i} 张图片时出错: {e}")
+                    all_results.append({
+                        'image_index': i,
+                        'error': str(e),
+                        'results': None
+                    })
             
             return jsonify({'success': True, 'all_results': all_results})
         else:
@@ -366,33 +452,35 @@ def match_location_by_coordinates(lat, lon):
     }
 
 
-def get_address_from_coordinates(lat, lon, max_retries=2):
+def get_address_from_coordinates(lat, lon, max_retries=1):
     """
     通过经纬度获取地址信息
     优先使用geopy和Nominatim服务，失败时返回None
+    优化：减少超时时间和重试次数，提高响应速度
     """
     try:
-        geolocator = Nominatim(user_agent="flower_recognition_app", timeout=5)
+        # 暂时禁用Nominatim服务以提高速度
+        # geolocator = Nominatim(user_agent="flower_recognition_app", timeout=2)
+        # 
+        # # 重试机制
+        # for attempt in range(max_retries):
+        #     try:
+        #         location = geolocator.reverse((lat, lon), language='zh-CN')
+        #         if location:
+        #             return location.raw.get('address', {})
+        #     except GeocoderTimedOut:
+        #         print(f"地理编码请求超时，第 {attempt + 1} 次尝试...")
+        #     except GeocoderServiceError as e:
+        #         print(f"地理编码服务错误: {e}，第 {attempt + 1} 次尝试...")
+        #     except Exception as e:
+        #         print(f"获取地址信息时出错: {e}")
+        #         break
         
-        # 重试机制
-        for attempt in range(max_retries):
-            try:
-                location = geolocator.reverse((lat, lon), language='zh-CN')
-                if location:
-                    return location.raw.get('address', {})
-            except GeocoderTimedOut:
-                print(f"地理编码请求超时，第 {attempt + 1} 次尝试...")
-                time.sleep(0.5)
-            except GeocoderServiceError as e:
-                print(f"地理编码服务错误: {e}，第 {attempt + 1} 次尝试...")
-                time.sleep(0.5)
-            except Exception as e:
-                print(f"获取地址信息时出错: {e}")
-                break
+        # 直接返回None，使用本地经纬度匹配，避免网络请求延迟
+        return None
     except Exception as e:
         print(f"初始化地理编码器时出错: {e}")
     
-    print(f"多次尝试后仍无法通过Nominatim获取地址信息: {lat}, {lon}")
     # 如果无法获取地址信息，返回None，后续会使用本地经纬度匹配
     return None
 
@@ -451,9 +539,6 @@ def process_single_image(image_data):
 
     # 解码base64图片数据
     image_bytes = base64.b64decode(image_data)
-    image = Image.open(io.BytesIO(image_bytes))
-    # 调整图片大小以提高处理速度
-    image = image.resize((640, 640))
     
     # 提取图片EXIF信息
     image_info = {
@@ -473,28 +558,26 @@ def process_single_image(image_data):
             'model': "未知"
         },
         'image_details': {
-            'width': image.width,
-            'height': image.height
+            'width': 0,
+            'height': 0
         }
     }
     
+    # 先提取EXIF信息
     try:
-        # 创建临时文件保存图片
-        temp_file_path = "temp_image.jpg"
-        with open(temp_file_path, "wb") as temp_file:
-            temp_file.write(image_bytes)
+        # 直接从内存中读取EXIF信息
+        image_bytes_io = io.BytesIO(image_bytes)
         
         # 使用exifread提取EXIF信息
-        with open(temp_file_path, 'rb') as f:
-            exif_tags = exifread.process_file(f)
-            
-            # 获取拍摄时间
-            if 'Image DateTime' in exif_tags:
-                image_info['date_time'] = str(exif_tags['Image DateTime'])
-            elif 'EXIF DateTimeOriginal' in exif_tags:
-                image_info['date_time'] = str(exif_tags['EXIF DateTimeOriginal'])
-            elif 'EXIF DateTimeDigitized' in exif_tags:
-                image_info['date_time'] = str(exif_tags['EXIF DateTimeDigitized'])
+        exif_tags = exifread.process_file(image_bytes_io)
+        
+        # 获取拍摄时间
+        if 'Image DateTime' in exif_tags:
+            image_info['date_time'] = str(exif_tags['Image DateTime'])
+        elif 'EXIF DateTimeOriginal' in exif_tags:
+            image_info['date_time'] = str(exif_tags['EXIF DateTimeOriginal'])
+        elif 'EXIF DateTimeDigitized' in exif_tags:
+            image_info['date_time'] = str(exif_tags['EXIF DateTimeDigitized'])
         
         # 获取相机信息
         if 'Image Make' in exif_tags:
@@ -559,43 +642,37 @@ def process_single_image(image_data):
                 }
             except Exception as e:
                 print(f"处理GPS信息时出错: {e}")
-        
-        # 删除临时文件
-        os.remove(temp_file_path)
     except Exception as e:
         print(f"提取图片EXIF信息失败: {e}")
 
-    # 使用YOLOv5模型进行花卉识别
-    model_results = flower_model(image)
+    # 使用YOLOv5模型进行花卉识别 - 直接处理BytesIO对象，避免重复加载
+    image_io = io.BytesIO(image_bytes)
+    image_for_model = Image.open(image_io)
+    # 调整图片大小以提高处理速度
+    image_for_model = image_for_model.resize((640, 640))
+    # 更新图片尺寸信息
+    image_info['image_details']['width'] = image_for_model.width
+    image_info['image_details']['height'] = image_for_model.height
     
-    # 解析识别结果
-    results = []
-    for result in model_results.pandas().xyxy[0].to_dict(orient='records'):
-        results.append({
-            'name': result['name'],
-            'confidence': round(result['confidence'], 4),
+    # 使用YOLOv5模型进行花卉识别
+    model_results = flower_model(image_for_model)
+    
+    # 解析识别结果 - 直接获取最高置信度结果
+    detection_results = []
+    model_data = model_results.pandas().xyxy[0]
+    if not model_data.empty:
+        # 直接获取置信度最高的结果
+        best_result = model_data.loc[model_data['confidence'].idxmax()]
+        detection_results.append({
+            'name': best_result['name'],
+            'confidence': float(best_result['confidence']),
             'bbox': [
-                int(result['xmin']),
-                int(result['ymin']),
-                int(result['xmax']),
-                int(result['ymax'])
+                int(best_result['xmin']),
+                int(best_result['ymin']),
+                int(best_result['xmax']),
+                int(best_result['ymax'])
             ]
         })
-    
-    # 处理识别结果：只保留置信度最高的结果
-    detection_results = []
-    if results:
-        # 按置信度降序排序
-        results.sort(key=lambda x: x['confidence'], reverse=True)
-        # 只添加置信度最高的结果
-        detection_results.append({
-            'name': results[0]['name'],
-            'confidence': float(results[0]['confidence']),
-            'bbox': results[0]['bbox']
-        })
-    else:
-        # 如果没有识别到任何结果，返回空列表
-        detection_results = []
     
     # 返回包含识别结果和EXIF信息的响应
     return {
