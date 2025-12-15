@@ -5,8 +5,12 @@ import os
 import sys
 import base64
 import io
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for
 from flask_cors import CORS
+import hashlib
+import secrets
+import pymysql
+import pymysql.cursors
 
 # 导入图片EXIF信息提取所需模块
 from PIL import Image # 用于打开和处理图片
@@ -19,8 +23,26 @@ import time # 用于处理时间相关操作
 app = Flask(__name__)
 CORS(app)  # 启用CORS以允许前端访问
 
+# 设置密钥用于会话管理
+app.secret_key = secrets.token_hex(16)
+
 # 定义静态文件目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 数据库连接配置
+DB_CONFIG = {
+    'host': 'localhost',
+    'user': 'root',
+    'password': '123456',  # MySQL密码，与init_db.py保持一致
+    'db': 'flower_recognition',
+    'charset': 'utf8mb4',
+    'cursorclass': pymysql.cursors.DictCursor
+}
+
+# 获取数据库连接
+def get_db_connection():
+    connection = pymysql.connect(**DB_CONFIG)
+    return connection
 
 # 加载YOLOv5模型
 import torch
@@ -44,6 +66,103 @@ def index():
 def serve_file(filename):
     """返回指定的文件"""
     return send_from_directory(BASE_DIR, filename)
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    """用户登录API接口"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+
+        if not username or not password:
+            return jsonify({'success': False, 'error': '用户名和密码不能为空'})
+
+        # 验证用户
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 查询用户
+        query = "SELECT * FROM users WHERE username = %s AND password_hash = %s"
+        cursor.execute(query, (username, hashed_password))
+        user = cursor.fetchone()
+        
+        cursor.close()
+        connection.close()
+        
+        if user:
+            # 登录成功，设置会话
+            session['username'] = username
+            return jsonify({'success': True, 'message': '登录成功'})
+        else:
+            return jsonify({'success': False, 'error': '用户名或密码错误'})
+    except Exception as e:
+        print(f"登录过程中发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': '登录失败，请稍后重试'})
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    """用户登出API接口"""
+    try:
+        # 清除会话
+        session.pop('username', None)
+        return jsonify({'success': True, 'message': '登出成功'})
+    except Exception as e:
+        print(f"登出过程中发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': '登出失败，请稍后重试'})
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    """用户注册API接口"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+
+        if not username or not password:
+            return jsonify({'success': False, 'error': '用户名和密码不能为空'})
+        
+        if len(password) < 6:
+            return jsonify({'success': False, 'error': '密码长度不能少于6位'})
+
+        # 检查用户名是否已存在
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        check_query = "SELECT * FROM users WHERE username = %s"
+        cursor.execute(check_query, (username,))
+        existing_user = cursor.fetchone()
+        
+        if existing_user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户名已存在'})
+        
+        # 密码哈希处理
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        
+        # 插入新用户
+        insert_query = "INSERT INTO users (username, password_hash) VALUES (%s, %s)"
+        cursor.execute(insert_query, (username, hashed_password))
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'message': '注册成功，请登录'})
+    except Exception as e:
+        print(f"注册过程中发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': '注册失败，请稍后重试'})
+
+
+@app.route('/api/check_login')
+def check_login():
+    """检查用户是否已登录"""
+    if 'username' in session:
+        return jsonify({'success': True, 'username': session['username']})
+    else:
+        return jsonify({'success': False, 'error': '未登录'})
 
 @app.route('/api/detect', methods=['POST'])
 def detect_flower():
