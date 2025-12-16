@@ -54,6 +54,8 @@ export interface RecognitionHistory {
   recognizedAt: string;
   confidence: number;
   isFavorite: boolean;
+  date?: string;
+  location?: string;
 }
 
 // 收藏的植物接口
@@ -70,4 +72,6 @@ export interface RecognitionResult {
   similarPlants: Plant[];
   imageUrl: string;
   recognizedAt: string;
+  date?: string;
+  location?: string;
 }

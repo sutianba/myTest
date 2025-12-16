@@ -12,7 +12,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onImageUpload }) => {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [uploading, setUploading] = useState<boolean>(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -25,11 +26,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onImageUpload }) => {
       return;
     }
     
-    // 检查文件大小 (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('图片大小不能超过5MB');
-      return;
-    }
+    // 保存选中的文件
+    setSelectedFile(file);
     
     // 显示预览
     const reader = new FileReader();
@@ -45,36 +43,70 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onImageUpload }) => {
   };
   
   const handleUpload = async () => {
-    if (!selectedImage) {
+    if (!selectedImage || !selectedFile) {
       toast.warning('请先选择一张图片');
       return;
     }
     
-    setUploading(true);
+    setLoading(true);
     
-    // 模拟上传过程
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
       toast.success('图片上传成功，正在识别中...');
       
-      // 模拟识别延迟
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // 将图片转换为Base64格式发送给后端
+      const reader = new FileReader();
       
-      // 存储识别图片到localStorage以便在结果页面使用
-      localStorage.setItem('lastRecognitionImage', selectedImage);
+      reader.onload = async (event) => {
+        const base64Image = event.target?.result as string;
+        
+        try {
+          // 调用后端识别API
+          const response = await fetch('http://localhost:5000/api/detect', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ image: base64Image })
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            // 存储识别结果和图片到localStorage
+            localStorage.setItem('lastRecognitionImage', selectedImage);
+            localStorage.setItem('lastRecognitionResult', JSON.stringify(data.results));
+            
+            // 跳转到识别结果页面
+            navigate('/recognition-result');
+          } else {
+            toast.error(`识别失败: ${data.error || '未知错误'}`);
+          }
+        } catch (apiError) {
+          console.error('API调用失败:', apiError);
+          toast.error('识别服务不可用，请稍后重试');
+        } finally {
+          setLoading(false);
+        }
+      };
       
-      // 跳转到识别结果页面
-      navigate('/recognition-result');
+      reader.onerror = () => {
+        toast.error('图片处理失败，请重试');
+        setLoading(false);
+      };
+      
+      // 读取文件为Base64
+      reader.readAsDataURL(selectedFile);
       
     } catch (error) {
+      console.error('上传过程中发生错误:', error);
       toast.error('识别失败，请重试');
-    } finally {
-      setUploading(false);
+      setLoading(false);
     }
   };
   
   const handleRemoveImage = () => {
     setSelectedImage(null);
+    setSelectedFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -151,7 +183,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onImageUpload }) => {
             </h3>
             
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              支持 JPG、PNG、WEBP 格式，最大 5MB
+              支持 JPG、PNG、WEBP 格式
             </p>
             
             <button 

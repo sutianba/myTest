@@ -13,8 +13,9 @@ const RecognitionResult: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // 从localStorage获取识别的图片
+    // 从localStorage获取识别的图片和结果
     const imageUrl = localStorage.getItem('lastRecognitionImage');
+    const resultStr = localStorage.getItem('lastRecognitionResult');
     
     if (!imageUrl) {
       // 如果没有识别图片，重定向到上传页面
@@ -22,51 +23,101 @@ const RecognitionResult: React.FC = () => {
       return;
     }
     
-    // 模拟识别过程
+    // 模拟识别过程（实际是从localStorage读取结果）
     setIsLoading(true);
     
     // 模拟API调用延迟
     setTimeout(() => {
-      // 随机选择一个植物作为识别结果
-      const randomIndex = Math.floor(Math.random() * plants.length);
-      const recognizedPlant = plants[randomIndex];
+      let result: RecognitionResultType | null = null;
       
-      // 生成随机置信度
-      const confidence = Math.round((0.85 + Math.random() * 0.15) * 100) / 100;
+      if (resultStr) {
+        // 如果有真实的识别结果，使用它
+        const recognitionData = JSON.parse(resultStr);
+        
+        // 从detections中获取植物识别结果
+        const detection = recognitionData.detections && recognitionData.detections.length > 0 ? recognitionData.detections[0] : null;
+        
+        // 从exif_info中获取日期和位置信息
+        const exifInfo = recognitionData.exif_info || {};
+        const dateTime = exifInfo.date_time || "未知日期";
+        
+        // 格式化位置信息
+        let locationStr = "未知位置";
+        if (exifInfo.location && exifInfo.location.has_location) {
+          const loc = exifInfo.location;
+          locationStr = `${loc.province} ${loc.city} ${loc.district}`;
+        }
+        
+        // 构建植物对象
+        const plant: Plant = {
+          id: detection ? detection.name.toLowerCase().replace(/\s+/g, '-') : 'unknown',
+          name: detection ? detection.name : '未知植物',
+          category: 'flower',
+          scientificName: detection ? detection.name : 'Unknown',
+          description: '',
+          imageUrl: '',
+          characteristics: [],
+          habitat: '',
+          bloomingSeason: '',
+          uses: [],
+          funFacts: []
+        };
+        
+        result = {
+          plant,
+          confidence: detection ? detection.confidence : Math.round((0.85 + Math.random() * 0.15) * 100) / 100,
+          similarPlants: [], // 暂时不处理相似植物
+          imageUrl,
+          recognizedAt: new Date().toISOString(),
+          date: dateTime,
+          location: locationStr
+        };
+      } else {
+        // 如果没有真实结果，使用模拟数据作为备用
+        const randomIndex = Math.floor(Math.random() * plants.length);
+        const recognizedPlant = plants[randomIndex];
+        
+        // 生成随机置信度
+        const confidence = Math.round((0.85 + Math.random() * 0.15) * 100) / 100;
+        
+        // 生成相似植物列表（排除已识别的植物）
+        const similarPlants = plants
+          .filter(plant => plant.category === recognizedPlant.category && plant.id !== recognizedPlant.id)
+          .sort(() => 0.5 - Math.random())
+          .slice(0, 3);
+        
+        result = {
+          plant: recognizedPlant,
+          confidence,
+          similarPlants,
+          imageUrl,
+          recognizedAt: new Date().toISOString()
+        };
+      }
       
-      // 生成相似植物列表（排除已识别的植物）
-      const similarPlants = plants
-        .filter(plant => plant.category === recognizedPlant.category && plant.id !== recognizedPlant.id)
-        .sort(() => 0.5 - Math.random())
-        .slice(0, 3);
-      
-      const result: RecognitionResultType = {
-        plant: recognizedPlant,
-        confidence,
-        similarPlants,
-        imageUrl,
-        recognizedAt: new Date().toISOString()
-      };
-      
-      setRecognitionResult(result);
-      
-      // 保存到识别历史
-      const history = JSON.parse(localStorage.getItem('recognitionHistory') || '[]');
-      const historyItem = {
-        id: Date.now().toString(),
-        plantId: recognizedPlant.id,
-        plantName: recognizedPlant.name,
-        imageUrl,
-        recognizedAt: new Date().toISOString(),
-        confidence,
-        isFavorite: false
-      };
-      
-      history.unshift(historyItem); // 添加到历史记录开头
-      localStorage.setItem('recognitionHistory', JSON.stringify(history.slice(0, 50))); // 只保留最近50条记录
+      if (result) {
+        setRecognitionResult(result);
+        
+        // 保存到识别历史
+        const history = JSON.parse(localStorage.getItem('recognitionHistory') || '[]');
+        const historyItem = {
+          id: Date.now().toString(),
+          plantId: result.plant.id,
+          plantName: result.plant.name,
+          imageUrl,
+          recognizedAt: result.recognizedAt,
+          confidence: result.confidence,
+          isFavorite: false,
+          date: result.date,
+          location: result.location
+        };
+        
+        history.unshift(historyItem); // 添加到历史记录开头
+        localStorage.setItem('recognitionHistory', JSON.stringify(history.slice(0, 50))); // 只保留最近50条记录
+      }
       
       setIsLoading(false);
-    }, 1500);
+    }, 500); // 缩短延迟时间
   }, [navigate]);
 
   if (isLoading) {
@@ -362,6 +413,32 @@ const RecognitionResult: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">基本信息</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* 识别到的日期信息 */}
+              {recognitionResult?.date && (
+                <div className="flex items-start">
+                  <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mr-3 flex-shrink-0">
+                    <i className="fas fa-clock text-green-500" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">拍摄日期</h4>
+                    <p className="text-gray-600 dark:text-gray-400">{recognitionResult.date}</p>
+                  </div>
+                </div>
+              )}
+              
+              {/* 识别到的地区信息 */}
+              {recognitionResult?.location && (
+                <div className="flex items-start">
+                  <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mr-3 flex-shrink-0">
+                    <i className="fas fa-map-pin text-purple-500" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">拍摄地点</h4>
+                    <p className="text-gray-600 dark:text-gray-400">{recognitionResult.location}</p>
+                  </div>
+                </div>
+              )}
+              
               {plant.bloomingSeason && (
                 <div className="flex items-start">
                   <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mr-3 flex-shrink-0">
