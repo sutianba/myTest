@@ -222,10 +222,10 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onImageUpload }) => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleUpload}
-                disabled={uploading}
+                disabled={loading}
                 className="px-6 py-2.5 bg-emerald-500 text-white rounded-full text-sm font-medium hover:bg-emerald-600 transition-colors flex items-center"
               >
-                {uploading ? (
+                {loading ? (
                   <>
                     <i className="fas fa-spinner fa-spin mr-2" />
                     识别中...

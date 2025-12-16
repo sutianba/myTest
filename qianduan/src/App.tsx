@@ -50,7 +50,7 @@ export default function App() {
          <Route path="/users" element={isAuthenticated ? <UserManagement /> : <Login />} />
          <Route path="/permissions" element={isAuthenticated ? <PermissionManagement /> : <Login />} />
          <Route path="/plant/:id" element={isAuthenticated ? <PlantDetail /> : <Login />} />
-         <Route path="/recognition-result" element={isAuthenticated ? <RecognitionResult /> : <Login />} />
+         <Route path="/recognition-result" element={<RecognitionResult />} />
          <Route path="/history" element={isAuthenticated ? <RecognitionHistory /> : <Login />} />
          <Route path="/favorites" element={isAuthenticated ? <Favorites /> : <Login />} />
          {/* 添加访客路线，方便用户直接访问主要功能 */}
