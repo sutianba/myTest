@@ -96,8 +96,8 @@ import torch
 # 使用正确路径加载模型
 try:
     flower_model = torch.hub.load('..', 'custom', path='../testflowers.pt', source='local', force_reload=True)
-    flower_model.conf = 0.5  # 提高置信度阈值，只保留高置信度结果
-    flower_model.iou = 0.5   # 提高NMS IOU阈值，更严格地过滤重叠边界框
+    flower_model.conf = 0.25  # 降低置信度阈值，保留更多检测结果
+    flower_model.iou = 0.5   # 保持NMS IOU阈值
     print("成功加载YOLOv5花卉识别模型")
 except Exception as e:
     print(f"无法加载YOLOv5模型: {e}")
@@ -281,7 +281,9 @@ def detect_flower():
 
     except Exception as e:
         print(f"识别过程中发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'识别服务不可用，请稍后重试: {str(e)}'}), 500
 
 
 def convert_to_decimal(coord, ref):
@@ -538,7 +540,12 @@ def process_single_image(image_data):
         image_data = image_data.split(',')[1]
 
     # 解码base64图片数据
-    image_bytes = base64.b64decode(image_data)
+    try:
+        image_bytes = base64.b64decode(image_data)
+        print(f"成功解码base64数据，大小: {len(image_bytes)} 字节")
+    except Exception as e:
+        print(f"base64解码失败: {e}")
+        raise ValueError("图片数据格式错误，无法解码") from e
     
     # 提取图片EXIF信息
     image_info = {
