@@ -37,6 +37,7 @@ const Login: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',  // 包含cookie以支持会话
         body: JSON.stringify({
           username: formData.username,
           password: formData.password

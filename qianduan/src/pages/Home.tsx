@@ -30,6 +30,7 @@ const Home: React.FC = () => {
   const extraFeatures = [
     { id: 'favorites', label: '我的收藏', icon: 'fas fa-heart', description: '查看您收藏的植物', route: '/favorites' },
     { id: 'history', label: '识别历史', icon: 'fas fa-history', description: '查看您的识别记录', route: '/history' },
+    { id: 'community', label: '花卉社区', icon: 'fas fa-comments', description: '分享您的花卉识别经验', route: '/community' },
     { id: 'encyclopedia', label: '植物百科', icon: 'fas fa-book', description: '浏览植物知识库', route: '/explore' },
     { id: 'care-guide', label: '养护建议', icon: 'fas fa-trowel', description: '获取植物养护指南', route: '/other' }
   ];

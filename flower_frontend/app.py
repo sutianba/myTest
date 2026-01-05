@@ -21,10 +21,19 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError # 用于处理地�
 import time # 用于处理时间相关操作
 
 app = Flask(__name__)
-CORS(app)  # 启用CORS以允许前端访问
+CORS(app, 
+    supports_credentials=True,
+    origins=['http://localhost:3000', 'http://127.0.0.1:3000'],
+    allow_headers=['Content-Type', 'Authorization'],
+    methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+)  # 启用CORS以允许前端访问，并支持会话cookie
 
 # 设置密钥用于会话管理
 app.secret_key = secrets.token_hex(16)
+
+# 配置session cookie以支持跨域
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 # 配置线程池用于异步处理
 thread_pool = ThreadPoolExecutor(max_workers=4)  # 根据系统CPU核心数调整
@@ -686,6 +695,411 @@ def process_single_image(image_data):
         'detections': detection_results,
         'exif_info': image_info
     }
+
+# ==================== 社区功能API接口 ====================
+
+@app.route('/api/community/posts', methods=['GET'])
+def get_posts():
+    """获取帖子列表"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        category = request.args.get('category', 'all')
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 构建查询条件
+        if category == 'all':
+            query = '''
+            SELECT p.*, u.username, 
+                   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
+                   (SELECT COUNT(*) FROM likes WHERE target_type = 'post' AND target_id = p.id) as like_count
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.status = 'published'
+            ORDER BY p.created_at DESC
+            LIMIT ? OFFSET ?
+            '''
+            cursor.execute(query, (per_page, (page - 1) * per_page))
+        else:
+            query = '''
+            SELECT p.*, u.username,
+                   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
+                   (SELECT COUNT(*) FROM likes WHERE target_type = 'post' AND target_id = p.id) as like_count
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.status = 'published' AND p.category = ?
+            ORDER BY p.created_at DESC
+            LIMIT ? OFFSET ?
+            '''
+            cursor.execute(query, (category, per_page, (page - 1) * per_page))
+        
+        posts = cursor.fetchall()
+        
+        # 转换为字典列表
+        posts_list = []
+        for post in posts:
+            posts_list.append({
+                'id': post['id'],
+                'user_id': post['user_id'],
+                'username': post['username'],
+                'title': post['title'],
+                'content': post['content'],
+                'image_data': post['image_data'],
+                'recognition_result': post['recognition_result'],
+                'category': post['category'],
+                'views': post['views'],
+                'comment_count': post['comment_count'],
+                'like_count': post['like_count'],
+                'created_at': post['created_at']
+            })
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'posts': posts_list})
+    except Exception as e:
+        print(f"获取帖子列表失败: {e}")
+        return jsonify({'success': False, 'error': '获取帖子列表失败'})
+
+@app.route('/api/community/posts/<int:post_id>', methods=['GET'])
+def get_post_detail(post_id):
+    """获取帖子详情"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 获取帖子信息并增加浏览量
+        cursor.execute('''
+        SELECT p.*, u.username,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
+               (SELECT COUNT(*) FROM likes WHERE target_type = 'post' AND target_id = p.id) as like_count
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        WHERE p.id = ?
+        ''', (post_id,))
+        
+        post = cursor.fetchone()
+        
+        if not post:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '帖子不存在'})
+        
+        # 增加浏览量
+        cursor.execute('UPDATE posts SET views = views + 1 WHERE id = ?', (post_id,))
+        connection.commit()
+        
+        post_detail = {
+            'id': post['id'],
+            'user_id': post['user_id'],
+            'username': post['username'],
+            'title': post['title'],
+            'content': post['content'],
+            'image_data': post['image_data'],
+            'recognition_result': post['recognition_result'],
+            'category': post['category'],
+            'views': post['views'] + 1,
+            'comment_count': post['comment_count'],
+            'like_count': post['like_count'],
+            'created_at': post['created_at']
+        }
+        
+        # 获取评论列表
+        cursor.execute('''
+        SELECT c.*, u.username
+        FROM comments c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.post_id = ? AND c.parent_id IS NULL
+        ORDER BY c.created_at ASC
+        ''', (post_id,))
+        
+        comments = cursor.fetchall()
+        comments_list = []
+        for comment in comments:
+            comments_list.append({
+                'id': comment['id'],
+                'user_id': comment['user_id'],
+                'username': comment['username'],
+                'content': comment['content'],
+                'created_at': comment['created_at']
+            })
+        
+        post_detail['comments'] = comments_list
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'post': post_detail})
+    except Exception as e:
+        print(f"获取帖子详情失败: {e}")
+        return jsonify({'success': False, 'error': '获取帖子详情失败'})
+
+@app.route('/api/community/posts', methods=['POST'])
+def create_post():
+    """创建新帖子"""
+    try:
+        data = request.get_json()
+        username = data.get('username')  # 从请求中获取用户名
+        
+        if not username:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        title = data.get('title', '').strip()
+        content = data.get('content', '').strip()
+        image_data = data.get('image_data')
+        recognition_result = data.get('recognition_result')
+        category = data.get('category', 'general')
+        
+        if not title or not content:
+            return jsonify({'success': False, 'error': '标题和内容不能为空'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 获取用户ID
+        cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        # 创建帖子
+        cursor.execute('''
+        INSERT INTO posts (user_id, title, content, image_data, recognition_result, category)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user['id'], title, content, image_data, recognition_result, category))
+        
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'message': '帖子发布成功'})
+    except Exception as e:
+        print(f"创建帖子失败: {e}")
+        return jsonify({'success': False, 'error': '创建帖子失败'})
+
+@app.route('/api/community/posts/<int:post_id>/comments', methods=['POST'])
+@login_required
+def add_comment(post_id):
+    """添加评论"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        data = request.get_json()
+        content = data.get('content', '').strip()
+        parent_id = data.get('parent_id')
+        
+        if not content:
+            return jsonify({'success': False, 'error': '评论内容不能为空'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 获取用户ID
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        # 添加评论
+        cursor.execute('''
+        INSERT INTO comments (post_id, user_id, content, parent_id)
+        VALUES (?, ?, ?, ?)
+        ''', (post_id, user['id'], content, parent_id))
+        
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'message': '评论成功'})
+    except Exception as e:
+        print(f"添加评论失败: {e}")
+        return jsonify({'success': False, 'error': '添加评论失败'})
+
+@app.route('/api/community/like', methods=['POST'])
+@login_required
+def toggle_like():
+    """点赞/取消点赞"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        data = request.get_json()
+        target_type = data.get('target_type')  # 'post' or 'comment'
+        target_id = data.get('target_id')
+        
+        if not target_type or not target_id:
+            return jsonify({'success': False, 'error': '参数错误'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 获取用户ID
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        # 检查是否已点赞
+        cursor.execute('''
+        SELECT id FROM likes WHERE user_id = ? AND target_type = ? AND target_id = ?
+        ''', (user['id'], target_type, target_id))
+        
+        existing_like = cursor.fetchone()
+        
+        if existing_like:
+            # 取消点赞
+            cursor.execute('''
+            DELETE FROM likes WHERE user_id = ? AND target_type = ? AND target_id = ?
+            ''', (user['id'], target_type, target_id))
+            connection.commit()
+            cursor.close()
+            connection.close()
+            return jsonify({'success': True, 'liked': False, 'message': '取消点赞'})
+        else:
+            # 添加点赞
+            cursor.execute('''
+            INSERT INTO likes (user_id, target_type, target_id)
+            VALUES (?, ?, ?)
+            ''', (user['id'], target_type, target_id))
+            connection.commit()
+            cursor.close()
+            connection.close()
+            return jsonify({'success': True, 'liked': True, 'message': '点赞成功'})
+    except Exception as e:
+        print(f"点赞操作失败: {e}")
+        return jsonify({'success': False, 'error': '点赞操作失败'})
+
+@app.route('/api/community/follow', methods=['POST'])
+@login_required
+def toggle_follow():
+    """关注/取消关注"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        data = request.get_json()
+        following_username = data.get('username')
+        
+        if not following_username:
+            return jsonify({'success': False, 'error': '参数错误'})
+        
+        if following_username == session['username']:
+            return jsonify({'success': False, 'error': '不能关注自己'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 获取用户ID
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        follower = cursor.fetchone()
+        
+        cursor.execute('SELECT id FROM users WHERE username = ?', (following_username,))
+        following = cursor.fetchone()
+        
+        if not follower or not following:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        # 检查是否已关注
+        cursor.execute('''
+        SELECT id FROM follows WHERE follower_id = ? AND following_id = ?
+        ''', (follower['id'], following['id']))
+        
+        existing_follow = cursor.fetchone()
+        
+        if existing_follow:
+            # 取消关注
+            cursor.execute('''
+            DELETE FROM follows WHERE follower_id = ? AND following_id = ?
+            ''', (follower['id'], following['id']))
+            connection.commit()
+            cursor.close()
+            connection.close()
+            return jsonify({'success': True, 'following': False, 'message': '取消关注'})
+        else:
+            # 添加关注
+            cursor.execute('''
+            INSERT INTO follows (follower_id, following_id)
+            VALUES (?, ?)
+            ''', (follower['id'], following['id']))
+            connection.commit()
+            cursor.close()
+            connection.close()
+            return jsonify({'success': True, 'following': True, 'message': '关注成功'})
+    except Exception as e:
+        print(f"关注操作失败: {e}")
+        return jsonify({'success': False, 'error': '关注操作失败'})
+
+@app.route('/api/community/favorite', methods=['POST'])
+@login_required
+def toggle_favorite():
+    """收藏/取消收藏"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        data = request.get_json()
+        post_id = data.get('post_id')
+        
+        if not post_id:
+            return jsonify({'success': False, 'error': '参数错误'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 获取用户ID
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        # 检查是否已收藏
+        cursor.execute('''
+        SELECT id FROM favorites WHERE user_id = ? AND post_id = ?
+        ''', (user['id'], post_id))
+        
+        existing_favorite = cursor.fetchone()
+        
+        if existing_favorite:
+            # 取消收藏
+            cursor.execute('''
+            DELETE FROM favorites WHERE user_id = ? AND post_id = ?
+            ''', (user['id'], post_id))
+            connection.commit()
+            cursor.close()
+            connection.close()
+            return jsonify({'success': True, 'favorited': False, 'message': '取消收藏'})
+        else:
+            # 添加收藏
+            cursor.execute('''
+            INSERT INTO favorites (user_id, post_id)
+            VALUES (?, ?)
+            ''', (user['id'], post_id))
+            connection.commit()
+            cursor.close()
+            connection.close()
+            return jsonify({'success': True, 'favorited': True, 'message': '收藏成功'})
+    except Exception as e:
+        print(f"收藏操作失败: {e}")
+        return jsonify({'success': False, 'error': '收藏操作失败'})
 
 if __name__ == '__main__':
     # 启动Flask服务器
