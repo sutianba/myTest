@@ -740,6 +740,14 @@ def get_posts():
         # 转换为字典列表
         posts_list = []
         for post in posts:
+            # 解析topics JSON字符串
+            topics = []
+            if post['topics']:
+                try:
+                    topics = json.loads(post['topics'])
+                except:
+                    topics = []
+                    
             posts_list.append({
                 'id': post['id'],
                 'user_id': post['user_id'],
@@ -752,7 +760,8 @@ def get_posts():
                 'views': post['views'],
                 'comment_count': post['comment_count'],
                 'like_count': post['like_count'],
-                'created_at': post['created_at']
+                'created_at': post['created_at'],
+                'topics': topics
             })
         
         cursor.close()
@@ -791,6 +800,14 @@ def get_post_detail(post_id):
         cursor.execute('UPDATE posts SET views = views + 1 WHERE id = ?', (post_id,))
         connection.commit()
         
+        # 解析topics JSON字符串
+        topics = []
+        if post['topics']:
+            try:
+                topics = json.loads(post['topics'])
+            except:
+                topics = []
+                
         post_detail = {
             'id': post['id'],
             'user_id': post['user_id'],
@@ -803,7 +820,8 @@ def get_post_detail(post_id):
             'views': post['views'] + 1,
             'comment_count': post['comment_count'],
             'like_count': post['like_count'],
-            'created_at': post['created_at']
+            'created_at': post['created_at'],
+            'topics': topics
         }
         
         # 获取评论列表
@@ -840,6 +858,9 @@ def get_post_detail(post_id):
 def create_post():
     """创建新帖子"""
     try:
+        import re
+        import json
+        
         data = request.get_json()
         username = data.get('username')  # 从请求中获取用户名
         
@@ -855,6 +876,12 @@ def create_post():
         if not title or not content:
             return jsonify({'success': False, 'error': '标题和内容不能为空'})
         
+        # 提取话题 - 匹配 #话题# 格式
+        topic_pattern = r'#([^#\s]+)#'
+        topics = re.findall(topic_pattern, content)
+        # 去重并转换为小写
+        unique_topics = list(set([topic.lower() for topic in topics]))
+        
         connection = get_db_connection()
         cursor = connection.cursor()
         
@@ -867,20 +894,40 @@ def create_post():
             connection.close()
             return jsonify({'success': False, 'error': '用户不存在'})
         
-        # 创建帖子
+        # 创建帖子，包含topics字段
         cursor.execute('''
-        INSERT INTO posts (user_id, title, content, image_data, recognition_result, category)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user['id'], title, content, image_data, recognition_result, category))
+        INSERT INTO posts (user_id, title, content, image_data, recognition_result, category, topics)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (user['id'], title, content, image_data, recognition_result, category, json.dumps(unique_topics)))
+        
+        post_id = cursor.lastrowid
+        
+        # 更新topics表
+        for topic_name in unique_topics:
+            # 检查话题是否已存在
+            cursor.execute('SELECT id FROM topics WHERE name = ?', (topic_name,))
+            topic = cursor.fetchone()
+            
+            if topic:
+                # 更新现有话题的帖子数量
+                cursor.execute('UPDATE topics SET post_count = post_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (topic['id'],))
+            else:
+                # 创建新话题
+                cursor.execute('''
+                INSERT INTO topics (name, display_name, post_count)
+                VALUES (?, ?, 1)
+                ''', (topic_name, f'#{topic_name}#'))
         
         connection.commit()
         
         cursor.close()
         connection.close()
         
-        return jsonify({'success': True, 'message': '帖子发布成功'})
+        return jsonify({'success': True, 'message': '帖子发布成功', 'topics': unique_topics})
     except Exception as e:
         print(f"创建帖子失败: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': '创建帖子失败'})
 
 @app.route('/api/community/posts/<int:post_id>/comments', methods=['POST'])
@@ -925,6 +972,27 @@ def add_comment(post_id):
     except Exception as e:
         print(f"添加评论失败: {e}")
         return jsonify({'success': False, 'error': '添加评论失败'})
+
+@app.route('/api/community/topics', methods=['GET'])
+def get_topics():
+    """获取所有话题"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 获取所有话题，按帖子数量降序排序
+        cursor.execute('SELECT name, display_name, post_count FROM topics ORDER BY post_count DESC')
+        topics = cursor.fetchall()
+        
+        connection.close()
+        
+        # 转换为字典列表
+        topic_list = [{'name': topic[0], 'display_name': topic[1], 'post_count': topic[2]} for topic in topics]
+        
+        return jsonify({'success': True, 'topics': topic_list})
+    except Exception as e:
+        print(f"获取话题失败: {e}")
+        return jsonify({'success': False, 'error': '获取话题失败'})
 
 @app.route('/api/community/like', methods=['POST'])
 @login_required

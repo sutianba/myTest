@@ -1,9 +1,15 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { AuthContext } from '../contexts/authContext';
+
+interface Topic {
+  name: string;
+  display_name: string;
+  post_count: number;
+}
 
 const CreatePost: React.FC = () => {
   const { theme } = useTheme();
@@ -15,6 +21,10 @@ const CreatePost: React.FC = () => {
   const [recognitionResult, setRecognitionResult] = useState<string | null>(null);
   const [category, setCategory] = useState('general');
   const [loading, setLoading] = useState(false);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [suggestedTopics, setSuggestedTopics] = useState<Topic[]>([]);
+  const [showTopicSuggestions, setShowTopicSuggestions] = useState(false);
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
 
   // 检查登录状态
   React.useEffect(() => {
@@ -23,6 +33,68 @@ const CreatePost: React.FC = () => {
       navigate('/login');
     }
   }, [isAuthenticated, navigate]);
+
+  // 加载话题列表
+  useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/community/topics');
+        const data = await response.json();
+        if (data.success) {
+          setTopics(data.topics);
+        }
+      } catch (error) {
+        console.error('获取话题列表失败:', error);
+      }
+    };
+    fetchTopics();
+  }, []);
+
+  // 处理内容变化，显示话题建议
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newContent = e.target.value;
+    setContent(newContent);
+
+    // 检查是否正在输入话题（以#开头）
+    const lastHashIndex = newContent.lastIndexOf('#');
+    if (lastHashIndex !== -1) {
+      const partialTopic = newContent.substring(lastHashIndex + 1).trim();
+      if (partialTopic && !partialTopic.includes('#')) {
+        // 过滤匹配的话题
+        const filteredTopics = topics.filter(topic => 
+          topic.name.toLowerCase().includes(partialTopic.toLowerCase())
+        );
+        setSuggestedTopics(filteredTopics);
+        setShowTopicSuggestions(true);
+        return;
+      }
+    }
+    setShowTopicSuggestions(false);
+  };
+
+  // 选择话题
+  const selectTopic = (topic: Topic) => {
+    // 找到内容中最后一个#的位置
+    const lastHashIndex = content.lastIndexOf('#');
+    if (lastHashIndex !== -1) {
+      // 替换部分输入为完整话题
+      const beforeHash = content.substring(0, lastHashIndex);
+      const newContent = `${beforeHash}#${topic.name}# `;
+      setContent(newContent);
+      
+      // 记录已选话题
+      if (!selectedTopics.includes(topic.name)) {
+        setSelectedTopics([...selectedTopics, topic.name]);
+      }
+    }
+    setShowTopicSuggestions(false);
+  };
+
+  // 移除已选话题
+  const removeTopic = (topicName: string) => {
+    setSelectedTopics(selectedTopics.filter(topic => topic !== topicName));
+    // 也可以从内容中移除该话题，但这需要更复杂的处理
+  };
 
   const categories = [
     { id: 'general', name: '综合讨论' },
@@ -245,17 +317,54 @@ const CreatePost: React.FC = () => {
               </div>
             )}
 
-            <div>
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 内容 *
               </label>
               <textarea
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="请输入帖子内容..."
+                onChange={handleContentChange}
+                placeholder="请输入帖子内容...支持使用#话题#格式添加话题"
                 rows={8}
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg resize-none bg-transparent text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
+              
+              {/* 已选话题 */}
+              {selectedTopics.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedTopics.map(topic => (
+                    <span
+                      key={topic}
+                      className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-sm flex items-center gap-1"
+                    >
+                      #{topic}#
+                      <button
+                        type="button"
+                        onClick={() => removeTopic(topic)}
+                        className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-300"
+                      >
+                        <i className="fas fa-times text-xs" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              
+              {/* 话题建议 */}
+              {showTopicSuggestions && suggestedTopics.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {suggestedTopics.map((topic, index) => (
+                    <div
+                      key={index}
+                      className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors flex justify-between items-center"
+                      onClick={() => selectTopic(topic)}
+                    >
+                      <span className="text-gray-900 dark:text-white">#{topic.name}#</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{topic.post_count} posts</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-4">

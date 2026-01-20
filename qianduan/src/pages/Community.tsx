@@ -17,6 +17,7 @@ interface Post {
   comment_count: number;
   like_count: number;
   created_at: string;
+  topics: string[];
 }
 
 const Community: React.FC = () => {
@@ -197,6 +198,20 @@ const Community: React.FC = () => {
                   <p className="text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">
                     {post.content}
                   </p>
+
+                  {/* 显示话题 */}
+                  {post.topics && post.topics.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {post.topics.map((topic, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-xs hover:bg-emerald-200 dark:hover:bg-emerald-800/50 transition-colors cursor-pointer"
+                        >
+                          #{topic}#
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-2">
