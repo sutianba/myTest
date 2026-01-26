@@ -233,165 +233,6 @@
             opacity: 0.8;
         }
 
-        @media (max-width: 768px) {
-            .main-content {
-                padding: 20px;
-            }
-
-            .header h1 {
-                font-size: 2em;
-            }
-
-            .drop-zone {
-                height: 150px;
-            }
-
-            .drop-zone i {
-                font-size: 3em;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🌸 花卉识别AI系统</h1>
-            <p>上传花卉图片，系统将自动识别花卉种类</p>
-        </div>
-        
-        <div class="main-content">
-            <div class="upload-section">
-            <div class="drop-zone" id="dropZone">
-                <i>📁</i>
-                <p>拖拽图片到此处或点击选择文件（支持多选）</p>
-            </div>
-            <input type="file" id="fileInput" accept="image/*" multiple>
-            <button class="upload-btn" id="uploadBtn">选择花卉图片</button>
-        </div>
-
-        <div class="loading" id="loading">
-            <p>正在识别中，请稍候...</p>
-            <div class="progress-container">
-                <div class="progress-bar" id="progressBar"></div>
-                <p class="progress-text" id="progressText">0% (0/0)</p>
-            </div>
-        </div>
-
-        <div class="results-section" id="resultsSection">
-            <h2 style="text-align: center; margin-bottom: 20px; color: #333;">识别结果</h2>
-            <div id="allResults"></div>
-
-            <div style="text-align: center; margin-top: 30px;">
-                <button class="upload-btn" id="uploadAnotherBtn">上传更多图片</button>
-                <button class="upload-btn" id="showClassificationBtn" style="margin-left: 20px;">分类展示</button>
-                <button class="upload-btn" id="clearAllBtn" style="margin-left: 20px; background-color: #e74c3c;">清除所有结果</button>
-            </div>
-            
-            <div style="text-align: center; margin-top: 10px; font-size: 0.9em; color: #666;">
-                <span id="storageInfo">已使用存储空间: 0 KB</span>
-            </div>
-        </div>
-        </div>
-
-        <div class="footer">
-            <p>© 植物花卉识别系统</p>
-        </div>
-    </div>
-
-    <script>
-        // ==========================================
-        // ==========================================         
-        // DOM元素获取 - 初始化阶段
-        // ==========================================
-        const dropZone = document.getElementById('dropZone');          // 拖拽上传区域
-        const fileInput = document.getElementById('fileInput');          // 文件输入框
-        const uploadBtn = document.getElementById('uploadBtn');          // 上传按钮
-        const loading = document.getElementById('loading');              // 加载状态容器
-        const resultsSection = document.getElementById('resultsSection'); // 结果展示区域
-        const previewImage = document.getElementById('previewImage');    // 图片预览
-        const resultsList = document.getElementById('resultsList');      // 结果列表
-        const uploadAnotherBtn = document.getElementById('uploadAnotherBtn'); // 上传更多按钮
-        const showClassificationBtn = document.getElementById('showClassificationBtn'); // 分类展示按钮
-        const clearAllBtn = document.getElementById('clearAllBtn'); // 清除所有结果按钮
-        const storageInfo = document.getElementById('storageInfo'); // 存储信息显示
-
-        // ==========================================
-        // 拖拽事件处理
-        // ==========================================
-        // 拖拽悬停事件 - 添加视觉反馈
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
-
-        // 拖拽离开事件 - 移除视觉反馈
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('dragover');
-        });
-
-        // 拖拽释放事件 - 处理上传的文件
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            const files = Array.from(e.dataTransfer.files); // 将FileList转换为数组
-            if (files.length > 0) {
-                handleMultipleFiles(files);
-            }
-        });
-
-        // ==========================================
-        // 点击事件处理
-        // ==========================================
-        // 点击上传区域 - 触发文件选择对话框
-        dropZone.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        // 点击上传按钮 - 触发文件选择对话框
-        uploadBtn.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        // 文件选择完成事件 - 处理选择的文件
-        fileInput.addEventListener('change', (e) => {
-            const files = Array.from(e.target.files); // 将FileList转换为数组
-            if (files.length > 0) {
-                handleMultipleFiles(files);
-            }
-        });
-
-        // 分类展示按钮点击事件
-        showClassificationBtn.addEventListener('click', () => {
-            window.location.href = 'classify.html';
-        });
-
-        // ==========================================          
-        // 页面加载时检查是否有保存的识别结果
-        // ==========================================
-        window.addEventListener('DOMContentLoaded', () => {
-            // 更新存储使用情况
-            updateStorageInfo();
-            
-            // 检查localStorage中是否有保存的识别结果
-            const savedResults = localStorage.getItem('flowerRecognitionResults');
-            if (savedResults) {
-                const parsedResults = JSON.parse(savedResults);
-                // 转换缩略图数据为完整图片数据（这里简化处理，直接使用缩略图）
-                const resultsToDisplay = parsedResults.map(item => ({
-                    file: {
-                        name: item.file.name,
-                        type: item.file.type,
-                        size: item.file.size,
-                        lastModified: item.file.lastModified
-                    },
-                    imageData: item.thumbnailData, // 使用缩略图作为显示
-                    detections: item.detections,
-                    exif_info: item.exif_info
-                }));
-                
-                // 直接显示保存的结果
-                displayAllResults(resultsToDisplay);
-            }
         });
         
         // ==========================================         
@@ -408,28 +249,13 @@
             // 验证是否有图片文件
             if (imageFiles.length === 0) {
                 alert('请选择图片文件！');
-                return;
-            }
-
-            // 更新UI状态 - 显示加载动画和进度条
-            loading.classList.add('active');
             resultsSection.classList.remove('active');
 
             // 开始处理所有图片
             processAllImages(imageFiles);
         }
 
-        // ==========================================
-        // 图片处理主函数
-        // ==========================================
-        /**
-         * 处理所有图片 - 核心处理函数
-         * @param {File[]} imageFiles - 图片文件数组
-         */
-        async function processAllImages(imageFiles) {
-            try {
-                const allResults = [];
-                const totalFiles = imageFiles.length;
+            <h1>🌸 花卉识别AI系统</h1>
                 const progressBar = document.getElementById('progressBar');
                 const progressText = document.getElementById('progressText');
                 
@@ -472,58 +298,6 @@
                 // 无论成功失败，都隐藏加载状态
                 loading.classList.remove('active');
             }
-        }
-
-        // ==========================================
-        // 文件读取工具函数
-        // ==========================================
-        /**
-         * 将文件读取为DataURL格式
-         * @param {File} file - 要读取的文件
-         * @returns {Promise<string>} DataURL格式的文件内容
-         */
-        function readFileAsDataURL(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result); // 读取成功回调
-                reader.onerror = reject; // 读取失败回调
-                reader.readAsDataURL(file); // 开始读取文件
-            });
-        }
-
-        // ==========================================
-        // API调用函数
-        // ==========================================
-        /**
-         * 调用花卉识别API
-         * @param {string} imageData - DataURL格式的图片数据
-         * @returns {Promise<Object>} 识别结果和EXIF信息
-         */
-        function callRecognitionAPI(imageData) {
-            return fetch('http://localhost:5000/api/detect', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json' // 设置请求头
-                },
-                body: JSON.stringify({
-                    image: imageData // 请求体 - 图片数据
-                })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    // 检查响应状态码
-                    throw new Error('服务器错误: ' + response.status);
-                }
-                return response.json(); // 解析JSON响应
-            })
-            .then(data => {
-                if (data.success) {
-                    // API调用成功 - 提取识别结果和EXIF信息
-                    return {
-                        detections: data.results.detections, // 花卉识别结果列表
-                        exif_info: data.results.exif_info    // EXIF元信息
-                    };
-                } else {
                     // API调用失败 - 抛出错误
                     throw new Error('识别失败: ' + (data.error || '未知错误'));
                 }
@@ -592,15 +366,12 @@
                 // 创建单个图片结果容器
                 const resultContainer = document.createElement('div');
                 resultContainer.className = 'single-result';
-                resultContainer.style.marginBottom = '40px';
+        // 页面加载时检查是否有保存的识别结果
                 resultContainer.style.padding = '20px';
                 resultContainer.style.border = '1px solid #e0e0e0';
                 resultContainer.style.borderRadius = '15px';
                 resultContainer.style.backgroundColor = '#fafafa';
 
-                // 添加图片预览
-                const imagePreview = document.createElement('img');
-                imagePreview.src = item.imageData;
                 imagePreview.style.maxWidth = '100%';
                 imagePreview.style.maxHeight = '400px';
                 imagePreview.style.borderRadius = '10px';
@@ -622,190 +393,6 @@
                 exifTitle.textContent = '图片信息';
                 exifTitle.style.marginTop = '0';
                 exifTitle.style.marginBottom = '15px';
-                exifTitle.style.color = '#333';
-                exifTitle.style.fontSize = '1.2em';
-                exifDiv.appendChild(exifTitle);
-                
-                // 创建信息表格
-                const infoTable = document.createElement('table');
-                infoTable.style.width = '100%';
-                infoTable.style.borderCollapse = 'collapse';
-                
-                // 添加拍摄时间信息
-                const dateRow = document.createElement('tr');
-                const dateLabel = document.createElement('td');
-                dateLabel.textContent = '拍摄时间：';
-                dateLabel.style.padding = '8px 12px';
-                dateLabel.style.fontWeight = 'bold';
-                dateLabel.style.color = '#555';
-                const dateValue = document.createElement('td');
-                dateValue.textContent = item.exif_info.date_time;
-                dateValue.style.padding = '8px 12px';
-                dateValue.style.color = '#666';
-                dateRow.appendChild(dateLabel);
-                dateRow.appendChild(dateValue);
-                infoTable.appendChild(dateRow);
-                
-                // 添加相机信息
-                const cameraRow = document.createElement('tr');
-                cameraRow.style.backgroundColor = '#f8f9fa';
-                const cameraLabel = document.createElement('td');
-                cameraLabel.textContent = '相机型号：';
-                cameraLabel.style.padding = '8px 12px';
-                cameraLabel.style.fontWeight = 'bold';
-                cameraLabel.style.color = '#555';
-                const cameraValue = document.createElement('td');
-                cameraValue.textContent = `${item.exif_info.camera_info.make} ${item.exif_info.camera_info.model}`;
-                cameraValue.style.padding = '8px 12px';
-                cameraValue.style.color = '#666';
-                cameraRow.appendChild(cameraLabel);
-                cameraRow.appendChild(cameraValue);
-                infoTable.appendChild(cameraRow);
-                
-                // 添加图片尺寸信息
-                const sizeRow = document.createElement('tr');
-                const sizeLabel = document.createElement('td');
-                sizeLabel.textContent = '图片尺寸：';
-                sizeLabel.style.padding = '8px 12px';
-                sizeLabel.style.fontWeight = 'bold';
-                sizeLabel.style.color = '#555';
-                const sizeValue = document.createElement('td');
-                sizeValue.textContent = `${item.exif_info.image_details.width} × ${item.exif_info.image_details.height}`;
-                sizeValue.style.padding = '8px 12px';
-                sizeValue.style.color = '#666';
-                sizeRow.appendChild(sizeLabel);
-                sizeRow.appendChild(sizeValue);
-                infoTable.appendChild(sizeRow);
-                
-                // 添加GPS位置信息
-                const locationRow = document.createElement('tr');
-                locationRow.style.backgroundColor = '#f8f9fa';
-                const locationLabel = document.createElement('td');
-                locationLabel.textContent = '拍摄位置：';
-                locationLabel.style.padding = '8px 12px';
-                locationLabel.style.fontWeight = 'bold';
-                locationLabel.style.color = '#555';
-                const locationValue = document.createElement('td');
-                
-                if (item.exif_info.location.has_location) {
-                    locationValue.innerHTML = `
-                        <div>地址：${item.exif_info.location.formatted_address}</div>
-                        <div style="margin-top: 5px; font-size: 0.9em; color: #888;">
-                            经纬度：${item.exif_info.location.latitude.toFixed(6)}, ${item.exif_info.location.longitude.toFixed(6)}
-                        </div>
-                    `;
-                } else {
-                    locationValue.textContent = item.exif_info.location.formatted_address;
-                }
-                
-                locationValue.style.padding = '8px 12px';
-                locationValue.style.color = '#666';
-                locationRow.appendChild(locationLabel);
-                locationRow.appendChild(locationValue);
-                infoTable.appendChild(locationRow);
-                
-                // 将表格添加到EXIF信息区域
-                exifDiv.appendChild(infoTable);
-
-                // 创建结果列表
-                const resultsList = document.createElement('div');
-                resultsList.style.marginTop = '20px';
-
-                if (item.detections && item.detections.length > 0) {
-                    item.detections.forEach(result => {
-                        const resultItem = document.createElement('div');
-                        resultItem.className = 'result-item';
-                        resultItem.style.marginBottom = '10px';
-
-                        // 根据置信度设置不同的颜色
-                        let confidenceClass = 'high';
-                        if (result.confidence < 0.7) confidenceClass = 'low';
-                        else if (result.confidence < 0.85) confidenceClass = 'medium';
-
-                        resultItem.innerHTML = `
-                            <div class="flower-name">${result.name}</div>
-                            <div class="confidence ${confidenceClass}">${(result.confidence * 100).toFixed(1)}%</div>
-                        `;
-
-                        resultsList.appendChild(resultItem);
-                    });
-                } else {
-                    resultsList.innerHTML = '<p style="text-align: center; color: #666;">未检测到花卉</p>';
-                }
-
-                // 添加标题
-                const title = document.createElement('h3');
-                title.textContent = `图片 ${index + 1}`;
-                title.style.color = '#444';
-                title.style.marginBottom = '15px';
-                title.style.textAlign = 'center';
-
-                // 组装结果容器
-                resultContainer.appendChild(title);
-                resultContainer.appendChild(imagePreview);
-                resultContainer.appendChild(exifDiv);
-                resultContainer.appendChild(resultsList);
-
-                // 添加到所有结果区域
-                allResultsDiv.appendChild(resultContainer);
-            });
-
-            // 显示结果区域
-            resultsSection.classList.add('active');
-        }
-
-        // 计算并显示存储使用情况
-        function updateStorageInfo() {
-            const savedResults = localStorage.getItem('flowerRecognitionResults');
-            if (savedResults) {
-                // 计算localStorage中数据的大小（字节）
-                const sizeInBytes = new Blob([savedResults]).size;
-                const sizeInKB = Math.round(sizeInBytes / 1024);
-                storageInfo.textContent = `已使用存储空间: ${sizeInKB} KB`;
-            } else {
-                storageInfo.textContent = '已使用存储空间: 0 KB';
-            }
-        }
-
-        // 清除所有结果
-        clearAllBtn.addEventListener('click', () => {
-            if (confirm('确定要清除所有识别结果吗？此操作不可恢复。')) {
-                // 清除localStorage中的数据
-                localStorage.removeItem('flowerRecognitionResults');
-                
-                // 清空结果显示
-                const allResultsDiv = document.getElementById('allResults');
-                allResultsDiv.innerHTML = '';
-                
-                // 隐藏结果区域
-                resultsSection.classList.remove('active');
-                
-                // 更新存储信息
-                updateStorageInfo();
-            }
-        });
-
-        // 上传更多图片
-        uploadAnotherBtn.addEventListener('click', () => {
-            resultsSection.classList.remove('active');
-            fileInput.value = '';
-        });
-        
-        /**
-         * 生成图片缩略图的DataURL，减少存储空间
-         * @param {string} imageData - 原始图片的DataURL
-         * @returns {Promise<string>} 缩略图的DataURL
-         */
-        function generateThumbnail(imageData) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    // 创建Canvas元素
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    
-                    // 计算缩略图尺寸（最大边为200px）
-                    const maxSize = 200;
                     let width = img.width;
                     let height = img.height;
                     
