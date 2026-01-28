@@ -419,7 +419,7 @@ def register():
             return jsonify({'success': False, 'error': '用户名已存在'}), 400
         
         # 创建用户
-        user_id = create_user(username, password, email)
+        user_id = create_user(username, email, password)
         
         # 生成JWT令牌
         token = generate_jwt(user_id, username)
@@ -446,7 +446,7 @@ def login():
             return jsonify({'success': False, 'error': '用户名或密码错误'}), 401
         
         # 验证密码
-        if not verify_password(user['id'], password):
+        if not verify_password(user['password_hash'], password):
             return jsonify({'success': False, 'error': '用户名或密码错误'}), 401
         
         # 生成JWT令牌

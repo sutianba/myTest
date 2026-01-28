@@ -82,7 +82,7 @@ class SQLDatabaseManager:
     # 用户相关操作
     def create_user(self, username, email, password):
         """创建新用户"""
-        password_hash = generate_password_hash(password)
+        password_hash = generate_password_hash(password, method='pbkdf2:sha256')
         current_time = int(time.time())
         
         conn = self.get_connection()
