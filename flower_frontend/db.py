@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 DB_PATH = 'flower_recognition.db'
 
 # SQL文件路径
-SCHEMA_SQL = 'database.sql'
+SCHEMA_SQL = 'flower_recognition.sql'
 BACKUP_SQL = 'database_backup.sql'
 
 class SQLDatabaseManager:
@@ -16,7 +16,7 @@ class SQLDatabaseManager:
         self.ensure_database_exists()
     
     def ensure_database_exists(self):
-        """确保数据库文件存在"""
+        """确保数据库文件存在，从SQL文件初始化"""
         if not os.path.exists(self.db_path):
             self.initialize_from_sql(SCHEMA_SQL)
     
