@@ -38,6 +38,14 @@ class SQLDatabaseManager:
         
         print(f"数据库已从 {sql_file} 初始化完成")
     
+    def delete_database(self):
+        """删除数据库文件"""
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
+            print(f"数据库文件已删除: {self.db_path}")
+            return True
+        return False
+    
     def execute_sql_file(self, sql_file):
         """执行SQL文件"""
         if not os.path.exists(sql_file):
@@ -741,3 +749,7 @@ if __name__ == '__main__':
     # 导出当前数据库为SQL文件
     db_manager.export_to_sql('flower_frontend/current_database.sql')
     print('数据库已导出为SQL文件')
+    
+    # 删除数据库文件（只保留SQL文件）
+    db_manager.delete_database()
+    print('数据库文件已删除，只保留SQL文件作为数据源')
