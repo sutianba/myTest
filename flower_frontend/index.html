@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>花卉识别AI系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        /* 导航栏 */
+        .navbar {
+            background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .navbar-brand {
+            font-size: 1.5em;
+            font-weight: bold;
+            text-decoration: none;
+            color: white;
+        }
+
+        .navbar-nav {
+            display: flex;
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-left: 20px;
+        }
+
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: #f0f0f0;
+            text-decoration: underline;
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #2ecc71;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: white;
+            border: 1px solid white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        /* 页面内容区域 */
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        /* 上传区域 */
+        .upload-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+
+        .drop-zone {
+            width: 100%;
+            max-width: 600px;
+            height: 200px;
+            border: 3px dashed #4a90e2;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #f8f9fa;
+        }
+
+        .drop-zone:hover {
+            border-color: #357abd;
+            background: #e9ecef;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .drop-zone.dragover {
+            border-color: #2ecc71;
+            background: #d4edda;
+        }
+
+        .drop-zone i {
+            font-size: 4em;
+            color: #4a90e2;
+            margin-bottom: 15px;
+        }
+
+        .drop-zone p {
+            font-size: 1.1em;
+            color: #666;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1em;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(46, 204, 113, 0.4);
+        }
+
+        /* 结果区域 */
+        .results-section {
+            display: none;
+            margin-top: 40px;
+        }
+
+        .results-section.active {
+            display: block;
+        }
+
+        .image-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        #previewImage {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 15px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .detection-results {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 20px;
+        }
+
+        .result-item {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .flower-name {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .confidence {
+            background: #4a90e2;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .confidence.high {
+            background: #2ecc71;
+        }
+
+        .confidence.medium {
+            background: #f39c12;
+        }
+
+        .confidence.low {
+            background: #e74c3c;
+        }
+
+        /* 加载状态 */
+        .loading {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .loading.active {
+            display: flex;
+        }
+
+        .progress-container {
+            width: 80%;
+            max-width: 500px;
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 8px;
+            background: linear-gradient(90deg, #4a90e2 0%, #357abd 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            margin-bottom: 8px;
+        }
+
+        .progress-text {
+            font-size: 0.9em;
+            color: #666;
+            margin: 0;
+            text-align: center;
+        }
+
+        /* 社区页面 */
+        .community-page {
+            padding: 20px;
+        }
+
+        .create-post-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .post-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-group label {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group textarea {
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            resize: vertical;
+            min-height: 100px;
+            font-size: 1.1em;
+        }
+
+        .form-group input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 1em;
+        }
+
+        .posts-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .post-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .post-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .post-author {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .post-time {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .post-content {
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        .post-image {
+            max-width: 100%;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .post-actions {
+            display: flex;
+            gap: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .action-btn {
+            background: transparent;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .action-btn:hover {
+            color: #4a90e2;
+        }
+
+        .action-btn.liked {
+            color: #e74c3c;
+        }
+
+        /* 模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: auto;
+            padding: 30px;
+            border: 1px solid #888;
+            width: 90%;
+            max-width: 500px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            color: #333;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .form input {
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 1.1em;
+        }
+
+        .form button {
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: #4a90e2;
+            color: white;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .form button:hover {
+            background: #357abd;
+            transform: translateY(-2px);
+        }
+
+        .form-footer {
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .form-footer a {
+            color: #4a90e2;
+            text-decoration: none;
+        }
+
+        .form-footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* 加载状态 */
+        .loading {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .loading.active {
+            display: flex;
+        }
+
+        .progress-container {
+            width: 80%;
+            max-width: 500px;
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 8px;
+            background: linear-gradient(90deg, #4a90e2 0%, #357abd 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            margin-bottom: 8px;
+        }
+
+        .progress-text {
+            font-size: 0.9em;
+            color: #666;
+            margin: 0;
+            text-align: center;
+        }
+
+        /* 页脚 */
+        .footer {
+            background: #333;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+        }
+
+        .footer p {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <a href="#" class="navbar-brand">🌸 花卉识别AI系统</a>
+            <ul class="navbar-nav">
+                <li class="nav-item"><a href="#" class="nav-link" data-page="home">首页</a></li>
+                <li class="nav-item"><a href="#" class="nav-link" data-page="community">社区</a></li>
+                <li class="nav-item"><a href="#" class="nav-link" data-page="recycle_bin">回收站</a></li>
+                <li class="nav-item"><a href="#" class="nav-link" data-page="about">关于</a></li>
+            </ul>
+            <div class="auth-buttons" id="authButtons">
+                <button class="btn btn-secondary" id="loginBtn">登录</button>
+                <button class="btn btn-primary" id="registerBtn">注册</button>
+            </div>
+            <div class="user-info" id="userInfo" style="display: none;">
+                <span id="usernameDisplay"></span>
+                <button class="btn btn-secondary" id="logoutBtn">退出</button>
+            </div>
+        </nav>
+
+        <!-- 首页 -->
+        <div class="page active" id="home">
+            <div class="header">
+                <h1>🌸 花卉识别AI系统</h1>
+                <p>上传图片，智能识别花卉种类</p>
+            </div>
+
+            <div class="main-content">
+                <div class="upload-section">
+                    <div class="drop-zone" id="dropZone">
+                        <i class="fa fa-cloud-upload"></i>
+                        <p>点击或拖拽图片到此处上传</p>
+                        <input type="file" id="fileInput" multiple accept="image/*">
+                    </div>
+                    <button class="upload-btn" id="uploadBtn">开始识别</button>
+                </div>
+
+                <div class="loading" id="loading">
+                    <p>识别中，请稍候...</p>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="progressBar"></div>
+                        <p class="progress-text" id="progressText">0%</p>
+                    </div>
+                </div>
+
+                <div class="results-section" id="resultsSection">
+                    <h2>识别结果</h2>
+                    <div id="allResults"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 社区页面 -->
+        <div class="page" id="community">
+            <div class="community-page">
+                <h2>🌼 花卉社区</h2>
+                <p>分享你的花卉识别经历，与其他花卉爱好者交流</p>
+
+                <!-- 创建帖子区域 -->
+                <div class="create-post-section" id="createPostSection">
+                    <h3>发布新帖子</h3>
+                    <form class="post-form" id="postForm">
+                        <div class="form-group">
+                            <label for="postContent">内容</label>
+                            <textarea id="postContent" placeholder="分享你的花卉识别故事..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="postImage">图片URL（可选）</label>
+                            <input type="text" id="postImage" placeholder="输入图片链接...">
+                        </div>
+                        <button type="submit" class="btn btn-primary">发布帖子</button>
+                    </form>
+                </div>
+
+                <!-- 帖子列表 -->
+                <div class="posts-section" id="postsSection">
+                    <h3>最新帖子</h3>
+                    <div id="postsList"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 回收站页面 -->
+        <div class="page" id="recycle_bin">
+            <div class="recycle-bin-page">
+                <h2>🗑️ 回收站</h2>
+                <p>管理已删除的帖子和评论</p>
+
+                <div class="recycle-bin-actions">
+                    <button class="btn btn-primary" id="restoreAllBtn">一键恢复</button>
+                    <button class="btn btn-danger" id="clearAllBtn">清空回收站</button>
+                </div>
+
+                <div class="recycle-bin-section">
+                    <h3>已删除的帖子</h3>
+                    <div id="recycleBinPostsList"></div>
+                </div>
+
+                <div class="recycle-bin-section">
+                    <h3>已删除的评论</h3>
+                    <div id="recycleBinCommentsList"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2024 花卉识别AI系统. 保留所有权利.</p>
+        </div>
+    </div>
+
+    <!-- 登录模态框 -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>登录</h2>
+                <span class="close">&times;</span>
+            </div>
+            <form class="form" id="loginForm">
+                <input type="text" id="loginUsername" placeholder="用户名" required>
+                <input type="password" id="loginPassword" placeholder="密码" required>
+                <button type="submit">登录</button>
+                <div class="form-footer">
+                    还没有账号？<a href="#" id="switchToRegister">立即注册</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 注册模态框 -->
+    <div class="modal" id="registerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>注册</h2>
+                <span class="close">&times;</span>
+            </div>
+            <form class="form" id="registerForm">
+                <input type="text" id="registerUsername" placeholder="用户名" required>
+                <input type="email" id="registerEmail" placeholder="邮箱" required>
+                <input type="password" id="registerPassword" placeholder="密码" required>
+                <button type="submit">注册</button>
+                <div class="form-footer">
+                    已有账号？<a href="#" id="switchToLogin">立即登录</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let token = localStorage.getItem('token');
+        let user = JSON.parse(localStorage.getItem('user'));
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+        });
+
+        // 初始化应用
+        function initializeApp() {
+            setupNavigation();
+            setupAuthModals();
+            setupFileUpload();
+            setupCommunity();
+            setupRecycleBin();
+            updateAuthState();
+        }
+
+        // 设置导航
+        function setupNavigation() {
+            const navLinks = document.querySelectorAll('.nav-link[data-page]');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const pageId = this.getAttribute('data-page');
+                    switchPage(pageId);
+                });
+            });
+        }
+
+        // 切换页面
+        function switchPage(pageId) {
+            const pages = document.querySelectorAll('.page');
+            pages.forEach(page => {
+                page.classList.remove('active');
+            });
+            document.getElementById(pageId).classList.add('active');
+
+            // 如果切换到社区页面，加载帖子
+            if (pageId === 'community') {
+                loadPosts();
+            }
+        }
+
+        // 设置认证模态框
+        function setupAuthModals() {
+            // 登录按钮
+            document.getElementById('loginBtn').addEventListener('click', function() {
+                openModal('loginModal');
+            });
+
+            // 注册按钮
+            document.getElementById('registerBtn').addEventListener('click', function() {
+                openModal('registerModal');
+            });
+
+            // 切换到注册
+            document.getElementById('switchToRegister').addEventListener('click', function(e) {
+                e.preventDefault();
+                closeModal('loginModal');
+                openModal('registerModal');
+            });
+
+            // 切换到登录
+            document.getElementById('switchToLogin').addEventListener('click', function(e) {
+                e.preventDefault();
+                closeModal('registerModal');
+                openModal('loginModal');
+            });
+
+            // 关闭模态框
+            const closeButtons = document.querySelectorAll('.close');
+            closeButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const modal = this.closest('.modal');
+                    closeModal(modal.id);
+                });
+            });
+
+            // 点击模态框外部关闭
+            window.addEventListener('click', function(e) {
+                if (e.target.classList.contains('modal')) {
+                    closeModal(e.target.id);
+                }
+            });
+
+            // 登录表单提交
+            document.getElementById('loginForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                handleLogin();
+            });
+
+            // 注册表单提交
+            document.getElementById('registerForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                handleRegister();
+            });
+
+            // 退出登录
+            document.getElementById('logoutBtn').addEventListener('click', function() {
+                handleLogout();
+            });
+        }
+
+        // 打开模态框
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        // 关闭模态框
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // 处理登录
+        async function handleLogin() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    token = data.token;
+                    user = {
+                        id: data.user_id,
+                        username: data.username
+                    };
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(user));
+                    updateAuthState();
+                    closeModal('loginModal');
+                    alert('登录成功！');
+                } else {
+                    alert('登录失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('登录错误:', error);
+                alert('登录失败，请稍后重试');
+            }
+        }
+
+        // 处理注册
+        async function handleRegister() {
+            const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password, email })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    token = data.token;
+                    user = {
+                        id: data.user_id,
+                        username: data.username
+                    };
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(user));
+                    updateAuthState();
+                    closeModal('registerModal');
+                    alert('注册成功！');
+                } else {
+                    alert('注册失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('注册错误:', error);
+                alert('注册失败，请稍后重试');
+            }
+        }
+
+        // 处理退出登录
+        function handleLogout() {
+            token = null;
+            user = null;
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            updateAuthState();
+            alert('已退出登录');
+        }
+
+        // 更新认证状态
+        function updateAuthState() {
+            const authButtons = document.getElementById('authButtons');
+            const userInfo = document.getElementById('userInfo');
+            const usernameDisplay = document.getElementById('usernameDisplay');
+            const createPostSection = document.getElementById('createPostSection');
+
+            if (user && token) {
+                authButtons.style.display = 'none';
+                userInfo.style.display = 'flex';
+                userInfo.style.alignItems = 'center';
+                userInfo.style.gap = '15px';
+                usernameDisplay.textContent = user.username;
+                createPostSection.style.display = 'block';
+            } else {
+                authButtons.style.display = 'flex';
+                userInfo.style.display = 'none';
+                createPostSection.style.display = 'none';
+            }
+        }
+
+        // 设置文件上传
+        function setupFileUpload() {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+
+            // 点击上传
+            dropZone.addEventListener('click', function() {
+                fileInput.click();
+            });
+
+            // 拖拽上传
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', function() {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    fileInput.files = e.dataTransfer.files;
+                }
+            });
+
+            // 文件选择变化
+            fileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    console.log('选择了', this.files.length, '个文件');
+                }
+            });
+
+            // 上传按钮点击
+            uploadBtn.addEventListener('click', function() {
+                if (fileInput.files.length > 0) {
+                    handleMultipleFiles(fileInput.files);
+                } else {
+                    alert('请先选择图片文件！');
+                }
+            });
+        }
+
+        // 处理多个文件上传
+        async function handleMultipleFiles(files) {
+            const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+            
+            if (imageFiles.length === 0) {
+                alert('请选择图片文件！');
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const resultsSection = document.getElementById('resultsSection');
+
+            loading.classList.add('active');
+            resultsSection.classList.remove('active');
+
+            try {
+                const allResults = [];
+                const totalFiles = imageFiles.length;
+
+                for (let i = 0; i < totalFiles; i++) {
+                    const file = imageFiles[i];
+                    const imageData = await readFileAsDataURL(file);
+                    const result = await callRecognitionAPI(imageData);
+
+                    allResults.push({
+                        file: file,
+                        imageData: imageData,
+                        detections: result.detections,
+                        exif_info: result.exif_info
+                    });
+
+                    const progress = ((i + 1) / totalFiles) * 100;
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `${Math.round(progress)}% (${i + 1}/${totalFiles})`;
+                }
+
+                displayAllResults(allResults);
+                resultsSection.classList.add('active');
+            } catch (error) {
+                console.error('处理图片时发生错误:', error);
+                alert('处理图片时发生错误: ' + error.message);
+            } finally {
+                loading.classList.remove('active');
+            }
+        }
+
+        // 读取文件为DataURL
+        function readFileAsDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    resolve(e.target.result);
+                };
+                reader.onerror = function() {
+                    reject(new Error('文件读取失败'));
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 调用识别API
+        async function callRecognitionAPI(imageData) {
+            const response = await fetch('/api/detect', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ image: imageData })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                return data.results;
+            } else {
+                throw new Error('识别失败: ' + (data.error || '未知错误'));
+            }
+        }
+
+        // 显示所有结果
+        function displayAllResults(allResults) {
+            const allResultsDiv = document.getElementById('allResults');
+            allResultsDiv.innerHTML = '';
+
+            allResults.forEach((item, index) => {
+                const resultContainer = document.createElement('div');
+                resultContainer.className = 'single-result';
+                resultContainer.style.padding = '20px';
+                resultContainer.style.border = '1px solid #e0e0e0';
+                resultContainer.style.borderRadius = '15px';
+                resultContainer.style.backgroundColor = '#fafafa';
+                resultContainer.style.marginBottom = '20px';
+
+                const imagePreview = document.createElement('img');
+                imagePreview.src = item.imageData;
+                imagePreview.style.maxWidth = '100%';
+                imagePreview.style.maxHeight = '400px';
+                imagePreview.style.borderRadius = '10px';
+                imagePreview.style.marginBottom = '20px';
+                imagePreview.style.display = 'block';
+                imagePreview.style.marginLeft = 'auto';
+                imagePreview.style.marginRight = 'auto';
+
+                const exifDiv = document.createElement('div');
+                exifDiv.style.backgroundColor = '#ffffff';
+                exifDiv.style.borderRadius = '10px';
+                exifDiv.style.padding = '20px';
+                exifDiv.style.marginBottom = '20px';
+                exifDiv.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
+
+                const exifTitle = document.createElement('h3');
+                exifTitle.textContent = '图片信息';
+                exifTitle.style.marginTop = '0';
+                exifTitle.style.marginBottom = '15px';
+
+                const exifContent = document.createElement('div');
+                exifContent.innerHTML = `
+                    <p><strong>拍摄时间:</strong> ${item.exif_info.date_time}</p>
+                    <p><strong>位置:</strong> ${item.exif_info.location.formatted_address}</p>
+                    <p><strong>相机:</strong> ${item.exif_info.camera_info.make} ${item.exif_info.camera_info.model}</p>
+                    <p><strong>尺寸:</strong> ${item.exif_info.image_details.width} × ${item.exif_info.image_details.height}</p>
+                `;
+
+                exifDiv.appendChild(exifTitle);
+                exifDiv.appendChild(exifContent);
+
+                const detectionsDiv = document.createElement('div');
+                detectionsDiv.style.backgroundColor = '#ffffff';
+                detectionsDiv.style.borderRadius = '10px';
+                detectionsDiv.style.padding = '20px';
+                detectionsDiv.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
+
+                const detectionsTitle = document.createElement('h3');
+                detectionsTitle.textContent = '识别结果';
+                detectionsTitle.style.marginTop = '0';
+                detectionsTitle.style.marginBottom = '15px';
+
+                const detectionsList = document.createElement('div');
+                item.detections.forEach(detection => {
+                    const detectionItem = document.createElement('div');
+                    detectionItem.className = 'result-item';
+                    detectionItem.innerHTML = `
+                        <span class="flower-name">${detection.name}</span>
+                        <span class="confidence ${getConfidenceClass(detection.confidence)}">${(detection.confidence * 100).toFixed(2)}%</span>
+                    `;
+                    detectionsList.appendChild(detectionItem);
+                });
+
+                detectionsDiv.appendChild(detectionsTitle);
+                detectionsDiv.appendChild(detectionsList);
+
+                resultContainer.appendChild(imagePreview);
+                resultContainer.appendChild(exifDiv);
+                resultContainer.appendChild(detectionsDiv);
+
+                allResultsDiv.appendChild(resultContainer);
+            });
+        }
+
+        // 获取置信度等级
+        function getConfidenceClass(confidence) {
+            if (confidence >= 0.8) return 'high';
+            if (confidence >= 0.6) return 'medium';
+            return 'low';
+        }
+
+        // 设置社区功能
+        function setupCommunity() {
+            const postForm = document.getElementById('postForm');
+            if (postForm) {
+                postForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    handleCreatePost();
+                });
+            }
+        }
+
+        // 处理创建帖子
+        async function handleCreatePost() {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            const content = document.getElementById('postContent').value;
+            const imageUrl = document.getElementById('postImage').value;
+
+            if (!content) {
+                alert('帖子内容不能为空');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/posts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ content, image_url: imageUrl })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('帖子发布成功！');
+                    document.getElementById('postContent').value = '';
+                    document.getElementById('postImage').value = '';
+                    loadPosts();
+                } else {
+                    alert('发布失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('发布帖子错误:', error);
+                alert('发布失败，请稍后重试');
+            }
+        }
+
+        // 加载帖子
+        async function loadPosts() {
+            const postsList = document.getElementById('postsList');
+            if (!postsList) return;
+
+            postsList.innerHTML = '<p>加载中...</p>';
+
+            try {
+                const response = await fetch('/api/posts');
+                const data = await response.json();
+
+                if (data.success) {
+                    displayPosts(data.posts);
+                } else {
+                    postsList.innerHTML = '<p>加载失败，请稍后重试</p>';
+                }
+            } catch (error) {
+                console.error('加载帖子错误:', error);
+                postsList.innerHTML = '<p>加载失败，请稍后重试</p>';
+            }
+        }
+
+        // 显示帖子
+        function displayPosts(posts) {
+            const postsList = document.getElementById('postsList');
+            postsList.innerHTML = '';
+
+            if (posts.length === 0) {
+                postsList.innerHTML = '<p>暂无帖子，快来发布第一条吧！</p>';
+                return;
+            }
+
+            posts.forEach(post => {
+                const postCard = document.createElement('div');
+                postCard.className = 'post-card';
+
+                postCard.innerHTML = `
+                    <div class="post-header">
+                        <span class="post-author">${post.username}</span>
+                        <span class="post-time">${new Date(post.created_at * 1000).toLocaleString()}</span>
+                    </div>
+                    <div class="post-content">${post.content}</div>
+                    ${post.image_url ? `<img src="${post.image_url}" class="post-image">` : ''}
+                    <div class="post-actions">
+                        <button class="action-btn" onclick="handleLike(${post.id})">
+                            <i class="fa fa-heart"></i>
+                            <span>${post.likes_count}</span>
+                        </button>
+                        <button class="action-btn">
+                            <i class="fa fa-comment"></i>
+                            <span>${post.comments_count}</span>
+                        </button>
+                        <button class="action-btn">
+                            <i class="fa fa-share"></i>
+                            <span>分享</span>
+                        </button>
+                    </div>
+                `;
+
+                postsList.appendChild(postCard);
+            });
+        }
+
+        // 处理点赞
+        async function handleLike(postId) {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/posts/${postId}/like`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    loadPosts();
+                } else {
+                    alert('点赞失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('点赞错误:', error);
+                alert('点赞失败，请稍后重试');
+            }
+        }
+
+        // 设置回收站功能
+        function setupRecycleBin() {
+            const restoreAllBtn = document.getElementById('restoreAllBtn');
+            const clearAllBtn = document.getElementById('clearAllBtn');
+
+            if (restoreAllBtn) {
+                restoreAllBtn.addEventListener('click', function() {
+                    handleRestoreAll();
+                });
+            }
+
+            if (clearAllBtn) {
+                clearAllBtn.addEventListener('click', function() {
+                    handleClearAll();
+                });
+            }
+        }
+
+        // 一键恢复
+        async function handleRestoreAll() {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            if (!confirm('确定要一键恢复所有已删除的内容吗？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/recycle_bin/restore_all', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('一键恢复成功！');
+                    loadRecycleBin();
+                } else {
+                    alert('恢复失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('一键恢复错误:', error);
+                alert('恢复失败，请稍后重试');
+            }
+        }
+
+        // 清空回收站
+        async function handleClearAll() {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            if (!confirm('确定要清空回收站吗？此操作不可恢复！')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/recycle_bin/clear_all', {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('清空回收站成功！');
+                    loadRecycleBin();
+                } else {
+                    alert('清空失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('清空回收站错误:', error);
+                alert('清空失败，请稍后重试');
+            }
+        }
+
+        // 加载回收站内容
+        async function loadRecycleBin() {
+            if (!user || !token) {
+                return;
+            }
+
+            const recycleBinPostsList = document.getElementById('recycleBinPostsList');
+            const recycleBinCommentsList = document.getElementById('recycleBinCommentsList');
+
+            if (recycleBinPostsList) {
+                recycleBinPostsList.innerHTML = '<p>加载中...</p>';
+            }
+
+            if (recycleBinCommentsList) {
+                recycleBinCommentsList.innerHTML = '<p>加载中...</p>';
+            }
+
+            try {
+                const postsResponse = await fetch('/api/recycle_bin/posts', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const postsData = await postsResponse.json();
+
+                if (postsData.success && recycleBinPostsList) {
+                    displayRecycleBinPosts(postsData.posts);
+                }
+
+                const commentsResponse = await fetch('/api/recycle_bin/comments', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const commentsData = await commentsResponse.json();
+
+                if (commentsData.success && recycleBinCommentsList) {
+                    displayRecycleBinComments(commentsData.comments);
+                }
+            } catch (error) {
+                console.error('加载回收站错误:', error);
+                if (recycleBinPostsList) {
+                    recycleBinPostsList.innerHTML = '<p>加载失败，请稍后重试</p>';
+                }
+                if (recycleBinCommentsList) {
+                    recycleBinCommentsList.innerHTML = '<p>加载失败，请稍后重试</p>';
+                }
+            }
+        }
+
+        // 显示回收站帖子
+        function displayRecycleBinPosts(posts) {
+            const recycleBinPostsList = document.getElementById('recycleBinPostsList');
+            if (!recycleBinPostsList) return;
+
+            recycleBinPostsList.innerHTML = '';
+
+            if (posts.length === 0) {
+                recycleBinPostsList.innerHTML = '<p>暂无已删除的帖子</p>';
+                return;
+            }
+
+            posts.forEach(post => {
+                const postCard = document.createElement('div');
+                postCard.className = 'post-card';
+                postCard.style.opacity = '0.7';
+
+                postCard.innerHTML = `
+                    <div class="post-header">
+                        <span class="post-author">${post.username}</span>
+                        <span class="post-time">${new Date(post.deleted_at * 1000).toLocaleString()}</span>
+                    </div>
+                    <div class="post-content">${post.content}</div>
+                    ${post.image_url ? `<img src="${post.image_url}" class="post-image">` : ''}
+                    <div class="post-actions">
+                        <button class="action-btn" onclick="handleRestorePost(${post.id})">
+                            <i class="fa fa-undo"></i>
+                            <span>恢复</span>
+                        </button>
+                        <button class="action-btn" onclick="handlePermanentlyDeletePost(${post.id})">
+                            <i class="fa fa-trash"></i>
+                            <span>永久删除</span>
+                        </button>
+                    </div>
+                `;
+
+                recycleBinPostsList.appendChild(postCard);
+            });
+        }
+
+        // 显示回收站评论
+        function displayRecycleBinComments(comments) {
+            const recycleBinCommentsList = document.getElementById('recycleBinCommentsList');
+            if (!recycleBinCommentsList) return;
+
+            recycleBinCommentsList.innerHTML = '';
+
+            if (comments.length === 0) {
+                recycleBinCommentsList.innerHTML = '<p>暂无已删除的评论</p>';
+                return;
+            }
+
+            comments.forEach(comment => {
+                const commentCard = document.createElement('div');
+                commentCard.className = 'post-card';
+                commentCard.style.opacity = '0.7';
+
+                commentCard.innerHTML = `
+                    <div class="post-header">
+                        <span class="post-author">${comment.username}</span>
+                        <span class="post-time">${new Date(comment.deleted_at * 1000).toLocaleString()}</span>
+                    </div>
+                    <div class="post-content">${comment.content}</div>
+                    <div class="post-actions">
+                        <button class="action-btn" onclick="handleRestoreComment(${comment.id})">
+                            <i class="fa fa-undo"></i>
+                            <span>恢复</span>
+                        </button>
+                        <button class="action-btn" onclick="handlePermanentlyDeleteComment(${comment.id})">
+                            <i class="fa fa-trash"></i>
+                            <span>永久删除</span>
+                        </button>
+                    </div>
+                `;
+
+                recycleBinCommentsList.appendChild(commentCard);
+            });
+        }
+
+        // 恢复帖子
+        async function handleRestorePost(postId) {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/recycle_bin/posts/${postId}/restore`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('恢复成功！');
+                    loadRecycleBin();
+                } else {
+                    alert('恢复失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('恢复帖子错误:', error);
+                alert('恢复失败，请稍后重试');
+            }
+        }
+
+        // 恢复评论
+        async function handleRestoreComment(commentId) {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/recycle_bin/comments/${commentId}/restore`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('恢复成功！');
+                    loadRecycleBin();
+                } else {
+                    alert('恢复失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('恢复评论错误:', error);
+                alert('恢复失败，请稍后重试');
+            }
+        }
+
+        // 永久删除帖子
+        async function handlePermanentlyDeletePost(postId) {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            if (!confirm('确定要永久删除此帖子吗？此操作不可恢复！')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/recycle_bin/posts/${postId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('永久删除操作已记录');
+                    loadRecycleBin();
+                } else {
+                    alert('删除失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('永久删除帖子错误:', error);
+                alert('删除失败，请稍后重试');
+            }
+        }
+
+        // 永久删除评论
+        async function handlePermanentlyDeleteComment(commentId) {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            if (!confirm('确定要永久删除此评论吗？此操作不可恢复！')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/recycle_bin/comments/${commentId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('永久删除操作已记录');
+                    loadRecycleBin();
+                } else {
+                    alert('删除失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('永久删除评论错误:', error);
+                alert('删除失败，请稍后重试');
+            }
+        }
+
+        // 页面切换时加载回收站内容
+        const originalSwitchPage = window.switchPage;
+        window.switchPage = function(pageId) {
+            originalSwitchPage(pageId);
+            if (pageId === 'recycle_bin') {
+                loadRecycleBin();
+            }
+        };
+    </script>
+</body>
+</html>
