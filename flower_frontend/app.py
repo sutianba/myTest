@@ -1169,6 +1169,421 @@ def toggle_favorite():
         print(f"收藏操作失败: {e}")
         return jsonify({'success': False, 'error': '收藏操作失败'})
 
+# 回收站相关API
+@app.route('/api/recycle_bin/posts', methods=['GET'])
+@login_required
+def get_recycle_bin_posts():
+    """获取回收站中的帖子"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        user_id = user['id']
+        
+        cursor.execute('''
+        SELECT * FROM post_recycle_bin
+        WHERE user_id = ?
+        ORDER BY deleted_at DESC
+        ''', (user_id,))
+        posts = cursor.fetchall()
+        
+        connection.close()
+        
+        posts_list = [{'id': post['id'], 'post_id': post['post_id'], 'content': post['content'], 
+                      'image_url': post['image_url'], 'deleted_at': post['deleted_at'],
+                      'restored_at': post['restored_at'], 'is_permanently_deleted': post['is_permanently_deleted']}
+                     for post in posts]
+        
+        return jsonify({'success': True, 'posts': posts_list})
+    except Exception as e:
+        print(f"获取回收站帖子时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle_bin/comments', methods=['GET'])
+@login_required
+def get_recycle_bin_comments():
+    """获取回收站中的评论"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        user_id = user['id']
+        
+        cursor.execute('''
+        SELECT * FROM comment_recycle_bin
+        WHERE user_id = ?
+        ORDER BY deleted_at DESC
+        ''', (user_id,))
+        comments = cursor.fetchall()
+        
+        connection.close()
+        
+        comments_list = [{'id': comment['id'], 'comment_id': comment['comment_id'], 'post_id': comment['post_id'],
+                         'content': comment['content'], 'deleted_at': comment['deleted_at'],
+                         'restored_at': comment['restored_at'], 'is_permanently_deleted': comment['is_permanently_deleted']}
+                        for comment in comments]
+        
+        return jsonify({'success': True, 'comments': comments_list})
+    except Exception as e:
+        print(f"获取回收站评论时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle_bin/posts/<int:post_id>/restore', methods=['POST'])
+@login_required
+def restore_post(post_id):
+    """恢复帖子"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        user_id = user['id']
+        
+        cursor.execute('''
+        SELECT * FROM post_recycle_bin WHERE id = ? AND user_id = ?
+        ''', (post_id, user_id))
+        recycle_post = cursor.fetchone()
+        
+        if not recycle_post:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '帖子不存在或无权限'})
+        
+        current_time = int(time.time())
+        
+        cursor.execute('''
+        INSERT INTO posts (user_id, content, image_url, likes_count, comments_count, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (recycle_post['user_id'], recycle_post['content'], recycle_post['image_url'], 0, 0, current_time, current_time))
+        
+        new_post_id = cursor.lastrowid
+        
+        cursor.execute('''
+        UPDATE post_recycle_bin SET restored_at = ?, is_permanently_deleted = 0 WHERE id = ?
+        ''', (current_time, post_id))
+        
+        cursor.execute('''
+        INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, 'restore_post', 'post', new_post_id, f'恢复帖子: {recycle_post["content"][:50]}', current_time))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"恢复帖子时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle_bin/comments/<int:comment_id>/restore', methods=['POST'])
+@login_required
+def restore_comment(comment_id):
+    """恢复评论"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        user_id = user['id']
+        
+        cursor.execute('''
+        SELECT * FROM comment_recycle_bin WHERE id = ? AND user_id = ?
+        ''', (comment_id, user_id))
+        recycle_comment = cursor.fetchone()
+        
+        if not recycle_comment:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '评论不存在或无权限'})
+        
+        current_time = int(time.time())
+        
+        cursor.execute('''
+        INSERT INTO comments (post_id, user_id, content, created_at)
+        VALUES (?, ?, ?, ?)
+        ''', (recycle_comment['post_id'], recycle_comment['user_id'], recycle_comment['content'], current_time))
+        
+        new_comment_id = cursor.lastrowid
+        
+        cursor.execute('''
+        UPDATE comment_recycle_bin SET restored_at = ?, is_permanently_deleted = 0 WHERE id = ?
+        ''', (current_time, comment_id))
+        
+        cursor.execute('''
+        UPDATE posts SET comments_count = comments_count + 1 WHERE id = ?
+        ''', (recycle_comment['post_id'],))
+        
+        cursor.execute('''
+        INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, 'restore_comment', 'comment', new_comment_id, f'恢复评论: {recycle_comment["content"][:50]}', current_time))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"恢复评论时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle_bin/posts/<int:post_id>', methods=['DELETE'])
+@login_required
+def permanently_delete_post(post_id):
+    """永久删除帖子"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        user_id = user['id']
+        
+        cursor.execute('''
+        SELECT * FROM post_recycle_bin WHERE id = ? AND user_id = ?
+        ''', (post_id, user_id))
+        recycle_post = cursor.fetchone()
+        
+        if not recycle_post:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '帖子不存在或无权限'})
+        
+        cursor.execute('DELETE FROM post_recycle_bin WHERE id = ?', (post_id,))
+        
+        current_time = int(time.time())
+        cursor.execute('''
+        INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, 'permanently_delete_post', 'post', post_id, f'永久删除帖子: {recycle_post["content"][:50]}', current_time))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"永久删除帖子时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle_bin/comments/<int:comment_id>', methods=['DELETE'])
+@login_required
+def permanently_delete_comment(comment_id):
+    """永久删除评论"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        user_id = user['id']
+        
+        cursor.execute('''
+        SELECT * FROM comment_recycle_bin WHERE id = ? AND user_id = ?
+        ''', (comment_id, user_id))
+        recycle_comment = cursor.fetchone()
+        
+        if not recycle_comment:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '评论不存在或无权限'})
+        
+        cursor.execute('DELETE FROM comment_recycle_bin WHERE id = ?', (comment_id,))
+        
+        current_time = int(time.time())
+        cursor.execute('''
+        INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, 'permanently_delete_comment', 'comment', comment_id, f'永久删除评论: {recycle_comment["content"][:50]}', current_time))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"永久删除评论时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle_bin/restore_all', methods=['POST'])
+@login_required
+def restore_all_recycle_bin_items():
+    """一键恢复所有回收站内容"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        user_id = user['id']
+        current_time = int(time.time())
+        
+        cursor.execute('''
+        SELECT * FROM post_recycle_bin WHERE user_id = ? AND is_permanently_deleted = 0
+        ''', (user_id,))
+        recycle_posts = cursor.fetchall()
+        
+        for post in recycle_posts:
+            cursor.execute('''
+            INSERT INTO posts (user_id, content, image_url, likes_count, comments_count, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (post['user_id'], post['content'], post['image_url'], 0, 0, current_time, current_time))
+            
+            new_post_id = cursor.lastrowid
+            
+            cursor.execute('''
+            UPDATE post_recycle_bin SET restored_at = ?, is_permanently_deleted = 0 WHERE id = ?
+            ''', (current_time, post['id']))
+            
+            cursor.execute('''
+            INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, 'restore_post', 'post', new_post_id, f'恢复帖子: {post["content"][:50]}', current_time))
+        
+        cursor.execute('''
+        SELECT * FROM comment_recycle_bin WHERE user_id = ? AND is_permanently_deleted = 0
+        ''', (user_id,))
+        recycle_comments = cursor.fetchall()
+        
+        for comment in recycle_comments:
+            cursor.execute('''
+            INSERT INTO comments (post_id, user_id, content, created_at)
+            VALUES (?, ?, ?, ?)
+            ''', (comment['post_id'], comment['user_id'], comment['content'], current_time))
+            
+            new_comment_id = cursor.lastrowid
+            
+            cursor.execute('''
+            UPDATE comment_recycle_bin SET restored_at = ?, is_permanently_deleted = 0 WHERE id = ?
+            ''', (current_time, comment['id']))
+            
+            cursor.execute('''
+            UPDATE posts SET comments_count = comments_count + 1 WHERE id = ?
+            ''', (comment['post_id'],))
+            
+            cursor.execute('''
+            INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, 'restore_comment', 'comment', new_comment_id, f'恢复评论: {comment["content"][:50]}', current_time))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"一键恢复时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle_bin/clear_all', methods=['DELETE'])
+@login_required
+def clear_all_recycle_bin_items():
+    """清空回收站"""
+    try:
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '请先登录'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute('SELECT id FROM users WHERE username = ?', (session['username'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户不存在'})
+        
+        user_id = user['id']
+        
+        cursor.execute('DELETE FROM post_recycle_bin WHERE user_id = ?', (user_id,))
+        cursor.execute('DELETE FROM comment_recycle_bin WHERE user_id = ?', (user_id,))
+        
+        current_time = int(time.time())
+        cursor.execute('''
+        INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, 'clear_recycle_bin', 'recycle_bin', None, '清空回收站', current_time))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"清空回收站时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     # 启动Flask服务器
     app.run(host='0.0.0.0', port=5000, debug=True)
