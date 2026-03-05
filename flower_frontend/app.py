@@ -13,6 +13,7 @@ import hashlib
 import secrets
 import jwt
 import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # 导入图片EXIF信息提取所需模块
 from PIL import Image # 用于打开和处理图片
@@ -154,19 +155,18 @@ def login():
             return jsonify({'success': False, 'error': '用户名和密码不能为空'})
 
         # 验证用户
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
         connection = get_db_connection()
         cursor = connection.cursor()
         
         # 查询用户
-        query = "SELECT * FROM users WHERE username = ? AND password_hash = ?"
-        cursor.execute(query, (username, hashed_password))
+        query = "SELECT * FROM users WHERE username = ?"
+        cursor.execute(query, (username,))
         user = cursor.fetchone()
         
         cursor.close()
         connection.close()
         
-        if user:
+        if user and check_password_hash(user['password_hash'], password):
             # 登录成功，生成JWT token
             payload = {
                 'user_id': user['id'],
