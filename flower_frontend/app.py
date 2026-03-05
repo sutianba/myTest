@@ -11,6 +11,8 @@ from flask import Flask, request, jsonify, send_from_directory, session, redirec
 from flask_cors import CORS
 import hashlib
 import secrets
+import jwt
+import datetime
 
 # 导入图片EXIF信息提取所需模块
 from PIL import Image # 用于打开和处理图片
@@ -165,10 +167,15 @@ def login():
         connection.close()
         
         if user:
-            # 登录成功，设置会话
-            session['username'] = username
-            session['role'] = user['role']
-            return jsonify({'success': True, 'message': '登录成功', 'role': user['role']})
+            # 登录成功，生成JWT token
+            payload = {
+                'user_id': user['id'],
+                'username': user['username'],
+                'role': user['role'],
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            }
+            token = jwt.encode(payload, app.secret_key, algorithm='HS256')
+            return jsonify({'success': True, 'message': '登录成功', 'token': token, 'user_id': user['id'], 'username': user['username'], 'role': user['role']})
         else:
             return jsonify({'success': False, 'error': '用户名或密码错误'})
     except Exception as e:
