@@ -563,7 +563,7 @@
             <ul class="navbar-nav">
                 <li class="nav-item"><a href="#" class="nav-link" data-page="home">首页</a></li>
                 <li class="nav-item"><a href="#" class="nav-link" data-page="community">社区</a></li>
-                <li class="nav-item"><a href="#" class="nav-link" data-page="recycle_bin">回收站</a></li>
+                <li class="nav-item" id="recycleBinNavItem" style="display: none;"><a href="#" class="nav-link" data-page="recycle_bin">回收站</a></li>
                 <li class="nav-item"><a href="#" class="nav-link" data-page="about">关于</a></li>
             </ul>
             <div class="auth-buttons" id="authButtons">
@@ -906,6 +906,7 @@
             const userInfo = document.getElementById('userInfo');
             const usernameDisplay = document.getElementById('usernameDisplay');
             const createPostSection = document.getElementById('createPostSection');
+            const recycleBinNavItem = document.getElementById('recycleBinNavItem');
 
             if (user && token) {
                 authButtons.style.display = 'none';
@@ -914,10 +915,16 @@
                 userInfo.style.gap = '15px';
                 usernameDisplay.textContent = user.username;
                 createPostSection.style.display = 'block';
+                if (recycleBinNavItem) {
+                    recycleBinNavItem.style.display = 'block';
+                }
             } else {
                 authButtons.style.display = 'flex';
                 userInfo.style.display = 'none';
                 createPostSection.style.display = 'none';
+                if (recycleBinNavItem) {
+                    recycleBinNavItem.style.display = 'none';
+                }
             }
         }
 
