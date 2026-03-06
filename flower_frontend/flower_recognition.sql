@@ -209,7 +209,11 @@ CREATE TABLE `operation_logs` (
 -- ----------------------------
 -- Insert initial data
 -- ----------------------------
-SET FOREIGN_KEY_CHECKS = 1;
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- Insert users (password: password123)
+INSERT INTO `users` (`id`, `username`, `email`, `password_hash`, `created_at`, `updated_at`) VALUES
+(1, 'testuser', 'test@example.com', 'pbkdf2:sha256:1000000$A3wkEuJm94FlOPHg$7b215c12d3c301d920da0a8f6629eba4d69e0804a51a0f6f929f8b5fbbef5a60', FROM_UNIXTIME(1769563038), FROM_UNIXTIME(1769563038));
 
 -- Insert roles
 INSERT INTO `roles` (`id`, `name`, `description`) VALUES
@@ -236,10 +240,6 @@ INSERT INTO `user_roles` (`user_id`, `role_id`) VALUES
 INSERT INTO `role_permissions` (`role_id`, `permission_id`) VALUES
 (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8), (1, 9),
 (2, 1), (2, 2), (2, 5), (2, 6), (2, 7), (2, 8), (2, 9);
-
--- Insert users (password: password123)
-INSERT INTO `users` (`id`, `username`, `email`, `password_hash`, `created_at`, `updated_at`) VALUES
-(1, 'testuser', 'test@example.com', 'pbkdf2:sha256:1000000$A3wkEuJm94FlOPHg$7b215c12d3c301d920da0a8f6629eba4d69e0804a51a0f6f929f8b5fbbef5a60', FROM_UNIXTIME(1769563038), FROM_UNIXTIME(1769563038));
 
 -- Insert posts
 INSERT INTO `posts` (`id`, `user_id`, `content`, `image_url`, `likes_count`, `comments_count`, `created_at`, `updated_at`) VALUES
