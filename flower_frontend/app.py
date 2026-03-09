@@ -48,6 +48,9 @@ from jwt_manager import (
     REFRESH_TOKEN_EXPIRY
 )
 
+# 导入验证码功能
+from captcha import generate_captcha, verify_captcha, clear_captcha
+
 # 导入图片EXIF信息提取所需模块
 from PIL import Image # 用于打开和处理图片
 from PIL.ExifTags import TAGS # 用于将EXIF标签ID映射到标签名称
