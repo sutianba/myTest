@@ -7,7 +7,7 @@ import base64
 import io
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for, make_response
 from flask_cors import CORS
 import hashlib
 import secrets
@@ -24,6 +24,29 @@ from email_config import generate_verification_token, send_verification_email, v
 
 # 导入密码哈希功能
 from password_hash import hash_password, verify_password
+
+# 导入安全防护功能
+from security import (
+    record_login_failure, 
+    record_login_success, 
+    check_login_failure_limit,
+    check_login_cooldown,
+    get_login_failures_count,
+    clear_login_failures
+)
+
+# 导入JWT管理功能
+from jwt_manager import (
+    generate_access_token,
+    generate_refresh_token,
+    verify_token as verify_jwt_token,
+    add_to_blacklist,
+    invalidate_user_tokens,
+    refresh_access_token,
+    get_current_user_from_token,
+    ACCESS_TOKEN_EXPIRY,
+    REFRESH_TOKEN_EXPIRY
+)
 
 # 导入图片EXIF信息提取所需模块
 from PIL import Image # 用于打开和处理图片
@@ -78,13 +101,24 @@ except Exception as e:
 
 # 路由保护装饰器
 def login_required(f):
-    """检查用户是否已登录的装饰器"""
+    """检查用户是否已登录的装饰器（使用JWT认证）"""
     from functools import wraps
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session:
-            # 用户未登录，重定向到登录页面
-            return jsonify({'success': False, 'error': '用户未登录'}), 401
+        # 获取Token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'success': False, 'error': '未提供认证Token'}), 401
+        
+        token = auth_header.split(' ')[1]
+        
+        # 验证Token
+        current_user = get_current_user_from_token(token)
+        if not current_user:
+            return jsonify({'success': False, 'error': 'Token无效或已过期'}), 401
+        
+        # 将用户信息添加到kwargs
+        kwargs['current_user'] = current_user
         return f(*args, **kwargs)
     return decorated_function
 
@@ -255,14 +289,27 @@ def resend_verification():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    """用户登录API接口"""
+    """用户登录API接口（集成安全防护）"""
     try:
         data = request.get_json()
         username = data.get('username')
         password = data.get('password')
-
+        
+        # 获取客户端IP地址
+        ip_address = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+        
         if not username or not password:
             return jsonify({'success': False, 'error': '用户名和密码不能为空'})
+
+        # 检查登录失败限制
+        allowed, error_msg = check_login_failure_limit(username, ip_address)
+        if not allowed:
+            return jsonify({'success': False, 'error': error_msg})
+        
+        # 检查登录冷却时间
+        allowed, error_msg = check_login_cooldown(username, ip_address)
+        if not allowed:
+            return jsonify({'success': False, 'error': error_msg})
 
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -274,33 +321,29 @@ def login():
         if not user:
             cursor.close()
             connection.close()
+            record_login_failure(username, ip_address, '用户名不存在')
             return jsonify({'success': False, 'error': '用户名或密码错误'})
         
         # 检查用户状态
         if user['status'] != 'active':
             cursor.close()
             connection.close()
+            record_login_failure(username, ip_address, '账号未激活')
             return jsonify({'success': False, 'error': '账号未激活，请先验证邮箱'})
         
         # 验证密码
         if not verify_password(password, user['password_hash']):
             cursor.close()
             connection.close()
+            record_login_failure(username, ip_address, '密码错误')
             return jsonify({'success': False, 'error': '用户名或密码错误'})
         
-        # 生成JWT token
-        payload = {
-            'user_id': user['id'],
-            'username': user['username'],
-            'role': user['role'],
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
-        }
-        token = jwt.encode(payload, app.secret_key, algorithm='HS256')
+        # 登录成功
+        record_login_success(username, ip_address)
         
-        # 设置session
-        session['username'] = user['username']
-        session['user_id'] = user['id']
-        session['token'] = token
+        # 生成JWT Token（Access Token + Refresh Token）
+        access_token = generate_access_token(user['id'], user['username'], user['role'])
+        refresh_token = generate_refresh_token(user['id'], user['username'])
         
         cursor.close()
         connection.close()
@@ -308,7 +351,10 @@ def login():
         return jsonify({
             'success': True,
             'message': '登录成功',
-            'token': token,
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'token_type': 'Bearer',
+            'expires_in': ACCESS_TOKEN_EXPIRY,
             'user': {
                 'id': user['id'],
                 'username': user['username'],
@@ -325,26 +371,76 @@ def login():
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
-    """用户登出API接口"""
+    """用户登出API接口（集成Token黑名单）"""
     try:
+        # 获取Token
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            # 将Token加入黑名单
+            payload = jwt.decode(token, app.secret_key, algorithms=['HS256'])
+            expires_at = datetime.datetime.utcfromtimestamp(payload['exp'])
+            add_to_blacklist(token, expires_at)
+        
+        # 清除session
         session.clear()
+        
         return jsonify({'success': True, 'message': '已成功登出'})
     except Exception as e:
         print(f"登出过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': '登出失败，请稍后重试'})
+
+@app.route('/api/refresh_token', methods=['POST'])
+def refresh_token_endpoint():
+    """刷新Access Token"""
+    try:
+        data = request.get_json()
+        refresh_token = data.get('refresh_token')
+        
+        if not refresh_token:
+            return jsonify({'success': False, 'error': '缺少Refresh Token'})
+        
+        success, new_access_token, error = refresh_access_token(refresh_token)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'access_token': new_access_token,
+                'token_type': 'Bearer',
+                'expires_in': ACCESS_TOKEN_EXPIRY
+            })
+        else:
+            return jsonify({'success': False, 'error': error})
+            
+    except Exception as e:
+        print(f"刷新Token过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '刷新Token失败，请重新登录'})
 
 @app.route('/api/user_info', methods=['GET'])
 def get_user_info():
-    """获取当前用户信息"""
+    """获取当前用户信息（使用JWT认证）"""
     try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '用户未登录'})
+        # 获取Token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'success': False, 'error': '未提供认证Token'})
+        
+        token = auth_header.split(' ')[1]
+        
+        # 验证Token
+        current_user = get_current_user_from_token(token)
+        if not current_user:
+            return jsonify({'success': False, 'error': 'Token无效或已过期'})
         
         connection = get_db_connection()
         cursor = connection.cursor()
         
         check_query = "SELECT id, username, email, role, created_at FROM users WHERE username = %s"
-        cursor.execute(check_query, (session['username'],))
+        cursor.execute(check_query, (current_user['username'],))
         user = cursor.fetchone()
         
         cursor.close()
@@ -372,8 +468,27 @@ def get_user_info():
 
 @app.route('/api/check_auth', methods=['GET'])
 def check_auth():
-    """检查用户认证状态"""
+    """检查用户认证状态（使用JWT认证）"""
     try:
+        # 获取Token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'success': False, 'authenticated': False, 'error': '未提供认证Token'})
+        
+        token = auth_header.split(' ')[1]
+        
+        # 验证Token
+        current_user = get_current_user_from_token(token)
+        if not current_user:
+            return jsonify({'success': False, 'authenticated': False, 'error': 'Token无效或已过期'})
+        
+        return jsonify({
+            'success': True,
+            'authenticated': True,
+            'user': {
+                'username': current_user['username']
+            }
+        })
         if 'username' in session:
             return jsonify({
                 'success': True,

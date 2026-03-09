@@ -271,3 +271,68 @@ INSERT INTO `comments` (`id`, `post_id`, `user_id`, `content`, `created_at`) VAL
 -- Insert likes
 INSERT INTO `likes` (`id`, `post_id`, `user_id`, `created_at`) VALUES
 (1, 1, 1, FROM_UNIXTIME(1769563083));
+
+-- ----------------------------
+-- Table structure for login_attempts
+-- ----------------------------
+DROP TABLE IF EXISTS `login_attempts`;
+CREATE TABLE `login_attempts` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `username` VARCHAR(50) DEFAULT NULL,
+  `ip_address` VARCHAR(45) DEFAULT NULL,
+  `attempt_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `success` BOOLEAN NOT NULL DEFAULT FALSE,
+  `failure_reason` VARCHAR(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_username` (`username`),
+  KEY `idx_ip_address` (`ip_address`),
+  KEY `idx_attempt_time` (`attempt_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------
+-- Table structure for blacklisted_tokens
+-- ----------------------------
+DROP TABLE IF EXISTS `blacklisted_tokens`;
+CREATE TABLE `blacklisted_tokens` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `token` VARCHAR(500) NOT NULL,
+  `blacklisted_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `expires_at` TIMESTAMP NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_token` (`token`(255)),
+  KEY `idx_expires_at` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------
+-- Table structure for email_send_records
+-- ----------------------------
+DROP TABLE IF EXISTS `email_send_records`;
+CREATE TABLE `email_send_records` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `email` VARCHAR(100) NOT NULL,
+  `send_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `success` BOOLEAN NOT NULL DEFAULT FALSE,
+  `error_message` TEXT,
+  PRIMARY KEY (`id`),
+  KEY `idx_email` (`email`),
+  KEY `idx_send_time` (`send_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------
+-- Table structure for registration_attempts
+-- ----------------------------
+DROP TABLE IF EXISTS `registration_attempts`;
+CREATE TABLE `registration_attempts` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `username` VARCHAR(50) DEFAULT NULL,
+  `email` VARCHAR(100) DEFAULT NULL,
+  `ip_address` VARCHAR(45) DEFAULT NULL,
+  `attempt_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `success` BOOLEAN NOT NULL DEFAULT FALSE,
+  `failure_reason` VARCHAR(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_username` (`username`),
+  KEY `idx_email` (`email`),
+  KEY `idx_ip_address` (`ip_address`),
+  KEY `idx_attempt_time` (`attempt_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
