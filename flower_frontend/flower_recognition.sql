@@ -13,12 +13,30 @@ CREATE TABLE `users` (
   `username` VARCHAR(50) NOT NULL,
   `email` VARCHAR(100) NOT NULL,
   `password_hash` VARCHAR(255) NOT NULL,
+  `status` ENUM('unverified', 'active', 'disabled') DEFAULT 'unverified',
   `role` VARCHAR(20) DEFAULT 'user',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`),
   UNIQUE KEY `uk_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------
+-- Table structure for email_verify_tokens
+-- ----------------------------
+DROP TABLE IF EXISTS `email_verify_tokens`;
+CREATE TABLE `email_verify_tokens` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `user_id` INT NOT NULL,
+  `token` VARCHAR(255) NOT NULL,
+  `expires_at` TIMESTAMP NOT NULL,
+  `used_at` TIMESTAMP NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_token` (`token`),
+  CONSTRAINT `fk_email_verify_tokens_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------
@@ -212,9 +230,9 @@ CREATE TABLE `operation_logs` (
 -- ----------------------------
 SET FOREIGN_KEY_CHECKS = 0;
 
--- Insert users (password: password123)
-INSERT INTO `users` (`id`, `username`, `email`, `password_hash`, `created_at`, `updated_at`) VALUES
-(1, 'testuser', 'test@example.com', 'pbkdf2:sha256:1000000$A3wkEuJm94FlOPHg$7b215c12d3c301d920da0a8f6629eba4d69e0804a51a0f6f929f8b5fbbef5a60', FROM_UNIXTIME(1769563038), FROM_UNIXTIME(1769563038));
+-- Insert users (password: password123, status: active)
+INSERT INTO `users` (`id`, `username`, `email`, `password_hash`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'testuser', 'test@example.com', 'pbkdf2:sha256:1000000$A3wkEuJm94FlOPHg$7b215c12d3c301d920da0a8f6629eba4d69e0804a51a0f6f929f8b5fbbef5a60', 'active', FROM_UNIXTIME(1769563038), FROM_UNIXTIME(1769563038));
 
 -- Insert roles
 INSERT INTO `roles` (`id`, `name`, `description`) VALUES

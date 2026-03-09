@@ -15,6 +15,12 @@ import jwt
 import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 
+# 导入邮箱验证功能
+from email_config import generate_verification_token, send_verification_email, verify_token, mark_token_as_used
+
+# 导入密码哈希功能
+from password_hash import hash_password, verify_password
+
 # 导入图片EXIF信息提取所需模块
 from PIL import Image # 用于打开和处理图片
 from PIL.ExifTags import TAGS # 用于将EXIF标签ID映射到标签名称
@@ -58,7 +64,7 @@ import torch
 
 # 使用正确路径加载模型
 try:
-    flower_model = torch.hub.load('..', 'custom', path='../testflowers.pt', source='local', force_reload=True)
+    flower_model = torch.hub.load('..', 'custom', path='../yolov5s.pt', source='local', force_reload=True)
     flower_model.conf = 0.25  # 降低置信度阈值，保留更多检测结果
     flower_model.iou = 0.5   # 保持NMS IOU阈值
     print("成功加载YOLOv5花卉识别模型")
@@ -74,25 +80,174 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if 'username' not in session:
             # 用户未登录，重定向到登录页面
-            return redirect(url_for('login_page'))
+            return jsonify({'success': False, 'error': '用户未登录'}), 401
         return f(*args, **kwargs)
     return decorated_function
 
-@app.route('/')
-@login_required
-def index():
-    """返回前端页面"""
-    return send_from_directory(BASE_DIR, 'index.html')
+# ==================== 邮箱注册相关API ====================
 
-@app.route('/login.html')
-def login_page():
-    """返回登录页面"""
-    return send_from_directory(BASE_DIR, 'login.html')
+@app.route('/api/register', methods=['POST'])
+def register():
+    """用户注册API接口（需要邮箱验证）"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        email = data.get('email')
 
-@app.route('/<path:filename>')
-def serve_file(filename):
-    """返回指定的文件"""
-    return send_from_directory(BASE_DIR, filename)
+        if not username or not password or not email:
+            return jsonify({'success': False, 'error': '用户名、密码和邮箱不能为空'})
+        
+        if len(password) < 6:
+            return jsonify({'success': False, 'error': '密码长度不能少于6位'})
+
+        # 检查用户名是否已存在
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        check_query = "SELECT * FROM users WHERE username = %s OR email = %s"
+        cursor.execute(check_query, (username, email))
+        existing_user = cursor.fetchone()
+        
+        if existing_user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户名或邮箱已存在'})
+        
+        # 密码哈希处理
+        password_hash = hash_password(password)
+        if not password_hash:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '密码加密失败'})
+        
+        # 创建待验证用户记录
+        insert_query = """
+            INSERT INTO users (username, email, password_hash, status) 
+            VALUES (%s, %s, %s, 'unverified')
+        """
+        cursor.execute(insert_query, (username, email, password_hash))
+        user_id = cursor.lastrowid
+        connection.commit()
+        
+        # 生成验证token
+        token = generate_verification_token(user_id, email)
+        
+        # 发送验证邮件
+        result = send_verification_email(email, username, token)
+        
+        cursor.close()
+        connection.close()
+        
+        if result['success']:
+            return jsonify({
+                'success': True, 
+                'message': '注册成功！请前往邮箱完成验证',
+                'email': email
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'error': result.get('error', '注册成功但邮件发送失败，请重试')
+            })
+            
+    except Exception as e:
+        print(f"注册过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '注册失败，请稍后重试'})
+
+@app.route('/api/verify-email', methods=['GET'])
+def verify_email():
+    """邮箱验证API"""
+    try:
+        token = request.args.get('token')
+        
+        if not token:
+            return jsonify({'success': False, 'error': '验证链接无效'})
+        
+        # 验证token
+        verify_result = verify_token(token)
+        
+        if not verify_result['success']:
+            return jsonify({'success': False, 'error': verify_result['error']})
+        
+        token_data = verify_result['data']
+        user_id = token_data['user_id']
+        
+        # 更新用户状态为已激活
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        update_query = "UPDATE users SET status = 'active' WHERE id = %s"
+        cursor.execute(update_query, (user_id,))
+        connection.commit()
+        
+        # 标记token为已使用
+        mark_token_as_used(token)
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'success': True, 
+            'message': '邮箱验证成功！账号已激活',
+            'redirect': '/login.html'
+        })
+        
+    except Exception as e:
+        print(f"邮箱验证过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '验证失败，请重试'})
+
+@app.route('/api/resend_verification', methods=['POST'])
+def resend_verification():
+    """重新发送验证邮件"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({'success': False, 'error': '邮箱不能为空'})
+        
+        # 查找用户
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        check_query = "SELECT * FROM users WHERE email = %s AND status = 'unverified'"
+        cursor.execute(check_query, (email,))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '未找到待验证的账号'})
+        
+        user_id = user['id']
+        username = user['username']
+        
+        # 生成新的验证token
+        token = generate_verification_token(user_id, email)
+        
+        # 发送验证邮件
+        result = send_verification_email(email, username, token)
+        
+        cursor.close()
+        connection.close()
+        
+        if result['success']:
+            return jsonify({'success': True, 'message': '验证邮件已重新发送'})
+        else:
+            return jsonify({'success': False, 'error': result.get('error', '邮件发送失败')})
+            
+    except Exception as e:
+        print(f"重新发送验证邮件过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '发送失败，请稍后重试'})
+
+# ==================== 原有登录API ====================
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -105,30 +260,59 @@ def login():
         if not username or not password:
             return jsonify({'success': False, 'error': '用户名和密码不能为空'})
 
-        # 验证用户
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # 查询用户
-        query = "SELECT * FROM users WHERE username = %s"
-        cursor.execute(query, (username,))
+        check_query = "SELECT * FROM users WHERE username = %s"
+        cursor.execute(check_query, (username,))
         user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户名或密码错误'})
+        
+        # 检查用户状态
+        if user['status'] != 'active':
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '账号未激活，请先验证邮箱'})
+        
+        # 验证密码
+        if not verify_password(password, user['password_hash']):
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '用户名或密码错误'})
+        
+        # 生成JWT token
+        payload = {
+            'user_id': user['id'],
+            'username': user['username'],
+            'role': user['role'],
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
+        }
+        token = jwt.encode(payload, app.secret_key, algorithm='HS256')
+        
+        # 设置session
+        session['username'] = user['username']
+        session['user_id'] = user['id']
+        session['token'] = token
         
         cursor.close()
         connection.close()
         
-        if user and check_password_hash(user['password_hash'], password):
-            # 登录成功，生成JWT token
-            payload = {
-                'user_id': user['id'],
+        return jsonify({
+            'success': True,
+            'message': '登录成功',
+            'token': token,
+            'user': {
+                'id': user['id'],
                 'username': user['username'],
-                'role': user['role'],
-                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+                'email': user['email'],
+                'role': user['role']
             }
-            token = jwt.encode(payload, app.secret_key, algorithm='HS256')
-            return jsonify({'success': True, 'message': '登录成功', 'token': token, 'user_id': user['id'], 'username': user['username'], 'role': user['role']})
-        else:
-            return jsonify({'success': False, 'error': '用户名或密码错误'})
+        })
+        
     except Exception as e:
         print(f"登录过程中发生错误: {type(e).__name__}: {str(e)}")
         import traceback
@@ -139,1409 +323,258 @@ def login():
 def logout():
     """用户登出API接口"""
     try:
-        # 清除会话
-        session.pop('username', None)
-        session.pop('role', None)
-        return jsonify({'success': True, 'message': '登出成功'})
+        session.clear()
+        return jsonify({'success': True, 'message': '已成功登出'})
     except Exception as e:
-        print(f"登出过程中发生错误: {str(e)}")
+        print(f"登出过程中发生错误: {type(e).__name__}: {str(e)}")
         return jsonify({'success': False, 'error': '登出失败，请稍后重试'})
 
-@app.route('/api/register', methods=['POST'])
-def register():
-    """用户注册API接口"""
+@app.route('/api/user_info', methods=['GET'])
+def get_user_info():
+    """获取当前用户信息"""
     try:
-        data = request.get_json()
-        username = data.get('username')
-        password = data.get('password')
-
-        if not username or not password:
-            return jsonify({'success': False, 'error': '用户名和密码不能为空'})
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': '用户未登录'})
         
-        if len(password) < 6:
-            return jsonify({'success': False, 'error': '密码长度不能少于6位'})
-
-        # 检查用户名是否已存在
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        check_query = "SELECT * FROM users WHERE username = %s"
-        cursor.execute(check_query, (username,))
-        existing_user = cursor.fetchone()
-        
-        if existing_user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户名已存在'})
-        
-        # 密码哈希处理
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
-        
-        # 插入新用户，默认为user角色
-        insert_query = "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)"
-        cursor.execute(insert_query, (username, hashed_password, 'user'))
-        connection.commit()
+        check_query = "SELECT id, username, email, role, created_at FROM users WHERE username = %s"
+        cursor.execute(check_query, (session['username'],))
+        user = cursor.fetchone()
         
         cursor.close()
         connection.close()
         
-        return jsonify({'success': True, 'message': '注册成功，请登录'})
-    except Exception as e:
-        print(f"注册过程中发生错误: {type(e).__name__}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': '注册失败，请稍后重试'})
-
-
-@app.route('/api/check_login')
-def check_login():
-    """检查用户是否已登录"""
-    if 'username' in session:
-        return jsonify({'success': True, 'username': session['username'], 'role': session.get('role', 'user')})
-    else:
-        return jsonify({'success': False, 'error': '未登录'})
-
-@app.route('/api/detect', methods=['POST'])
-def detect_flower():
-    """花卉识别API接口"""
-    try:
-        # 获取请求数据
-        data = request.get_json()
+        if not user:
+            return jsonify({'success': False, 'error': '用户不存在'})
         
-        # 支持单图片和多图片请求
-        if 'image' in data:
-            # 单图片请求
-            image_data = data['image']
-            results = process_single_image(image_data)
-            return jsonify({'success': True, 'results': results})
-        elif 'images' in data:
-            # 多图片请求 - 使用线程池异步处理
-            images_data = data['images']
-            
-            # 使用线程池并行处理多张图片
-            futures = []
-            for i, image_data in enumerate(images_data):
-                # 提交任务到线程池
-                future = thread_pool.submit(process_single_image, image_data)
-                futures.append((i, future))
-            
-            # 收集所有结果
-            all_results = []
-            for i, future in futures:
-                try:
-                    results = future.result()  # 获取任务结果
-                    all_results.append({
-                        'image_index': i,
-                        'results': results
-                    })
-                except Exception as e:
-                    print(f"处理第 {i} 张图片时出错: {e}")
-                    all_results.append({
-                        'image_index': i,
-                        'error': str(e),
-                        'results': None
-                    })
-            
-            return jsonify({'success': True, 'all_results': all_results})
-        else:
-            return jsonify({'success': False, 'error': '缺少图片数据'}), 400
-
-    except Exception as e:
-        print(f"识别过程中发生错误: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': f'识别服务不可用，请稍后重试: {str(e)}'}), 500
-
-
-def convert_to_decimal(coord, ref):
-    """将EXIF格式的经纬度转换为十进制格式"""
-    # coord通常是一个包含三个元素的列表：度、分、秒
-    d, m, s = 0, 0, 0
-    
-    # 处理exifread返回的格式
-    if hasattr(coord, 'values'):
-        coord_values = coord.values
-    else:
-        coord_values = coord
-    
-    if len(coord_values) >= 3:
-        # 处理度
-        if hasattr(coord_values[0], 'num') and hasattr(coord_values[0], 'den'):
-            d = coord_values[0].num / coord_values[0].den
-        else:
-            d = float(coord_values[0])
-        
-        # 处理分
-        if hasattr(coord_values[1], 'num') and hasattr(coord_values[1], 'den'):
-            m = coord_values[1].num / coord_values[1].den
-        else:
-            m = float(coord_values[1])
-        
-        # 处理秒
-        if hasattr(coord_values[2], 'num') and hasattr(coord_values[2], 'den'):
-            s = coord_values[2].num / coord_values[2].den
-        else:
-            s = float(coord_values[2])
-    
-    # 计算十进制坐标
-    decimal = d + (m / 60.0) + (s / 3600.0)
-    
-    # 根据参考方向调整符号
-    if ref in ['S', 'W']:
-        decimal = -decimal
-    
-    return decimal
-
-
-# 广西和广东地区经纬度范围数据库（包含部分城市的区信息）
-guangxi_guangdong_cities = {
-    "guangxi": {
-        "province_name": "广西壮族自治区",
-        "cities": {
-            "南宁市": {"lat_min": 22.7, "lat_max": 23.3, "lon_min": 108.1, "lon_max": 108.5, "districts": {}},
-            "柳州市": {"lat_min": 23.6, "lat_max": 24.4, "lon_min": 108.9, "lon_max": 109.7, "districts": {}},
-            "桂林市": {"lat_min": 24.7, "lat_max": 25.5, "lon_min": 110.1, "lon_max": 110.7, "districts": {}},
-            "梧州市": {"lat_min": 22.8, "lat_max": 23.6, "lon_min": 111.1, "lon_max": 111.7, "districts": {}},
-            "北海市": {"lat_min": 20.8, "lat_max": 21.6, "lon_min": 108.8, "lon_max": 109.6, "districts": {}},
-            "防城港市": {"lat_min": 21.3, "lat_max": 22.1, "lon_min": 107.5, "lon_max": 108.5, "districts": {}},
-            "钦州市": {"lat_min": 21.7, "lat_max": 22.7, "lon_min": 108.4, "lon_max": 109.2, "districts": {}},
-            "贵港市": {"lat_min": 22.8, "lat_max": 23.8, "lon_min": 109.2, "lon_max": 109.8, "districts": {}},
-            "玉林市": {"lat_min": 22.1, "lat_max": 23.1, "lon_min": 109.8, "lon_max": 110.6, "districts": {}},
-            "百色市": {"lat_min": 23.5, "lat_max": 24.5, "lon_min": 106.2, "lon_max": 107.0, "districts": {}},
-            "贺州市": {"lat_min": 23.7, "lat_max": 24.5, "lon_min": 111.1, "lon_max": 112.0, "districts": {}},
-            "河池市": {"lat_min": 23.9, "lat_max": 25.1, "lon_min": 107.6, "lon_max": 108.6, "districts": {}},
-            "来宾市": {"lat_min": 23.3, "lat_max": 24.1, "lon_min": 108.6, "lon_max": 109.4, "districts": {}},
-            "崇左市": {"lat_min": 22.1, "lat_max": 23.1, "lon_min": 107.1, "lon_max": 108.2, "districts": {}}
-        }
-    },
-    "guangdong": {
-        "province_name": "广东省",
-        "cities": {
-            "广州市": {
-                "lat_min": 22.7, "lat_max": 23.3, "lon_min": 113.1, "lon_max": 113.6,
-                "districts": {
-                    "越秀区": {"lat_min": 23.12, "lat_max": 23.16, "lon_min": 113.24, "lon_max": 113.30},
-                    "天河区": {"lat_min": 23.11, "lat_max": 23.24, "lon_min": 113.32, "lon_max": 113.40},
-                    "海珠区": {"lat_min": 23.05, "lat_max": 23.15, "lon_min": 113.22, "lon_max": 113.32},
-                    "荔湾区": {"lat_min": 23.06, "lat_max": 23.15, "lon_min": 113.16, "lon_max": 113.26},
-                    "白云区": {"lat_min": 23.10, "lat_max": 23.30, "lon_min": 113.10, "lon_max": 113.30},
-                    "黄埔区": {"lat_min": 23.05, "lat_max": 23.25, "lon_min": 113.35, "lon_max": 113.55},
-                    "番禺区": {"lat_min": 22.80, "lat_max": 23.00, "lon_min": 113.20, "lon_max": 113.50},
-                    "花都区": {"lat_min": 23.20, "lat_max": 23.40, "lon_min": 112.90, "lon_max": 113.20},
-                    "南沙区": {"lat_min": 22.60, "lat_max": 22.80, "lon_min": 113.30, "lon_max": 113.60},
-                    "从化区": {"lat_min": 23.40, "lat_max": 23.70, "lon_min": 113.30, "lon_max": 114.00},
-                    "增城区": {"lat_min": 23.10, "lat_max": 23.50, "lon_min": 113.50, "lon_max": 114.00}
-                }
-            },
-            "深圳市": {
-                "lat_min": 22.3, "lat_max": 22.8, "lon_min": 113.7, "lon_max": 114.6,
-                "districts": {
-                    "罗湖区": {"lat_min": 22.53, "lat_max": 22.57, "lon_min": 114.04, "lon_max": 114.12},
-                    "福田区": {"lat_min": 22.51, "lat_max": 22.57, "lon_min": 113.93, "lon_max": 114.04},
-                    "南山区": {"lat_min": 22.42, "lat_max": 22.55, "lon_min": 113.87, "lon_max": 114.00},
-                    "宝安区": {"lat_min": 22.44, "lat_max": 22.70, "lon_min": 113.72, "lon_max": 114.00},
-                    "龙岗区": {"lat_min": 22.53, "lat_max": 22.80, "lon_min": 114.08, "lon_max": 114.30},
-                    "盐田区": {"lat_min": 22.57, "lat_max": 22.68, "lon_min": 114.22, "lon_max": 114.32},
-                    "龙华区": {"lat_min": 22.54, "lat_max": 22.70, "lon_min": 113.90, "lon_max": 114.08},
-                    "坪山区": {"lat_min": 22.65, "lat_max": 22.80, "lon_min": 114.15, "lon_max": 114.40},
-                    "光明区": {"lat_min": 22.70, "lat_max": 22.80, "lon_min": 113.90, "lon_max": 114.05},
-                    "大鹏新区": {"lat_min": 22.40, "lat_max": 22.60, "lon_min": 114.20, "lon_max": 114.60}
-                }
-            },
-            "珠海市": {"lat_min": 21.8, "lat_max": 22.4, "lon_min": 113.2, "lon_max": 113.7, "districts": {}},
-            "汕头市": {"lat_min": 23.1, "lat_max": 23.5, "lon_min": 116.4, "lon_max": 117.2, "districts": {}},
-            "佛山市": {"lat_min": 22.9, "lat_max": 23.3, "lon_min": 112.9, "lon_max": 113.3, "districts": {}},
-            "韶关市": {"lat_min": 24.5, "lat_max": 25.4, "lon_min": 113.4, "lon_max": 114.3, "districts": {}},
-            "湛江市": {"lat_min": 20.8, "lat_max": 21.5, "lon_min": 110.2, "lon_max": 110.9, "districts": {}},
-            "肇庆市": {"lat_min": 23.1, "lat_max": 23.8, "lon_min": 112.2, "lon_max": 112.8, "districts": {}},
-            "江门市": {"lat_min": 22.3, "lat_max": 22.8, "lon_min": 112.4, "lon_max": 113.0, "districts": {}},
-            "茂名市": {"lat_min": 21.3, "lat_max": 21.8, "lon_min": 110.7, "lon_max": 111.3, "districts": {}},
-            "惠州市": {"lat_min": 22.8, "lat_max": 23.5, "lon_min": 114.3, "lon_max": 114.9, "districts": {}},
-            "梅州市": {"lat_min": 24.0, "lat_max": 24.4, "lon_min": 116.0, "lon_max": 116.4, "districts": {}},
-            "汕尾市": {"lat_min": 22.7, "lat_max": 23.1, "lon_min": 115.2, "lon_max": 116.0, "districts": {}},
-            "河源市": {"lat_min": 23.6, "lat_max": 24.3, "lon_min": 114.4, "lon_max": 115.2, "districts": {}},
-            "阳江市": {"lat_min": 21.7, "lat_max": 22.3, "lon_min": 111.4, "lon_max": 112.0, "districts": {}},
-            "清远市": {"lat_min": 23.4, "lat_max": 24.2, "lon_min": 112.9, "lon_max": 113.5, "districts": {}},
-            "东莞市": {"lat_min": 22.8, "lat_max": 23.1, "lon_min": 113.6, "lon_max": 114.1, "districts": {}},
-            "中山市": {"lat_min": 22.4, "lat_max": 22.7, "lon_min": 113.1, "lon_max": 113.5, "districts": {}},
-            "潮州市": {"lat_min": 23.4, "lat_max": 23.7, "lon_min": 116.3, "lon_max": 116.7, "districts": {}},
-            "揭阳市": {"lat_min": 22.9, "lat_max": 23.5, "lon_min": 115.8, "lon_max": 116.4, "districts": {}},
-            "云浮市": {"lat_min": 22.7, "lat_max": 23.2, "lon_min": 111.9, "lon_max": 112.4, "districts": {}}
-        }
-    }
-}
-
-
-def match_location_by_coordinates(lat, lon):
-    """
-    根据经纬度匹配广西或广东的城市和区
-    使用简单的矩形范围匹配
-    """
-    # 检查是否在广东范围内
-    for city_name, city_info in guangxi_guangdong_cities["guangdong"]["cities"].items():
-        if city_info["lat_min"] <= lat <= city_info["lat_max"] and city_info["lon_min"] <= lon <= city_info["lon_max"]:
-            # 进一步检查是否在该城市的某个区内
-            for district_name, district_coords in city_info["districts"].items():
-                if district_coords["lat_min"] <= lat <= district_coords["lat_max"] and district_coords["lon_min"] <= lon <= district_coords["lon_max"]:
-                    return {
-                        "province": guangxi_guangdong_cities["guangdong"]["province_name"],
-                        "city": city_name,
-                        "district": district_name
-                    }
-            # 如果没有匹配到区，返回城市信息
-            return {
-                "province": guangxi_guangdong_cities["guangdong"]["province_name"],
-                "city": city_name,
-                "district": "未知区"
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user['id'],
+                'username': user['username'],
+                'email': user['email'],
+                'role': user['role'],
+                'created_at': user['created_at'].isoformat() if user['created_at'] else None
             }
-    
-    # 检查是否在广西范围内
-    for city_name, city_info in guangxi_guangdong_cities["guangxi"]["cities"].items():
-        if city_info["lat_min"] <= lat <= city_info["lat_max"] and city_info["lon_min"] <= lon <= city_info["lon_max"]:
-            # 进一步检查是否在该城市的某个区内
-            for district_name, district_coords in city_info["districts"].items():
-                if district_coords["lat_min"] <= lat <= district_coords["lat_max"] and district_coords["lon_min"] <= lon <= district_coords["lon_max"]:
-                    return {
-                        "province": guangxi_guangdong_cities["guangxi"]["province_name"],
-                        "city": city_name,
-                        "district": district_name
-                    }
-            # 如果没有匹配到区，返回城市信息
-            return {
-                "province": guangxi_guangdong_cities["guangxi"]["province_name"],
-                "city": city_name,
-                "district": "未知区"
-            }
-    
-    # 默认返回未知
-    return {
-        "province": "未知省份",
-        "city": "未知城市",
-        "district": "未知区"
-    }
-
-
-def get_address_from_coordinates(lat, lon, max_retries=1):
-    """
-    通过经纬度获取地址信息
-    优先使用geopy和Nominatim服务，失败时返回None
-    优化：减少超时时间和重试次数，提高响应速度
-    """
-    try:
-        # 暂时禁用Nominatim服务以提高速度
-        # geolocator = Nominatim(user_agent="flower_recognition_app", timeout=2)
-        # 
-        # # 重试机制
-        # for attempt in range(max_retries):
-        #     try:
-        #         location = geolocator.reverse((lat, lon), language='zh-CN')
-        #         if location:
-        #             return location.raw.get('address', {})
-        #     except GeocoderTimedOut:
-        #         print(f"地理编码请求超时，第 {attempt + 1} 次尝试...")
-        #     except GeocoderServiceError as e:
-        #         print(f"地理编码服务错误: {e}，第 {attempt + 1} 次尝试...")
-        #     except Exception as e:
-        #         print(f"获取地址信息时出错: {e}")
-        #         break
-        
-        # 直接返回None，使用本地经纬度匹配，避免网络请求延迟
-        return None
-    except Exception as e:
-        print(f"初始化地理编码器时出错: {e}")
-    
-    # 如果无法获取地址信息，返回None，后续会使用本地经纬度匹配
-    return None
-
-
-def format_address(address):
-    """格式化地址信息，提取省、市、区等关键部分"""
-    if not address:
-        return {
-            'formatted_address': "地址信息不可用",
-            'province': "未知省份",
-            'city': "未知城市",
-            'district': "未知区"
-        }
-    
-    # 尝试提取关键地址组件
-    country = address.get('country', '未知国家')
-    province = address.get('state', '') or address.get('province', '') or '未知省份'
-    city = address.get('city', '') or address.get('district', '') or '未知城市'
-    district = address.get('county', '') or address.get('district', '') or ''
-    town = address.get('town', '') or address.get('county', '') or ''
-    street = address.get('road', '') or address.get('street', '') or ''
-    number = address.get('house_number', '')
-    
-    # 如果district与city相同，尝试从town中提取district
-    if district and district == city and town:
-        district = town
-    
-    # 构建完整地址
-    address_parts = [country, province, city]
-    if district and district != city:
-        address_parts.append(district)
-    if town and town != district:
-        address_parts.append(town)
-    if street:
-        address_parts.append(street)
-        if number:
-            address_parts.append(number)
-    
-    # 移除空字符串并连接
-    formatted_address = '，'.join(filter(None, address_parts))
-    
-    # 返回结构化地址信息
-    return {
-        'formatted_address': formatted_address,
-        'province': province,
-        'city': city,
-        'district': district if district and district != city else "未知区"
-    }
-
-
-def process_single_image(image_data):
-    """处理单个图片的识别"""
-    # 移除base64头部
-    if image_data.startswith('data:image/'):
-        image_data = image_data.split(',')[1]
-
-    # 解码base64图片数据
-    try:
-        image_bytes = base64.b64decode(image_data)
-        print(f"成功解码base64数据，大小: {len(image_bytes)} 字节")
-    except Exception as e:
-        print(f"base64解码失败: {e}")
-        raise ValueError("图片数据格式错误，无法解码") from e
-    
-    # 提取图片EXIF信息
-    image_info = {
-        'date_time': "未知",
-        'location': {
-            'has_location': False,
-            'latitude': None,
-            'longitude': None,
-            'formatted_address': "无GPS信息",
-            'province': "未知省份",
-            'city': "未知城市",
-            'district': "未知区",
-            'raw_gps': None
-        },
-        'camera_info': {
-            'make': "未知",
-            'model': "未知"
-        },
-        'image_details': {
-            'width': 0,
-            'height': 0
-        }
-    }
-    
-    # 先提取EXIF信息
-    try:
-        # 直接从内存中读取EXIF信息
-        image_bytes_io = io.BytesIO(image_bytes)
-        
-        # 使用exifread提取EXIF信息
-        exif_tags = exifread.process_file(image_bytes_io)
-        
-        # 获取拍摄时间
-        if 'Image DateTime' in exif_tags:
-            image_info['date_time'] = str(exif_tags['Image DateTime'])
-        elif 'EXIF DateTimeOriginal' in exif_tags:
-            image_info['date_time'] = str(exif_tags['EXIF DateTimeOriginal'])
-        elif 'EXIF DateTimeDigitized' in exif_tags:
-            image_info['date_time'] = str(exif_tags['EXIF DateTimeDigitized'])
-        
-        # 获取相机信息
-        if 'Image Make' in exif_tags:
-            image_info['camera_info']['make'] = str(exif_tags['Image Make'])
-        if 'Image Model' in exif_tags:
-            image_info['camera_info']['model'] = str(exif_tags['Image Model'])
-        
-        # 获取GPS位置信息
-        if all(key in exif_tags for key in ['GPS GPSLongitudeRef', 'GPS GPSLongitude', 
-                                           'GPS GPSLatitudeRef', 'GPS GPSLatitude']):
-            try:
-                # 获取原始的经纬度信息
-                lon_ref = exif_tags['GPS GPSLongitudeRef'].printable
-                lon = exif_tags['GPS GPSLongitude']
-                lat_ref = exif_tags['GPS GPSLatitudeRef'].printable
-                lat = exif_tags['GPS GPSLatitude']
-                
-                # 转换为十进制格式
-                dec_lat = convert_to_decimal(lat, lat_ref)
-                dec_lon = convert_to_decimal(lon, lon_ref)
-                
-                try:
-                    # 获取地址信息
-                    address = get_address_from_coordinates(dec_lat, dec_lon)
-                    if address:
-                        address_info = format_address(address)
-                        formatted_address = address_info['formatted_address']
-                        province = address_info['province']
-                        city = address_info['city']
-                        district = address_info['district']
-                    else:
-                        # 当Nominatim服务失败时，使用本地经纬度匹配广西和广东地区
-                        location_match = match_location_by_coordinates(dec_lat, dec_lon)
-                        formatted_address = f"{location_match['province']}, {location_match['city']}, {location_match['district']}"
-                        province = location_match['province']
-                        city = location_match['city']
-                        district = location_match['district']
-                except Exception as e:
-                    # 当获取地址信息或格式化地址时出错，直接使用本地经纬度匹配
-                    print(f"获取或格式化地址时出错: {e}")
-                    location_match = match_location_by_coordinates(dec_lat, dec_lon)
-                    formatted_address = f"{location_match['province']}, {location_match['city']}, {location_match['district']}"
-                    province = location_match['province']
-                    city = location_match['city']
-                    district = location_match['district']
-                
-                # 更新位置信息
-                image_info['location'] = {
-                    'has_location': True,
-                    'latitude': dec_lat,
-                    'longitude': dec_lon,
-                    'formatted_address': formatted_address,
-                    'province': province,
-                    'city': city,
-                    'district': district,
-                    'raw_gps': {
-                        'lat_ref': lat_ref,
-                        'lat': str(lat),
-                        'lon_ref': lon_ref,
-                        'lon': str(lon)
-                    }
-                }
-            except Exception as e:
-                print(f"处理GPS信息时出错: {e}")
-    except Exception as e:
-        print(f"提取图片EXIF信息失败: {e}")
-
-    # 使用YOLOv5模型进行花卉识别 - 直接处理BytesIO对象，避免重复加载
-    image_io = io.BytesIO(image_bytes)
-    image_for_model = Image.open(image_io)
-    # 调整图片大小以提高处理速度
-    image_for_model = image_for_model.resize((640, 640))
-    # 更新图片尺寸信息
-    image_info['image_details']['width'] = image_for_model.width
-    image_info['image_details']['height'] = image_for_model.height
-    
-    # 使用YOLOv5模型进行花卉识别
-    model_results = flower_model(image_for_model)
-    
-    # 解析识别结果 - 直接获取最高置信度结果
-    detection_results = []
-    model_data = model_results.pandas().xyxy[0]
-    if not model_data.empty:
-        # 直接获取置信度最高的结果
-        best_result = model_data.loc[model_data['confidence'].idxmax()]
-        detection_results.append({
-            'name': best_result['name'],
-            'confidence': float(best_result['confidence']),
-            'bbox': [
-                int(best_result['xmin']),
-                int(best_result['ymin']),
-                int(best_result['xmax']),
-                int(best_result['ymax'])
-            ]
         })
-    
-    # 返回包含识别结果和EXIF信息的响应
-    return {
-        'detections': detection_results,
-        'exif_info': image_info
-    }
-
-# ==================== 社区功能API接口 ====================
-
-@app.route('/api/community/posts', methods=['GET'])
-def get_posts():
-    """获取帖子列表"""
-    try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 10, type=int)
-        category = request.args.get('category', 'all')
         
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        # 构建查询条件
-        if category == 'all':
-            query = '''
-            SELECT p.*, u.username, 
-                   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
-                   (SELECT COUNT(*) FROM likes WHERE target_type = 'post' AND target_id = p.id) as like_count
-            FROM posts p
-            JOIN users u ON p.user_id = u.id
-            WHERE p.status = 'published'
-            ORDER BY p.created_at DESC
-            LIMIT %s OFFSET %s
-            '''
-            cursor.execute(query, (per_page, (page - 1) * per_page))
-        else:
-            query = '''
-            SELECT p.*, u.username,
-                   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
-                   (SELECT COUNT(*) FROM likes WHERE target_type = 'post' AND target_id = p.id) as like_count
-            FROM posts p
-            JOIN users u ON p.user_id = u.id
-            WHERE p.status = 'published' AND p.category = %s
-            ORDER BY p.created_at DESC
-            LIMIT %s OFFSET %s
-            '''
-            cursor.execute(query, (category, per_page, (page - 1) * per_page))
-        
-        posts = cursor.fetchall()
-        
-        # 转换为字典列表
-        posts_list = []
-        for post in posts:
-            # 解析topics JSON字符串
-            topics = []
-            if post['topics']:
-                try:
-                    topics = json.loads(post['topics'])
-                except:
-                    topics = []
-                    
-            posts_list.append({
-                'id': post['id'],
-                'user_id': post['user_id'],
-                'username': post['username'],
-                'title': post['title'],
-                'content': post['content'],
-                'image_data': post['image_data'],
-                'recognition_result': post['recognition_result'],
-                'category': post['category'],
-                'views': post['views'],
-                'comment_count': post['comment_count'],
-                'like_count': post['like_count'],
-                'created_at': post['created_at'],
-                'topics': topics
-            })
-        
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'success': True, 'posts': posts_list})
     except Exception as e:
-        print(f"获取帖子列表失败: {e}")
-        return jsonify({'success': False, 'error': '获取帖子列表失败'})
-
-@app.route('/api/community/posts/<int:post_id>', methods=['GET'])
-def get_post_detail(post_id):
-    """获取帖子详情"""
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        # 获取帖子信息并增加浏览量
-        cursor.execute('''
-        SELECT p.*, u.username,
-               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
-               (SELECT COUNT(*) FROM likes WHERE target_type = 'post' AND target_id = p.id) as like_count
-        FROM posts p
-        JOIN users u ON p.user_id = u.id
-        WHERE p.id = %s
-        ''', (post_id,))
-        
-        post = cursor.fetchone()
-        
-        if not post:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '帖子不存在'})
-        
-        # 增加浏览量
-        cursor.execute('UPDATE posts SET views = views + 1 WHERE id = %s', (post_id,))
-        connection.commit()
-        
-        # 解析topics JSON字符串
-        topics = []
-        if post['topics']:
-            try:
-                topics = json.loads(post['topics'])
-            except:
-                topics = []
-                
-        post_detail = {
-            'id': post['id'],
-            'user_id': post['user_id'],
-            'username': post['username'],
-            'title': post['title'],
-            'content': post['content'],
-            'image_data': post['image_data'],
-            'recognition_result': post['recognition_result'],
-            'category': post['category'],
-            'views': post['views'] + 1,
-            'comment_count': post['comment_count'],
-            'like_count': post['like_count'],
-            'created_at': post['created_at'],
-            'topics': topics
-        }
-        
-        # 获取评论列表
-        cursor.execute('''
-        SELECT c.*, u.username
-        FROM comments c
-        JOIN users u ON c.user_id = u.id
-        WHERE c.post_id = %s AND c.parent_id IS NULL
-        ORDER BY c.created_at ASC
-        ''', (post_id,))
-        
-        comments = cursor.fetchall()
-        comments_list = []
-        for comment in comments:
-            comments_list.append({
-                'id': comment['id'],
-                'user_id': comment['user_id'],
-                'username': comment['username'],
-                'content': comment['content'],
-                'created_at': comment['created_at']
-            })
-        
-        post_detail['comments'] = comments_list
-        
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'success': True, 'post': post_detail})
-    except Exception as e:
-        print(f"获取帖子详情失败: {e}")
-        return jsonify({'success': False, 'error': '获取帖子详情失败'})
-
-@app.route('/api/community/posts', methods=['POST'])
-def create_post():
-    """创建新帖子"""
-    try:
-        import re
-        import json
-        
-        data = request.get_json()
-        username = data.get('username')  # 从请求中获取用户名
-        
-        if not username:
-            return jsonify({'success': False, 'error': '请先登录'})
-        
-        title = data.get('title', '').strip()
-        content = data.get('content', '').strip()
-        image_data = data.get('image_data')
-        recognition_result = data.get('recognition_result')
-        category = data.get('category', 'general')
-        
-        if not title or not content:
-            return jsonify({'success': False, 'error': '标题和内容不能为空'})
-        
-        # 提取话题 - 匹配 #话题# 格式
-        topic_pattern = r'#([^#\s]+)#'
-        topics = re.findall(topic_pattern, content)
-        # 去重并转换为小写
-        unique_topics = list(set([topic.lower() for topic in topics]))
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        # 获取用户ID
-        cursor.execute('SELECT id FROM users WHERE username = %s', (username,))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        # 创建帖子，包含topics字段
-        cursor.execute('''
-        INSERT INTO posts (user_id, title, content, image_data, recognition_result, category, topics)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (user['id'], title, content, image_data, recognition_result, category, json.dumps(unique_topics)))
-        
-        post_id = cursor.lastrowid
-        
-        # 更新topics表
-        for topic_name in unique_topics:
-            # 检查话题是否已存在
-            cursor.execute('SELECT id FROM topics WHERE name = %s', (topic_name,))
-            topic = cursor.fetchone()
-            
-            if topic:
-                # 更新现有话题的帖子数量
-                cursor.execute('UPDATE topics SET post_count = post_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = %s', (topic['id'],))
-            else:
-                # 创建新话题
-                cursor.execute('''
-                INSERT INTO topics (name, display_name, post_count)
-                VALUES (?, ?, 1)
-                ''', (topic_name, f'#{topic_name}#'))
-        
-        connection.commit()
-        
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'success': True, 'message': '帖子发布成功', 'topics': unique_topics})
-    except Exception as e:
-        print(f"创建帖子失败: {e}")
+        print(f"获取用户信息过程中发生错误: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': '创建帖子失败'})
+        return jsonify({'success': False, 'error': '获取用户信息失败'})
 
-@app.route('/api/community/posts/<int:post_id>/comments', methods=['POST'])
-@login_required
-def add_comment(post_id):
-    """添加评论"""
+@app.route('/api/check_auth', methods=['GET'])
+def check_auth():
+    """检查用户认证状态"""
     try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
-        
-        data = request.get_json()
-        content = data.get('content', '').strip()
-        parent_id = data.get('parent_id')
-        
-        if not content:
-            return jsonify({'success': False, 'error': '评论内容不能为空'})
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        # 获取用户ID
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        # 添加评论
-        cursor.execute('''
-        INSERT INTO comments (post_id, user_id, content, parent_id)
-        VALUES (?, ?, ?, ?)
-        ''', (post_id, user['id'], content, parent_id))
-        
-        connection.commit()
-        
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'success': True, 'message': '评论成功'})
-    except Exception as e:
-        print(f"添加评论失败: {e}")
-        return jsonify({'success': False, 'error': '添加评论失败'})
-
-@app.route('/api/community/topics', methods=['GET'])
-def get_topics():
-    """获取所有话题"""
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        # 获取所有话题，按帖子数量降序排序
-        cursor.execute('SELECT name, display_name, post_count FROM topics ORDER BY post_count DESC')
-        topics = cursor.fetchall()
-        
-        connection.close()
-        
-        # 转换为字典列表
-        topic_list = [{'name': topic[0], 'display_name': topic[1], 'post_count': topic[2]} for topic in topics]
-        
-        return jsonify({'success': True, 'topics': topic_list})
-    except Exception as e:
-        print(f"获取话题失败: {e}")
-        return jsonify({'success': False, 'error': '获取话题失败'})
-
-@app.route('/api/community/like', methods=['POST'])
-@login_required
-def toggle_like():
-    """点赞/取消点赞"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
-        
-        data = request.get_json()
-        target_type = data.get('target_type')  # 'post' or 'comment'
-        target_id = data.get('target_id')
-        
-        if not target_type or not target_id:
-            return jsonify({'success': False, 'error': '参数错误'})
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        # 获取用户ID
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        # 检查是否已点赞
-        cursor.execute('''
-        SELECT id FROM likes WHERE user_id = %s AND target_type = %s AND target_id = %s
-        ''', (user['id'], target_type, target_id))
-        
-        existing_like = cursor.fetchone()
-        
-        if existing_like:
-            # 取消点赞
-            cursor.execute('''
-            DELETE FROM likes WHERE user_id = %s AND target_type = %s AND target_id = %s
-            ''', (user['id'], target_type, target_id))
-            connection.commit()
-            cursor.close()
-            connection.close()
-            return jsonify({'success': True, 'liked': False, 'message': '取消点赞'})
+        if 'username' in session:
+            return jsonify({
+                'success': True,
+                'authenticated': True,
+                'user': {'username': session['username']}
+            })
         else:
-            # 添加点赞
-            cursor.execute('''
-            INSERT INTO likes (user_id, target_type, target_id)
-            VALUES (?, ?, ?)
-            ''', (user['id'], target_type, target_id))
-            connection.commit()
-            cursor.close()
-            connection.close()
-            return jsonify({'success': True, 'liked': True, 'message': '点赞成功'})
+            return jsonify({
+                'success': True,
+                'authenticated': False
+            })
     except Exception as e:
-        print(f"点赞操作失败: {e}")
-        return jsonify({'success': False, 'error': '点赞操作失败'})
+        print(f"检查认证状态过程中发生错误: {type(e).__name__}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'authenticated': False,
+            'error': '检查失败'
+        })
 
-@app.route('/api/community/follow', methods=['POST'])
+# ==================== 图片识别相关API ====================
+
+@app.route('/api/upload', methods=['POST'])
 @login_required
-def toggle_follow():
-    """关注/取消关注"""
+def upload_image():
+    """上传图片进行识别"""
     try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': '没有找到文件'})
         
-        data = request.get_json()
-        following_username = data.get('username')
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': '文件名不能为空'})
         
-        if not following_username:
-            return jsonify({'success': False, 'error': '参数错误'})
+        if file:
+            filename = file.filename
+            upload_dir = os.path.join(BASE_DIR, 'uploads')
+            if not os.path.exists(upload_dir):
+                os.makedirs(upload_dir)
+            
+            filepath = os.path.join(upload_dir, filename)
+            file.save(filepath)
+            
+            try:
+                results = flower_model(filepath)
+                predictions = results.pandas().xyxy[0].to_dict(orient='records')
+                
+                if predictions:
+                    result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
+                else:
+                    result_str = '未识别到花卉'
+                
+                connection = get_db_connection()
+                cursor = connection.cursor()
+                
+                insert_query = """
+                    INSERT INTO recognition_results (user_id, image_path, result, confidence) 
+                    VALUES (%s, %s, %s, %s)
+                """
+                confidence = predictions[0]['conf'] if predictions else 0
+                cursor.execute(insert_query, (session['user_id'], filepath, result_str, confidence))
+                connection.commit()
+                
+                cursor.close()
+                connection.close()
+                
+                return jsonify({
+                    'success': True,
+                    'result': result_str,
+                    'predictions': predictions
+                })
+            except Exception as e:
+                print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
+                return jsonify({'success': False, 'error': f'识别失败: {str(e)}'})
         
-        if following_username == session['username']:
-            return jsonify({'success': False, 'error': '不能关注自己'})
-        
+    except Exception as e:
+        print(f"上传过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '上传失败，请稍后重试'})
+
+@app.route('/api/results', methods=['GET'])
+@login_required
+def get_results():
+    """获取识别结果列表"""
+    try:
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # 获取用户ID
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        follower = cursor.fetchone()
+        query = """
+            SELECT id, image_path, result, confidence, created_at 
+            FROM recognition_results 
+            WHERE user_id = %s 
+            ORDER BY created_at DESC 
+            LIMIT 50
+        """
+        cursor.execute(query, (session['user_id'],))
+        results = cursor.fetchall()
         
-        cursor.execute('SELECT id FROM users WHERE username = %s', (following_username,))
-        following = cursor.fetchone()
+        cursor.close()
+        connection.close()
         
-        if not follower or not following:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
+        formatted_results = []
+        for r in results:
+            formatted_results.append({
+                'id': r['id'],
+                'image_path': r['image_path'],
+                'result': r['result'],
+                'confidence': float(r['confidence']) if r['confidence'] else 0,
+                'created_at': r['created_at'].isoformat() if r['created_at'] else None
+            })
         
-        # 检查是否已关注
-        cursor.execute('''
-        SELECT id FROM follows WHERE follower_id = %s AND following_id = %s
-        ''', (follower['id'], following['id']))
+        return jsonify({
+            'success': True,
+            'results': formatted_results
+        })
         
-        existing_follow = cursor.fetchone()
+    except Exception as e:
+        print(f"获取识别结果过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '获取结果失败'})
+
+@app.route('/api/results/<int:result_id>', methods=['DELETE'])
+@login_required
+def delete_result(result_id):
+    """删除识别结果"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
         
-        if existing_follow:
-            # 取消关注
-            cursor.execute('''
-            DELETE FROM follows WHERE follower_id = %s AND following_id = %s
-            ''', (follower['id'], following['id']))
-            connection.commit()
-            cursor.close()
-            connection.close()
-            return jsonify({'success': True, 'following': False, 'message': '取消关注'})
+        delete_query = "DELETE FROM recognition_results WHERE id = %s AND user_id = %s"
+        cursor.execute(delete_query, (result_id, session['user_id']))
+        connection.commit()
+        
+        affected_rows = cursor.rowcount
+        cursor.close()
+        connection.close()
+        
+        if affected_rows > 0:
+            return jsonify({'success': True, 'message': '删除成功'})
         else:
-            # 添加关注
-            cursor.execute('''
-            INSERT INTO follows (follower_id, following_id)
-            VALUES (?, ?)
-            ''', (follower['id'], following['id']))
-            connection.commit()
-            cursor.close()
-            connection.close()
-            return jsonify({'success': True, 'following': True, 'message': '关注成功'})
-    except Exception as e:
-        print(f"关注操作失败: {e}")
-        return jsonify({'success': False, 'error': '关注操作失败'})
-
-@app.route('/api/community/favorite', methods=['POST'])
-@login_required
-def toggle_favorite():
-    """收藏/取消收藏"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
+            return jsonify({'success': False, 'error': '删除失败或记录不存在'})
         
+    except Exception as e:
+        print(f"删除识别结果过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '删除失败，请稍后重试'})
+
+@app.route('/api/recognize', methods=['POST'])
+@login_required
+def recognize():
+    """识别图片API"""
+    try:
         data = request.get_json()
-        post_id = data.get('post_id')
+        image_path = data.get('image_path')
         
-        if not post_id:
-            return jsonify({'success': False, 'error': '参数错误'})
+        if not image_path:
+            return jsonify({'success': False, 'error': '图片路径不能为空'})
         
-        connection = get_db_connection()
-        cursor = connection.cursor()
+        results = flower_model(image_path)
+        predictions = results.pandas().xyxy[0].to_dict(orient='records')
         
-        # 获取用户ID
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        # 检查是否已收藏
-        cursor.execute('''
-        SELECT id FROM favorites WHERE user_id = %s AND post_id = %s
-        ''', (user['id'], post_id))
-        
-        existing_favorite = cursor.fetchone()
-        
-        if existing_favorite:
-            # 取消收藏
-            cursor.execute('''
-            DELETE FROM favorites WHERE user_id = %s AND post_id = %s
-            ''', (user['id'], post_id))
-            connection.commit()
-            cursor.close()
-            connection.close()
-            return jsonify({'success': True, 'favorited': False, 'message': '取消收藏'})
+        if predictions:
+            result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
         else:
-            # 添加收藏
-            cursor.execute('''
-            INSERT INTO favorites (user_id, post_id)
-            VALUES (?, ?)
-            ''', (user['id'], post_id))
-            connection.commit()
-            cursor.close()
-            connection.close()
-            return jsonify({'success': True, 'favorited': True, 'message': '收藏成功'})
-    except Exception as e:
-        print(f"收藏操作失败: {e}")
-        return jsonify({'success': False, 'error': '收藏操作失败'})
-
-# 回收站相关API
-@app.route('/api/recycle_bin/posts', methods=['GET'])
-@login_required
-def get_recycle_bin_posts():
-    """获取回收站中的帖子"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
+            result_str = '未识别到花卉'
         
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        user_id = user['id']
-        
-        cursor.execute('''
-        SELECT * FROM post_recycle_bin
-        WHERE user_id = %s
-        ORDER BY deleted_at DESC
-        ''', (user_id,))
-        posts = cursor.fetchall()
-        
-        connection.close()
-        
-        posts_list = [{'id': post['id'], 'post_id': post['post_id'], 'content': post['content'], 
-                      'image_url': post['image_url'], 'deleted_at': post['deleted_at'],
-                      'restored_at': post['restored_at'], 'is_permanently_deleted': post['is_permanently_deleted']}
-                     for post in posts]
-        
-        return jsonify({'success': True, 'posts': posts_list})
-    except Exception as e:
-        print(f"获取回收站帖子时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/recycle_bin/comments', methods=['GET'])
-@login_required
-def get_recycle_bin_comments():
-    """获取回收站中的评论"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        user_id = user['id']
-        
-        cursor.execute('''
-        SELECT * FROM comment_recycle_bin
-        WHERE user_id = %s
-        ORDER BY deleted_at DESC
-        ''', (user_id,))
-        comments = cursor.fetchall()
-        
-        connection.close()
-        
-        comments_list = [{'id': comment['id'], 'comment_id': comment['comment_id'], 'post_id': comment['post_id'],
-                         'content': comment['content'], 'deleted_at': comment['deleted_at'],
-                         'restored_at': comment['restored_at'], 'is_permanently_deleted': comment['is_permanently_deleted']}
-                        for comment in comments]
-        
-        return jsonify({'success': True, 'comments': comments_list})
-    except Exception as e:
-        print(f"获取回收站评论时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/recycle_bin/posts/<int:post_id>/restore', methods=['POST'])
-@login_required
-def restore_post(post_id):
-    """恢复帖子"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        user_id = user['id']
-        
-        cursor.execute('''
-        SELECT * FROM post_recycle_bin WHERE id = %s AND user_id = %s
-        ''', (post_id, user_id))
-        recycle_post = cursor.fetchone()
-        
-        if not recycle_post:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '帖子不存在或无权限'})
-        
-        current_time = int(time.time())
-        
-        cursor.execute('''
-        INSERT INTO posts (user_id, content, image_url, likes_count, comments_count, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (recycle_post['user_id'], recycle_post['content'], recycle_post['image_url'], 0, 0, current_time, current_time))
-        
-        new_post_id = cursor.lastrowid
-        
-        cursor.execute('''
-        UPDATE post_recycle_bin SET restored_at = %s, is_permanently_deleted = 0 WHERE id = %s
-        ''', (current_time, post_id))
-        
-        cursor.execute('''
-        INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, 'restore_post', 'post', new_post_id, f'恢复帖子: {recycle_post["content"][:50]}', current_time))
-        
+        insert_query = """
+            INSERT INTO recognition_results (user_id, image_path, result, confidence) 
+            VALUES (%s, %s, %s, %s)
+        """
+        confidence = predictions[0]['conf'] if predictions else 0
+        cursor.execute(insert_query, (session['user_id'], image_path, result_str, confidence))
         connection.commit()
+        
         cursor.close()
         connection.close()
         
-        return jsonify({'success': True})
+        return jsonify({
+            'success': True,
+            'result': result_str,
+            'predictions': predictions
+        })
+        
     except Exception as e:
-        print(f"恢复帖子时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '识别失败，请稍后重试'})
 
-@app.route('/api/recycle_bin/comments/<int:comment_id>/restore', methods=['POST'])
-@login_required
-def restore_comment(comment_id):
-    """恢复评论"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        user_id = user['id']
-        
-        cursor.execute('''
-        SELECT * FROM comment_recycle_bin WHERE id = %s AND user_id = %s
-        ''', (comment_id, user_id))
-        recycle_comment = cursor.fetchone()
-        
-        if not recycle_comment:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '评论不存在或无权限'})
-        
-        current_time = int(time.time())
-        
-        cursor.execute('''
-        INSERT INTO comments (post_id, user_id, content, created_at)
-        VALUES (?, ?, ?, ?)
-        ''', (recycle_comment['post_id'], recycle_comment['user_id'], recycle_comment['content'], current_time))
-        
-        new_comment_id = cursor.lastrowid
-        
-        cursor.execute('''
-        UPDATE comment_recycle_bin SET restored_at = %s, is_permanently_deleted = 0 WHERE id = %s
-        ''', (current_time, comment_id))
-        
-        cursor.execute('''
-        UPDATE posts SET comments_count = comments_count + 1 WHERE id = %s
-        ''', (recycle_comment['post_id'],))
-        
-        cursor.execute('''
-        INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, 'restore_comment', 'comment', new_comment_id, f'恢复评论: {recycle_comment["content"][:50]}', current_time))
-        
-        connection.commit()
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"恢复评论时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+# ==================== 静态文件服务 ====================
 
-@app.route('/api/recycle_bin/posts/<int:post_id>', methods=['DELETE'])
-@login_required
-def permanently_delete_post(post_id):
-    """永久删除帖子"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        user_id = user['id']
-        
-        cursor.execute('''
-        SELECT * FROM post_recycle_bin WHERE id = %s AND user_id = %s
-        ''', (post_id, user_id))
-        recycle_post = cursor.fetchone()
-        
-        if not recycle_post:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '帖子不存在或无权限'})
-        
-        cursor.execute('DELETE FROM post_recycle_bin WHERE id = %s', (post_id,))
-        
-        current_time = int(time.time())
-        cursor.execute('''
-        INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, 'permanently_delete_post', 'post', post_id, f'永久删除帖子: {recycle_post["content"][:50]}', current_time))
-        
-        connection.commit()
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"永久删除帖子时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+@app.route('/')
+def index():
+    """首页路由"""
+    return send_from_directory(BASE_DIR, 'index.html')
 
-@app.route('/api/recycle_bin/comments/<int:comment_id>', methods=['DELETE'])
-@login_required
-def permanently_delete_comment(comment_id):
-    """永久删除评论"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        user_id = user['id']
-        
-        cursor.execute('''
-        SELECT * FROM comment_recycle_bin WHERE id = %s AND user_id = %s
-        ''', (comment_id, user_id))
-        recycle_comment = cursor.fetchone()
-        
-        if not recycle_comment:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '评论不存在或无权限'})
-        
-        cursor.execute('DELETE FROM comment_recycle_bin WHERE id = %s', (comment_id,))
-        
-        current_time = int(time.time())
-        cursor.execute('''
-        INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, 'permanently_delete_comment', 'comment', comment_id, f'永久删除评论: {recycle_comment["content"][:50]}', current_time))
-        
-        connection.commit()
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"永久删除评论时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/recycle_bin/restore_all', methods=['POST'])
-@login_required
-def restore_all_recycle_bin_items():
-    """一键恢复所有回收站内容"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        user_id = user['id']
-        current_time = int(time.time())
-        
-        cursor.execute('''
-        SELECT * FROM post_recycle_bin WHERE user_id = %s AND is_permanently_deleted = 0
-        ''', (user_id,))
-        recycle_posts = cursor.fetchall()
-        
-        for post in recycle_posts:
-            cursor.execute('''
-            INSERT INTO posts (user_id, content, image_url, likes_count, comments_count, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (post['user_id'], post['content'], post['image_url'], 0, 0, current_time, current_time))
-            
-            new_post_id = cursor.lastrowid
-            
-            cursor.execute('''
-            UPDATE post_recycle_bin SET restored_at = %s, is_permanently_deleted = 0 WHERE id = %s
-            ''', (current_time, post['id']))
-            
-            cursor.execute('''
-            INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, 'restore_post', 'post', new_post_id, f'恢复帖子: {post["content"][:50]}', current_time))
-        
-        cursor.execute('''
-        SELECT * FROM comment_recycle_bin WHERE user_id = %s AND is_permanently_deleted = 0
-        ''', (user_id,))
-        recycle_comments = cursor.fetchall()
-        
-        for comment in recycle_comments:
-            cursor.execute('''
-            INSERT INTO comments (post_id, user_id, content, created_at)
-            VALUES (?, ?, ?, ?)
-            ''', (comment['post_id'], comment['user_id'], comment['content'], current_time))
-            
-            new_comment_id = cursor.lastrowid
-            
-            cursor.execute('''
-            UPDATE comment_recycle_bin SET restored_at = %s, is_permanently_deleted = 0 WHERE id = %s
-            ''', (current_time, comment['id']))
-            
-            cursor.execute('''
-            UPDATE posts SET comments_count = comments_count + 1 WHERE id = %s
-            ''', (comment['post_id'],))
-            
-            cursor.execute('''
-            INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, 'restore_comment', 'comment', new_comment_id, f'恢复评论: {comment["content"][:50]}', current_time))
-        
-        connection.commit()
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"一键恢复时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/recycle_bin/clear_all', methods=['DELETE'])
-@login_required
-def clear_all_recycle_bin_items():
-    """清空回收站"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': '请先登录'})
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        cursor.execute('SELECT id FROM users WHERE username = %s', (session['username'],))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.close()
-            connection.close()
-            return jsonify({'success': False, 'error': '用户不存在'})
-        
-        user_id = user['id']
-        
-        cursor.execute('DELETE FROM post_recycle_bin WHERE user_id = %s', (user_id,))
-        cursor.execute('DELETE FROM comment_recycle_bin WHERE user_id = %s', (user_id,))
-        
-        current_time = int(time.time())
-        cursor.execute('''
-        INSERT INTO operation_logs (user_id, action_type, target_type, target_id, details, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, 'clear_recycle_bin', 'recycle_bin', None, '清空回收站', current_time))
-        
-        connection.commit()
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"清空回收站时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+@app.route('/<path:filename>')
+def serve_static(filename):
+    """静态文件服务"""
+    return send_from_directory(BASE_DIR, filename)
 
 if __name__ == '__main__':
-    # 启动Flask服务器
     app.run(host='0.0.0.0', port=5000, debug=True)

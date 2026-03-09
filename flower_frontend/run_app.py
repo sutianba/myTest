@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 """
-运行app.py并捕获输出
+运行app.py
 """
 
 import subprocess
@@ -27,23 +27,17 @@ def run_app():
             cwd=os.path.dirname(os.path.abspath(__file__))
         )
         
-        # 读取前50行输出
-        lines = []
-        for i, line in enumerate(process.stdout):
-            if i >= 50:
-                break
-            lines.append(line)
+        # 读取输出
+        for line in process.stdout:
             print(line, end='')
         
-        # 如果进程还在运行，终止它
-        if process.poll() is None:
-            print("\n[提示] app.py正在运行，按Ctrl+C停止")
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
+        process.wait()
         
+    except KeyboardInterrupt:
+        print("\n[提示] 应用已停止")
+        if 'process' in locals():
+            process.terminate()
+            process.wait()
     except Exception as e:
         print(f"运行失败: {str(e)}")
         import traceback
