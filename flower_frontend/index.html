@@ -1825,7 +1825,7 @@
             }
 
             function checkAuth() {
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem('access_token');
                 if (token) {
                     $.ajax({
                         url: '/api/check-auth',
@@ -1835,22 +1835,22 @@
                         },
                         success: function(response) {
                             if (response.success) {
-                                currentUser = response.data;
-                                currentToken = token;
+                                currentUser = response.user;
+                                currentToken = response.access_token;
                                 updateNavbar();
                                 
                                 if (currentUser.status === 'unverified') {
                                     $('#unverifiedModal').addClass('active');
                                 }
                             } else {
-                                localStorage.removeItem('token');
+                                localStorage.removeItem('access_token');
                                 currentUser = null;
                                 currentToken = null;
                                 updateNavbar();
                             }
                         },
                         error: function() {
-                            localStorage.removeItem('token');
+                            localStorage.removeItem('access_token');
                             currentUser = null;
                             currentToken = null;
                             updateNavbar();
@@ -1860,7 +1860,7 @@
             }
 
             function logout() {
-                localStorage.removeItem('token');
+                localStorage.removeItem('access_token');
                 currentUser = null;
                 currentToken = null;
                 updateNavbar();
@@ -2274,7 +2274,7 @@
                 },
                 error: function(xhr) {
                     if (xhr.status === 401) {
-                        localStorage.removeItem('token');
+                        localStorage.removeItem('access_token');
                         currentUser = null;
                         currentToken = null;
                         updateNavbar();

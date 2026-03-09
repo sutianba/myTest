@@ -434,9 +434,7 @@ def logout():
             expires_at = datetime.datetime.utcfromtimestamp(payload['exp'])
             add_to_blacklist(token, expires_at)
         
-        # 清除session
-        session.clear()
-        
+        # 登出成功，清除前端存储的Token
         return jsonify({'success': True, 'message': '已成功登出'})
     except Exception as e:
         print(f"登出过程中发生错误: {type(e).__name__}: {str(e)}")
@@ -541,17 +539,6 @@ def check_auth():
                 'username': current_user['username']
             }
         })
-        if 'username' in session:
-            return jsonify({
-                'success': True,
-                'authenticated': True,
-                'user': {'username': session['username']}
-            })
-        else:
-            return jsonify({
-                'success': True,
-                'authenticated': False
-            })
     except Exception as e:
         print(f"检查认证状态过程中发生错误: {type(e).__name__}: {str(e)}")
         return jsonify({
@@ -600,7 +587,7 @@ def upload_image():
                     VALUES (%s, %s, %s, %s)
                 """
                 confidence = predictions[0]['conf'] if predictions else 0
-                cursor.execute(insert_query, (session['user_id'], filepath, result_str, confidence))
+                cursor.execute(insert_query, (current_user['user_id'], filepath, result_str, confidence))
                 connection.commit()
                 
                 cursor.close()
@@ -636,7 +623,7 @@ def get_results():
             ORDER BY created_at DESC 
             LIMIT 50
         """
-        cursor.execute(query, (session['user_id'],))
+        cursor.execute(query, (current_user['user_id'],))
         results = cursor.fetchall()
         
         cursor.close()
@@ -672,7 +659,7 @@ def delete_result(result_id):
         cursor = connection.cursor()
         
         delete_query = "DELETE FROM recognition_results WHERE id = %s AND user_id = %s"
-        cursor.execute(delete_query, (result_id, session['user_id']))
+        cursor.execute(delete_query, (result_id, current_user['user_id']))
         connection.commit()
         
         affected_rows = cursor.rowcount
@@ -717,7 +704,7 @@ def recognize():
             VALUES (%s, %s, %s, %s)
         """
         confidence = predictions[0]['conf'] if predictions else 0
-        cursor.execute(insert_query, (session['user_id'], image_path, result_str, confidence))
+        cursor.execute(insert_query, (current_user['user_id'], image_path, result_str, confidence))
         connection.commit()
         
         cursor.close()
