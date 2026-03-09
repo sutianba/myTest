@@ -1387,6 +1387,746 @@ def get_plants_by_category(category):
         traceback.print_exc()
         return jsonify({'success': False, 'error': '获取失败，请稍后重试'})
 
+# ==================== 园艺工具 API ====================
+
+@app.route('/api/records/timeline', methods=['GET'])
+@login_required
+def get_records_by_timeline():
+    """按时间查看识别记录（时间轴视图）"""
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        group_by = request.args.get('group_by', 'day')  # day, week, month
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        query = """
+            SELECT id, image_path, result, confidence, created_at, is_favorite, is_archived
+            FROM recognition_results
+            WHERE user_id = %s AND is_deleted = 0
+        """
+        params = [session['user_id']]
+        
+        if start_date:
+            query += " AND DATE(created_at) >= %s"
+            params.append(start_date)
+        if end_date:
+            query += " AND DATE(created_at) <= %s"
+            params.append(end_date)
+        
+        query += " ORDER BY created_at DESC"
+        
+        cursor.execute(query, tuple(params))
+        records = cursor.fetchall()
+        
+        # 按时间分组
+        timeline = {}
+        for record in records:
+            date_key = record['created_at'].strftime('%Y-%m-%d')
+            if date_key not in timeline:
+                timeline[date_key] = []
+            timeline[date_key].append({
+                'id': record['id'],
+                'imagePath': record['image_path'],
+                'result': record['result'],
+                'confidence': float(record['confidence']) if record['confidence'] else 0,
+                'createdAt': record['created_at'].isoformat(),
+                'isFavorite': bool(record['is_favorite']),
+                'isArchived': bool(record['is_archived'])
+            })
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'success': True,
+            'timeline': timeline,
+            'total': len(records)
+        })
+        
+    except Exception as e:
+        print(f"获取时间轴记录失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '获取失败'})
+
+@app.route('/api/records/by-plant', methods=['GET'])
+@login_required
+def get_records_by_plant():
+    """按植物名称查看记录"""
+    try:
+        plant_name = request.args.get('plant_name', '')
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        query = """
+            SELECT id, image_path, result, confidence, created_at, is_favorite, notes
+            FROM recognition_results
+            WHERE user_id = %s AND is_deleted = 0 AND result LIKE %s
+            ORDER BY created_at DESC
+        """
+        cursor.execute(query, (session['user_id'], f'%{plant_name}%'))
+        records = cursor.fetchall()
+        
+        formatted_records = []
+        for record in records:
+            formatted_records.append({
+                'id': record['id'],
+                'imagePath': record['image_path'],
+                'result': record['result'],
+                'confidence': float(record['confidence']) if record['confidence'] else 0,
+                'createdAt': record['created_at'].isoformat(),
+                'isFavorite': bool(record['is_favorite']),
+                'notes': record['notes']
+            })
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'success': True,
+            'records': formatted_records,
+            'total': len(formatted_records)
+        })
+        
+    except Exception as e:
+        print(f"按植物名称获取记录失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '获取失败'})
+
+@app.route('/api/records/<int:result_id>/favorite', methods=['POST'])
+@login_required
+def toggle_favorite(result_id):
+    """收藏/取消收藏识别结果"""
+    try:
+        data = request.get_json()
+        is_favorite = data.get('is_favorite', True)
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 更新识别结果的收藏状态
+        cursor.execute("""
+            UPDATE recognition_results
+            SET is_favorite = %s
+            WHERE id = %s AND user_id = %s
+        """, (1 if is_favorite else 0, result_id, session['user_id']))
+        
+        # 同时更新favorites表
+        if is_favorite:
+            cursor.execute("""
+                INSERT IGNORE INTO favorites (user_id, result_id, favorite_type)
+                VALUES (%s, %s, 'result')
+            """, (session['user_id'], result_id))
+        else:
+            cursor.execute("""
+                DELETE FROM favorites
+                WHERE user_id = %s AND result_id = %s AND favorite_type = 'result'
+            """, (session['user_id'], result_id))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'success': True,
+            'message': '已收藏' if is_favorite else '已取消收藏',
+            'isFavorite': is_favorite
+        })
+        
+    except Exception as e:
+        print(f"收藏操作失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '操作失败'})
+
+@app.route('/api/favorites', methods=['GET'])
+@login_required
+def get_favorites():
+    """获取用户的所有收藏"""
+    try:
+        favorite_type = request.args.get('type', 'all')  # all, result, plant
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        if favorite_type == 'result':
+            query = """
+                SELECT f.*, r.image_path, r.result, r.confidence, r.created_at as result_created_at
+                FROM favorites f
+                JOIN recognition_results r ON f.result_id = r.id
+                WHERE f.user_id = %s AND f.favorite_type = 'result' AND r.is_deleted = 0
+                ORDER BY f.created_at DESC
+            """
+            cursor.execute(query, (session['user_id'],))
+        elif favorite_type == 'plant':
+            query = """
+                SELECT f.*, p.name, p.scientific_name, p.image_url, p.category
+                FROM favorites f
+                JOIN plants p ON f.plant_id = p.id
+                WHERE f.user_id = %s AND f.favorite_type = 'plant'
+                ORDER BY f.created_at DESC
+            """
+            cursor.execute(query, (session['user_id'],))
+        else:
+            # 获取所有收藏
+            query = """
+                SELECT f.*, 
+                       r.image_path, r.result, r.confidence,
+                       p.name as plant_name, p.scientific_name, p.image_url
+                FROM favorites f
+                LEFT JOIN recognition_results r ON f.result_id = r.id AND r.is_deleted = 0
+                LEFT JOIN plants p ON f.plant_id = p.id
+                WHERE f.user_id = %s
+                ORDER BY f.created_at DESC
+            """
+            cursor.execute(query, (session['user_id'],))
+        
+        favorites = cursor.fetchall()
+        
+        formatted_favorites = []
+        for fav in favorites:
+            formatted_favorites.append({
+                'id': fav['id'],
+                'type': fav['favorite_type'],
+                'createdAt': fav['created_at'].isoformat(),
+                'data': {
+                    'resultId': fav.get('result_id'),
+                    'plantId': fav.get('plant_id'),
+                    'imagePath': fav.get('image_path') or fav.get('image_url'),
+                    'name': fav.get('result') or fav.get('plant_name'),
+                    'scientificName': fav.get('scientific_name'),
+                    'confidence': float(fav['confidence']) if fav.get('confidence') else None,
+                    'category': fav.get('category')
+                }
+            })
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'success': True,
+            'favorites': formatted_favorites,
+            'total': len(formatted_favorites)
+        })
+        
+    except Exception as e:
+        print(f"获取收藏失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '获取失败'})
+
+@app.route('/api/tags', methods=['GET', 'POST'])
+@login_required
+def manage_tags():
+    """标签管理"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        if request.method == 'GET':
+            # 获取所有标签
+            cursor.execute("""
+                SELECT t.*, COUNT(rt.result_id) as count
+                FROM tags t
+                LEFT JOIN result_tags rt ON t.id = rt.tag_id
+                WHERE t.user_id = %s
+                GROUP BY t.id
+                ORDER BY t.created_at DESC
+            """, (session['user_id'],))
+            tags = cursor.fetchall()
+            
+            formatted_tags = []
+            for tag in tags:
+                formatted_tags.append({
+                    'id': tag['id'],
+                    'name': tag['name'],
+                    'color': tag['color'],
+                    'count': tag['count'],
+                    'createdAt': tag['created_at'].isoformat()
+                })
+            
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'success': True,
+                'tags': formatted_tags
+            })
+            
+        elif request.method == 'POST':
+            # 创建新标签
+            data = request.get_json()
+            name = data.get('name', '').strip()
+            color = data.get('color', '#4CAF50')
+            
+            if not name:
+                return jsonify({'success': False, 'error': '标签名称不能为空'})
+            
+            cursor.execute("""
+                INSERT INTO tags (user_id, name, color)
+                VALUES (%s, %s, %s)
+            """, (session['user_id'], name, color))
+            
+            connection.commit()
+            tag_id = cursor.lastrowid
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'success': True,
+                'message': '标签创建成功',
+                'tag': {
+                    'id': tag_id,
+                    'name': name,
+                    'color': color
+                }
+            })
+            
+    except Exception as e:
+        print(f"标签管理失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '操作失败'})
+
+@app.route('/api/tags/<int:tag_id>', methods=['PUT', 'DELETE'])
+@login_required
+def update_tag(tag_id):
+    """更新或删除标签"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        if request.method == 'PUT':
+            data = request.get_json()
+            name = data.get('name', '').strip()
+            color = data.get('color')
+            
+            if not name:
+                return jsonify({'success': False, 'error': '标签名称不能为空'})
+            
+            cursor.execute("""
+                UPDATE tags
+                SET name = %s, color = %s
+                WHERE id = %s AND user_id = %s
+            """, (name, color, tag_id, session['user_id']))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'success': True,
+                'message': '标签更新成功'
+            })
+            
+        elif request.method == 'DELETE':
+            cursor.execute("""
+                DELETE FROM tags
+                WHERE id = %s AND user_id = %s
+            """, (tag_id, session['user_id']))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'success': True,
+                'message': '标签删除成功'
+            })
+            
+    except Exception as e:
+        print(f"标签操作失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '操作失败'})
+
+@app.route('/api/records/<int:result_id>/tags', methods=['POST', 'DELETE'])
+@login_required
+def manage_result_tags(result_id):
+    """为识别结果添加/删除标签"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        if request.method == 'POST':
+            data = request.get_json()
+            tag_ids = data.get('tag_ids', [])
+            
+            for tag_id in tag_ids:
+                cursor.execute("""
+                    INSERT IGNORE INTO result_tags (result_id, tag_id)
+                    VALUES (%s, %s)
+                """, (result_id, tag_id))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'success': True,
+                'message': '标签添加成功'
+            })
+            
+        elif request.method == 'DELETE':
+            data = request.get_json()
+            tag_ids = data.get('tag_ids', [])
+            
+            for tag_id in tag_ids:
+                cursor.execute("""
+                    DELETE FROM result_tags
+                    WHERE result_id = %s AND tag_id = %s
+                """, (result_id, tag_id))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'success': True,
+                'message': '标签移除成功'
+            })
+            
+    except Exception as e:
+        print(f"标签操作失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '操作失败'})
+
+@app.route('/api/records/batch-delete', methods=['POST'])
+@login_required
+def batch_delete_records():
+    """批量删除识别结果（移动到回收站）"""
+    try:
+        data = request.get_json()
+        result_ids = data.get('result_ids', [])
+        permanent = data.get('permanent', False)  # 是否永久删除
+        
+        if not result_ids:
+            return jsonify({'success': False, 'error': '未选择要删除的记录'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        if permanent:
+            # 永久删除
+            for result_id in result_ids:
+                cursor.execute("""
+                    DELETE FROM recognition_results
+                    WHERE id = %s AND user_id = %s
+                """, (result_id, session['user_id']))
+        else:
+            # 软删除（移动到回收站）
+            for result_id in result_ids:
+                # 先获取原始数据
+                cursor.execute("""
+                    SELECT * FROM recognition_results
+                    WHERE id = %s AND user_id = %s
+                """, (result_id, session['user_id']))
+                record = cursor.fetchone()
+                
+                if record:
+                    # 保存到回收站
+                    import json
+                    cursor.execute("""
+                        INSERT INTO recycle_bin (user_id, result_id, original_data, expires_at)
+                        VALUES (%s, %s, %s, DATE_ADD(NOW(), INTERVAL 30 DAY))
+                    """, (session['user_id'], result_id, json.dumps(dict(record), default=str)))
+                    
+                    # 标记为已删除
+                    cursor.execute("""
+                        UPDATE recognition_results
+                        SET is_deleted = 1, deleted_at = NOW()
+                        WHERE id = %s
+                    """, (result_id,))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'已删除 {len(result_ids)} 条记录'
+        })
+        
+    except Exception as e:
+        print(f"批量删除失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '删除失败'})
+
+@app.route('/api/records/batch-archive', methods=['POST'])
+@login_required
+def batch_archive_records():
+    """批量归档识别结果"""
+    try:
+        data = request.get_json()
+        result_ids = data.get('result_ids', [])
+        is_archived = data.get('is_archived', True)
+        
+        if not result_ids:
+            return jsonify({'success': False, 'error': '未选择要归档的记录'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        for result_id in result_ids:
+            cursor.execute("""
+                UPDATE recognition_results
+                SET is_archived = %s
+                WHERE id = %s AND user_id = %s
+            """, (1 if is_archived else 0, result_id, session['user_id']))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        action = '归档' if is_archived else '取消归档'
+        return jsonify({
+            'success': True,
+            'message': f'已{action} {len(result_ids)} 条记录'
+        })
+        
+    except Exception as e:
+        print(f"批量归档失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '归档失败'})
+
+@app.route('/api/recycle-bin', methods=['GET'])
+@login_required
+def get_recycle_bin():
+    """获取回收站内容"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute("""
+            SELECT rb.*, r.image_path, r.result, r.confidence
+            FROM recycle_bin rb
+            JOIN recognition_results r ON rb.result_id = r.id
+            WHERE rb.user_id = %s AND (rb.expires_at IS NULL OR rb.expires_at > NOW())
+            ORDER BY rb.deleted_at DESC
+        """, (session['user_id'],))
+        items = cursor.fetchall()
+        
+        formatted_items = []
+        for item in items:
+            formatted_items.append({
+                'id': item['id'],
+                'resultId': item['result_id'],
+                'imagePath': item['image_path'],
+                'result': item['result'],
+                'confidence': float(item['confidence']) if item['confidence'] else 0,
+                'deletedAt': item['deleted_at'].isoformat(),
+                'expiresAt': item['expires_at'].isoformat() if item['expires_at'] else None
+            })
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'success': True,
+            'items': formatted_items,
+            'total': len(formatted_items)
+        })
+        
+    except Exception as e:
+        print(f"获取回收站失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '获取失败'})
+
+@app.route('/api/recycle-bin/<int:item_id>/restore', methods=['POST'])
+@login_required
+def restore_from_recycle_bin(item_id):
+    """从回收站恢复记录"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 获取回收站记录
+        cursor.execute("""
+            SELECT result_id FROM recycle_bin
+            WHERE id = %s AND user_id = %s
+        """, (item_id, session['user_id']))
+        item = cursor.fetchone()
+        
+        if not item:
+            return jsonify({'success': False, 'error': '记录不存在'})
+        
+        result_id = item['result_id']
+        
+        # 恢复记录
+        cursor.execute("""
+            UPDATE recognition_results
+            SET is_deleted = 0, deleted_at = NULL
+            WHERE id = %s AND user_id = %s
+        """, (result_id, session['user_id']))
+        
+        # 从回收站删除
+        cursor.execute("""
+            DELETE FROM recycle_bin
+            WHERE id = %s
+        """, (item_id,))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'success': True,
+            'message': '记录已恢复'
+        })
+        
+    except Exception as e:
+        print(f"恢复记录失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '恢复失败'})
+
+@app.route('/api/sync', methods=['POST'])
+@login_required
+def sync_data():
+    """本地/云端同步"""
+    try:
+        data = request.get_json()
+        device_id = data.get('device_id', 'unknown')
+        sync_type = data.get('sync_type', 'bidirectional')  # upload, download, bidirectional
+        local_data = data.get('local_data', {})
+        last_sync_at = data.get('last_sync_at')
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 获取云端数据
+        cursor.execute("""
+            SELECT id, image_path, result, confidence, is_favorite, is_archived, 
+                   notes, location, weather, created_at, updated_at
+            FROM recognition_results
+            WHERE user_id = %s AND is_deleted = 0
+        """, (session['user_id'],))
+        cloud_records = cursor.fetchall()
+        
+        # 获取上次同步时间
+        cursor.execute("""
+            SELECT last_sync_at FROM sync_records
+            WHERE user_id = %s AND device_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (session['user_id'], device_id))
+        last_sync = cursor.fetchone()
+        
+        # 记录同步
+        import json
+        cursor.execute("""
+            INSERT INTO sync_records (user_id, device_id, sync_type, sync_status, sync_data)
+            VALUES (%s, %s, %s, 'completed', %s)
+        """, (session['user_id'], device_id, sync_type, json.dumps({
+            'records_count': len(cloud_records),
+            'sync_type': sync_type
+        })))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'success': True,
+            'message': '同步完成',
+            'cloudData': {
+                'records': [dict(r) for r in cloud_records],
+                'lastSyncAt': last_sync['last_sync_at'].isoformat() if last_sync and last_sync['last_sync_at'] else None
+            }
+        })
+        
+    except Exception as e:
+        print(f"同步失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '同步失败'})
+
+@app.route('/api/settings', methods=['GET', 'PUT'])
+@login_required
+def user_settings():
+    """用户设置管理"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        if request.method == 'GET':
+            cursor.execute("""
+                SELECT * FROM user_settings
+                WHERE user_id = %s
+            """, (session['user_id'],))
+            settings = cursor.fetchone()
+            
+            if not settings:
+                # 创建默认设置
+                cursor.execute("""
+                    INSERT INTO user_settings (user_id)
+                    VALUES (%s)
+                """, (session['user_id'],))
+                connection.commit()
+                
+                cursor.execute("""
+                    SELECT * FROM user_settings
+                    WHERE user_id = %s
+                """, (session['user_id'],))
+                settings = cursor.fetchone()
+            
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'success': True,
+                'settings': {
+                    'autoSync': bool(settings['auto_sync']),
+                    'syncInterval': settings['sync_interval'],
+                    'defaultView': settings['default_view'],
+                    'theme': settings['theme'],
+                    'language': settings['language']
+                }
+            })
+            
+        elif request.method == 'PUT':
+            data = request.get_json()
+            
+            cursor.execute("""
+                UPDATE user_settings
+                SET auto_sync = %s,
+                    sync_interval = %s,
+                    default_view = %s,
+                    theme = %s,
+                    language = %s
+                WHERE user_id = %s
+            """, (
+                data.get('autoSync', True),
+                data.get('syncInterval', 3600),
+                data.get('defaultView', 'grid'),
+                data.get('theme', 'auto'),
+                data.get('language', 'zh-CN'),
+                session['user_id']
+            ))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'success': True,
+                'message': '设置已更新'
+            })
+            
+    except Exception as e:
+        print(f"设置操作失败: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '操作失败'})
+
 # ==================== 静态文件服务 ====================
 
 @app.route('/')

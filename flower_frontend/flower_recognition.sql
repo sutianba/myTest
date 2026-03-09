@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 创建识别结果表
+-- 创建识别结果表（增强版）
 CREATE TABLE IF NOT EXISTS recognition_results (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,
@@ -21,7 +21,91 @@ CREATE TABLE IF NOT EXISTS recognition_results (
     renamed TINYINT DEFAULT 0,
     renamed_at TIMESTAMP NULL,
     image_hash VARCHAR(255),
+    -- 园艺工具新增字段
+    is_favorite TINYINT DEFAULT 0,
+    is_archived TINYINT DEFAULT 0,
+    is_deleted TINYINT DEFAULT 0,
+    deleted_at TIMESTAMP NULL,
+    notes TEXT,
+    location VARCHAR(255),
+    weather VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 创建标签表
+CREATE TABLE IF NOT EXISTS tags (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    name VARCHAR(100) NOT NULL,
+    color VARCHAR(20) DEFAULT '#4CAF50',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE KEY unique_user_tag (user_id, name)
+);
+
+-- 创建识别结果与标签关联表
+CREATE TABLE IF NOT EXISTS result_tags (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    result_id INT,
+    tag_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (result_id) REFERENCES recognition_results(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_result_tag (result_id, tag_id)
+);
+
+-- 创建收藏表
+CREATE TABLE IF NOT EXISTS favorites (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    result_id INT,
+    plant_id INT,
+    favorite_type ENUM('result', 'plant') DEFAULT 'result',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (result_id) REFERENCES recognition_results(id) ON DELETE CASCADE,
+    FOREIGN KEY (plant_id) REFERENCES plants(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_favorite (user_id, result_id, plant_id, favorite_type)
+);
+
+-- 创建回收站表（软删除记录）
+CREATE TABLE IF NOT EXISTS recycle_bin (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    result_id INT,
+    original_data JSON,
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (result_id) REFERENCES recognition_results(id) ON DELETE CASCADE
+);
+
+-- 创建同步记录表
+CREATE TABLE IF NOT EXISTS sync_records (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    device_id VARCHAR(255),
+    sync_type ENUM('upload', 'download', 'bidirectional') DEFAULT 'bidirectional',
+    last_sync_at TIMESTAMP NULL,
+    sync_status ENUM('pending', 'syncing', 'completed', 'failed') DEFAULT 'pending',
+    sync_data JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 创建用户设置表
+CREATE TABLE IF NOT EXISTS user_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNIQUE,
+    auto_sync TINYINT DEFAULT 1,
+    sync_interval INT DEFAULT 3600,
+    default_view ENUM('grid', 'list', 'timeline') DEFAULT 'grid',
+    theme ENUM('light', 'dark', 'auto') DEFAULT 'auto',
+    language VARCHAR(10) DEFAULT 'zh-CN',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
