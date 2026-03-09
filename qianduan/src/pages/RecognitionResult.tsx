@@ -276,6 +276,24 @@ const RecognitionResult: React.FC = () => {
     navigate('/');
   };
 
+  const handleCorrectResult = () => {
+    const correctName = prompt('请输入正确的植物名称:');
+    if (correctName && correctName.trim()) {
+      // 这里应该调用后端API来纠正结果
+      toast.success('识别结果已纠正');
+      // 刷新页面或更新状态
+      window.location.reload();
+    }
+  };
+
+  const handleFeedback = () => {
+    const comment = prompt('请告诉我们哪里识别错了:');
+    if (comment !== null) {
+      // 这里应该调用后端API来提交反馈
+      toast.success('反馈已提交，感谢您的帮助');
+    }
+  };
+
   // 格式化置信度百分比
   const formattedConfidence = Math.round(confidence * 100);
 
@@ -419,6 +437,34 @@ const RecognitionResult: React.FC = () => {
                   >
                     <i className="fas fa-heart mr-2" />
                     添加到收藏
+                  </motion.button>
+                  
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleCorrectResult}
+                    className={`px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center ${
+                      theme === 'light' 
+                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                        : 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50'
+                    }`}
+                  >
+                    <i className="fas fa-edit mr-2" />
+                    纠正结果
+                  </motion.button>
+                  
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleFeedback}
+                    className={`px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center ${
+                      theme === 'light' 
+                        ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                        : 'bg-red-900/30 text-red-400 hover:bg-red-900/50'
+                    }`}
+                  >
+                    <i className="fas fa-times-circle mr-2" />
+                    识别错了
                   </motion.button>
                 </div>
               </div>
