@@ -6,6 +6,8 @@ import sys
 import base64
 import io
 import asyncio
+import uuid
+import imghdr
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for, make_response
 from flask_cors import CORS
@@ -574,46 +576,83 @@ def upload_image():
         if file.filename == '':
             return jsonify({'success': False, 'error': '文件名不能为空'})
         
-        if file:
-            filename = file.filename
-            upload_dir = os.path.join(BASE_DIR, 'uploads')
-            if not os.path.exists(upload_dir):
-                os.makedirs(upload_dir)
-            
-            filepath = os.path.join(upload_dir, filename)
+        # 文件大小限制（10MB）
+        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+        if file.content_length > MAX_FILE_SIZE:
+            return jsonify({'success': False, 'error': '文件大小超过限制（最大10MB）'})
+        
+        # 文件类型白名单校验
+        ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp'}
+        if '.' not in file.filename:
+            return jsonify({'success': False, 'error': '无效的文件名'})
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            return jsonify({'success': False, 'error': '不支持的文件类型，只允许 jpg、jpeg、png、webp'})
+        
+        # 生成随机文件名，防止文件覆盖
+        new_filename = f"{uuid.uuid4()}.{ext}"
+        upload_dir = os.path.join(BASE_DIR, 'uploads')
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
+        
+        filepath = os.path.join(upload_dir, new_filename)
+        
+        try:
+            # 保存文件
             file.save(filepath)
             
+            # MIME类型校验
+            img_type = imghdr.what(filepath)
+            if not img_type:
+                os.remove(filepath)
+                return jsonify({'success': False, 'error': '无效的图片文件'})
+            
+            # 图片压缩
             try:
-                results = flower_model(filepath)
-                predictions = results.pandas().xyxy[0].to_dict(orient='records')
-                
-                if predictions:
-                    result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
-                else:
-                    result_str = '未识别到花卉'
-                
-                connection = get_db_connection()
-                cursor = connection.cursor()
-                
-                insert_query = """
-                    INSERT INTO recognition_results (user_id, image_path, result, confidence) 
-                    VALUES (%s, %s, %s, %s)
-                """
-                confidence = predictions[0]['conf'] if predictions else 0
-                cursor.execute(insert_query, (session['user_id'], filepath, result_str, confidence))
-                connection.commit()
-                
-                cursor.close()
-                connection.close()
-                
-                return jsonify({
-                    'success': True,
-                    'result': result_str,
-                    'predictions': predictions
-                })
+                from PIL import Image
+                img = Image.open(filepath)
+                # 压缩到最大800x800
+                img.thumbnail((800, 800))
+                img.save(filepath, optimize=True, quality=85)
             except Exception as e:
-                print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
-                return jsonify({'success': False, 'error': f'识别失败: {str(e)}'})
+                print(f"图片压缩失败: {e}")
+                # 压缩失败不影响识别，继续处理
+            
+            # 识别图片
+            results = flower_model(filepath)
+            predictions = results.pandas().xyxy[0].to_dict(orient='records')
+            
+            if predictions:
+                result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
+            else:
+                result_str = '未识别到花卉'
+            
+            # 保存识别结果到数据库
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            
+            insert_query = """
+                INSERT INTO recognition_results (user_id, image_path, result, confidence) 
+                VALUES (%s, %s, %s, %s)
+            """
+            confidence = predictions[0]['conf'] if predictions else 0
+            cursor.execute(insert_query, (session['user_id'], filepath, result_str, confidence))
+            connection.commit()
+            
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'success': True,
+                'result': result_str,
+                'predictions': predictions
+            })
+        except Exception as e:
+            # 上传失败清理
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
+            return jsonify({'success': False, 'error': f'识别失败: {str(e)}'})
         
     except Exception as e:
         print(f"上传过程中发生错误: {type(e).__name__}: {str(e)}")
@@ -690,6 +729,127 @@ def delete_result(result_id):
         traceback.print_exc()
         return jsonify({'success': False, 'error': '删除失败，请稍后重试'})
 
+@app.route('/api/detect', methods=['POST'])
+@login_required
+def detect_flower():
+    """花卉识别API接口（接收Base64图片）"""
+    try:
+        # 获取请求数据
+        data = request.get_json()
+        
+        if 'image' not in data:
+            return jsonify({'success': False, 'error': '缺少图片数据'})
+        
+        base64_image = data['image']
+        
+        # 限制Base64大小（约10MB）
+        MAX_BASE64_SIZE = 10 * 1024 * 1024 * 1.33  # Base64会增加约33%大小
+        if len(base64_image) > MAX_BASE64_SIZE:
+            return jsonify({'success': False, 'error': '图片大小超过限制（最大10MB）'})
+        
+        # 验证Base64格式
+        if not base64_image.startswith('data:image/'):
+            return jsonify({'success': False, 'error': '无效的图片格式'})
+        
+        # 提取文件扩展名
+        import re
+        match = re.search(r'data:image/(\w+);base64,', base64_image)
+        if not match:
+            return jsonify({'success': False, 'error': '无效的图片格式'})
+        
+        ext = match.group(1)
+        # 白名单校验
+        ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp'}
+        if ext not in ALLOWED_EXTENSIONS:
+            return jsonify({'success': False, 'error': '不支持的文件类型'})
+        
+        # 生成随机文件名
+        new_filename = f"{uuid.uuid4()}.{ext}"
+        upload_dir = os.path.join(BASE_DIR, 'uploads')
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
+        
+        filepath = os.path.join(upload_dir, new_filename)
+        
+        try:
+            # 解码Base64
+            import base64
+            img_data = base64.b64decode(base64_image.split(',')[1])
+            
+            # 保存图片
+            with open(filepath, 'wb') as f:
+                f.write(img_data)
+            
+            # MIME类型校验
+            img_type = imghdr.what(filepath)
+            if not img_type:
+                os.remove(filepath)
+                return jsonify({'success': False, 'error': '无效的图片文件'})
+            
+            # 图片压缩
+            try:
+                from PIL import Image
+                img = Image.open(filepath)
+                img.thumbnail((800, 800))
+                img.save(filepath, optimize=True, quality=85)
+            except Exception as e:
+                print(f"图片压缩失败: {e}")
+            
+            # 识别图片
+            results = flower_model(filepath)
+            predictions = results.pandas().xyxy[0].to_dict(orient='records')
+            
+            if predictions:
+                result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
+            else:
+                result_str = '未识别到花卉'
+            
+            # 保存识别结果
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            
+            insert_query = """
+                INSERT INTO recognition_results (user_id, image_path, result, confidence) 
+                VALUES (%s, %s, %s, %s)
+            """
+            confidence = predictions[0]['conf'] if predictions else 0
+            cursor.execute(insert_query, (session['user_id'], filepath, result_str, confidence))
+            connection.commit()
+            
+            cursor.close()
+            connection.close()
+            
+            # 构建结果
+            formatted_results = []
+            for pred in predictions:
+                formatted_results.append({
+                    'name': pred['name'],
+                    'confidence': float(pred['conf']),
+                    'bbox': [
+                        float(pred['xmin']),
+                        float(pred['ymin']),
+                        float(pred['xmax']),
+                        float(pred['ymax'])
+                    ]
+                })
+            
+            return jsonify({
+                'success': True,
+                'results': formatted_results
+            })
+        except Exception as e:
+            # 清理文件
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
+            return jsonify({'success': False, 'error': f'识别失败: {str(e)}'})
+        
+    except Exception as e:
+        print(f"检测过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '检测失败，请稍后重试'})
+
 @app.route('/api/recognize', methods=['POST'])
 @login_required
 def recognize():
@@ -734,6 +894,269 @@ def recognize():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': '识别失败，请稍后重试'})
+
+@app.route('/api/results/<int:result_id>/correct', methods=['POST'])
+@login_required
+def correct_result(result_id):
+    """用户手动纠正识别结果"""
+    try:
+        data = request.get_json()
+        correct_name = data.get('correct_name')
+        
+        if not correct_name:
+            return jsonify({'success': False, 'error': '请提供正确的植物名称'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        check_query = "SELECT * FROM recognition_results WHERE id = %s AND user_id = %s"
+        cursor.execute(check_query, (result_id, session['user_id']))
+        result = cursor.fetchone()
+        
+        if not result:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '记录不存在或无权访问'})
+        
+        update_query = """
+            UPDATE recognition_results 
+            SET result = %s, 
+                corrected = 1,
+                original_result = %s,
+                corrected_at = NOW()
+            WHERE id = %s
+        """
+        cursor.execute(update_query, (correct_name, result['result'], result_id))
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'message': '识别结果已纠正'})
+        
+    except Exception as e:
+        print(f"纠正识别结果过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '纠正失败，请稍后重试'})
+
+@app.route('/api/results/<int:result_id>/feedback', methods=['POST'])
+@login_required
+def submit_feedback(result_id):
+    """提交错误反馈（识别错了）"""
+    try:
+        data = request.get_json()
+        feedback_type = data.get('feedback_type', 'wrong')
+        feedback_comment = data.get('comment', '')
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        check_query = "SELECT * FROM recognition_results WHERE id = %s AND user_id = %s"
+        cursor.execute(check_query, (result_id, session['user_id']))
+        result = cursor.fetchone()
+        
+        if not result:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '记录不存在或无权访问'})
+        
+        check_feedback = "SELECT * FROM recognition_feedback WHERE result_id = %s"
+        cursor.execute(check_feedback, (result_id,))
+        existing_feedback = cursor.fetchone()
+        
+        if existing_feedback:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '已提交过反馈'})
+        
+        insert_query = """
+            INSERT INTO recognition_feedback (result_id, user_id, feedback_type, comment)
+            VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(insert_query, (result_id, session['user_id'], feedback_type, feedback_comment))
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'message': '反馈已提交，感谢您的帮助'})
+        
+    except Exception as e:
+        print(f"提交反馈过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '提交失败，请稍后重试'})
+
+@app.route('/api/results/<int:result_id>/rename', methods=['POST'])
+@login_required
+def rename_result(result_id):
+    """重命名识别结果标签"""
+    try:
+        data = request.get_json()
+        new_name = data.get('new_name')
+        
+        if not new_name:
+            return jsonify({'success': False, 'error': '请提供新的名称'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        check_query = "SELECT * FROM recognition_results WHERE id = %s AND user_id = %s"
+        cursor.execute(check_query, (result_id, session['user_id']))
+        result = cursor.fetchone()
+        
+        if not result:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'error': '记录不存在或无权访问'})
+        
+        update_query = """
+            UPDATE recognition_results 
+            SET result = %s,
+                renamed = 1,
+                renamed_at = NOW()
+            WHERE id = %s
+        """
+        cursor.execute(update_query, (new_name, result_id))
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'message': '标签已重命名'})
+        
+    except Exception as e:
+        print(f"重命名标签过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '重命名失败，请稍后重试'})
+
+@app.route('/api/results/filter', methods=['GET'])
+@login_required
+def filter_results():
+    """筛选识别历史记录"""
+    try:
+        min_confidence = request.args.get('min_confidence', type=float)
+        max_confidence = request.args.get('max_confidence', type=float)
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        corrected_only = request.args.get('corrected_only', 'false').lower() == 'true'
+        search = request.args.get('search', '')
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        query = """
+            SELECT id, image_path, result, confidence, created_at, corrected, renamed
+            FROM recognition_results 
+            WHERE user_id = %s
+        """
+        params = [session['user_id']]
+        
+        if min_confidence is not None:
+            query += " AND confidence >= %s"
+            params.append(min_confidence)
+        
+        if max_confidence is not None:
+            query += " AND confidence <= %s"
+            params.append(max_confidence)
+        
+        if start_date:
+            query += " AND created_at >= %s"
+            params.append(start_date)
+        
+        if end_date:
+            query += " AND created_at <= %s"
+            params.append(end_date)
+        
+        if corrected_only:
+            query += " AND corrected = 1"
+        
+        if search:
+            query += " AND result LIKE %s"
+            params.append(f'%{search}%')
+        
+        query += " ORDER BY created_at DESC LIMIT 100"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        formatted_results = []
+        for r in results:
+            formatted_results.append({
+                'id': r['id'],
+                'image_path': r['image_path'],
+                'result': r['result'],
+                'confidence': float(r['confidence']) if r['confidence'] else 0,
+                'created_at': r['created_at'].isoformat() if r['created_at'] else None,
+                'corrected': bool(r['corrected']),
+                'renamed': bool(r['renamed'])
+            })
+        
+        return jsonify({
+            'success': True,
+            'results': formatted_results
+        })
+        
+    except Exception as e:
+        print(f"筛选识别结果过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '筛选失败，请稍后重试'})
+
+@app.route('/api/results/check-duplicate', methods=['POST'])
+@login_required
+def check_duplicate():
+    """检查相同图片是否已识别过"""
+    try:
+        data = request.get_json()
+        image_hash = data.get('image_hash')
+        
+        if not image_hash:
+            return jsonify({'success': False, 'error': '缺少图片哈希值'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        check_query = """
+            SELECT id, result, confidence, created_at
+            FROM recognition_results
+            WHERE user_id = %s AND image_hash = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+        """
+        cursor.execute(check_query, (session['user_id'], image_hash))
+        existing_result = cursor.fetchone()
+        
+        cursor.close()
+        connection.close()
+        
+        if existing_result:
+            return jsonify({
+                'success': True,
+                'is_duplicate': True,
+                'existing_result': {
+                    'id': existing_result['id'],
+                    'result': existing_result['result'],
+                    'confidence': float(existing_result['confidence']) if existing_result['confidence'] else 0,
+                    'created_at': existing_result['created_at'].isoformat() if existing_result['created_at'] else None
+                }
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'is_duplicate': False
+            })
+        
+    except Exception as e:
+        print(f"检查重复识别过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '检查失败，请稍后重试'})
 
 # ==================== 静态文件服务 ====================
 
