@@ -1267,6 +1267,40 @@
             text-decoration: underline;
         }
 
+        .captcha-container {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .captcha-image {
+            cursor: pointer;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 5px;
+            background: white;
+            transition: transform 0.2s;
+        }
+
+        .captcha-image:hover {
+            transform: scale(1.05);
+        }
+
+        .captcha-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .captcha-input:focus {
+            outline: none;
+            border-color: #4a90e2;
+        }
+
         .register-form {
             display: flex;
             flex-direction: column;
@@ -1591,6 +1625,14 @@
                     <form class="login-form" id="loginForm">
                         <input type="text" id="loginUsername" placeholder="用户名" required>
                         <input type="password" id="loginPassword" placeholder="密码" required>
+                        
+                        <!-- 图形验证码 -->
+                        <div class="captcha-container">
+                            <img id="loginCaptchaImage" class="captcha-image" alt="验证码" title="点击刷新">
+                            <input type="text" id="loginCaptchaInput" class="captcha-input" placeholder="输入验证码" maxlength="4" required>
+                            <input type="hidden" id="loginCaptchaId">
+                        </div>
+                        
                         <button type="submit">登录</button>
                         <div class="form-footer">
                             还没有账号？<a href="#" id="switchToRegister">立即注册</a>
@@ -1640,6 +1682,14 @@
             <form class="form" id="loginModalForm">
                 <input type="text" id="modalLoginUsername" placeholder="用户名" required>
                 <input type="password" id="modalLoginPassword" placeholder="密码" required>
+                
+                <!-- 图形验证码 -->
+                <div class="captcha-container">
+                    <img id="modalCaptchaImage" class="captcha-image" alt="验证码" title="点击刷新">
+                    <input type="text" id="modalCaptchaInput" class="captcha-input" placeholder="输入验证码" maxlength="4" required>
+                    <input type="hidden" id="modalCaptchaId">
+                </div>
+                
                 <button type="submit">登录</button>
                 <div class="form-footer">
                     还没有账号？<a href="#" id="modalSwitchToRegister">立即注册</a>
@@ -1890,23 +1940,54 @@
                 $('#unverifiedModal').removeClass('active');
             });
 
+            // 加载验证码
+            function loadCaptcha(captchaImgId, captchaInputId, captchaIdInputId) {
+                $.ajax({
+                    url: '/api/captcha',
+                    method: 'GET',
+                    success: function(response) {
+                        if (response.success) {
+                            $(captchaImgId).attr('src', response.image);
+                            $(captchaIdInputId).val(response.captcha_id);
+                        }
+                    },
+                    error: function() {
+                        console.error('获取验证码失败');
+                    }
+                });
+            }
+
+            // 点击验证码图片刷新
+            $(document).on('click', '.captcha-image', function() {
+                const captchaImg = $(this);
+                const captchaInput = captchaImg.siblings('.captcha-input');
+                const captchaIdInput = captchaImg.siblings('input[type="hidden"]');
+                loadCaptcha(captchaImg, captchaInput, captchaIdInput);
+            });
+
             checkAuth();
 
             $('#loginModalForm').submit(function(e) {
                 e.preventDefault();
                 const username = $('#modalLoginUsername').val();
                 const password = $('#modalLoginPassword').val();
+                const captchaId = $('#modalCaptchaId').val();
+                const captchaText = $('#modalCaptchaInput').val();
 
                 $.ajax({
                     url: '/api/login',
                     method: 'POST',
                     contentType: 'application/json',
-                    data: JSON.stringify({ username, password }),
+                    data: JSON.stringify({ username, password, captcha_id: captchaId, captcha_text: captchaText }),
                     success: function(response) {
                         if (response.success) {
-                            localStorage.setItem('token', response.token);
+                            // 保存JWT Token
+                            localStorage.setItem('access_token', response.access_token);
+                            localStorage.setItem('refresh_token', response.refresh_token);
+                            localStorage.setItem('token_expires', Date.now() + response.expires_in * 1000);
+                            
                             currentUser = response.user;
-                            currentToken = response.token;
+                            currentToken = response.access_token;
                             updateNavbar();
                             $('#loginModal').removeClass('active');
                             showNotification('登录成功', 'success');
@@ -1916,10 +1997,14 @@
                             }
                         } else {
                             showNotification(response.error || '登录失败', 'error');
+                            // 登录失败，刷新验证码
+                            loadCaptcha('#modalCaptchaImage', '#modalCaptchaInput', '#modalCaptchaId');
                         }
                     },
                     error: function() {
                         showNotification('登录失败,请稍后重试', 'error');
+                        // 登录失败，刷新验证码
+                        loadCaptcha('#modalCaptchaImage', '#modalCaptchaInput', '#modalCaptchaId');
                     }
                 });
             });
@@ -1928,17 +2013,23 @@
                 e.preventDefault();
                 const username = $('#loginUsername').val();
                 const password = $('#loginPassword').val();
+                const captchaId = $('#loginCaptchaId').val();
+                const captchaText = $('#loginCaptchaInput').val();
 
                 $.ajax({
                     url: '/api/login',
                     method: 'POST',
                     contentType: 'application/json',
-                    data: JSON.stringify({ username, password }),
+                    data: JSON.stringify({ username, password, captcha_id: captchaId, captcha_text: captchaText }),
                     success: function(response) {
                         if (response.success) {
-                            localStorage.setItem('token', response.token);
+                            // 保存JWT Token
+                            localStorage.setItem('access_token', response.access_token);
+                            localStorage.setItem('refresh_token', response.refresh_token);
+                            localStorage.setItem('token_expires', Date.now() + response.expires_in * 1000);
+                            
                             currentUser = response.user;
-                            currentToken = response.token;
+                            currentToken = response.access_token;
                             updateNavbar();
                             showNotification('登录成功', 'success');
                             
@@ -1947,12 +2038,22 @@
                             }
                         } else {
                             showNotification(response.error || '登录失败', 'error');
+                            // 登录失败，刷新验证码
+                            loadCaptcha('#loginCaptchaImage', '#loginCaptchaInput', '#loginCaptchaId');
                         }
                     },
                     error: function() {
                         showNotification('登录失败,请稍后重试', 'error');
+                        // 登录失败，刷新验证码
+                        loadCaptcha('#loginCaptchaImage', '#loginCaptchaInput', '#loginCaptchaId');
                     }
                 });
+            });
+
+            // 初始化验证码
+            $(document).ready(function() {
+                loadCaptcha('#loginCaptchaImage', '#loginCaptchaInput', '#loginCaptchaId');
+                loadCaptcha('#modalCaptchaImage', '#modalCaptchaInput', '#modalCaptchaId');
             });
 
             $('#registerModalForm').submit(function(e) {

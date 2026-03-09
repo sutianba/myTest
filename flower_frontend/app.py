@@ -297,6 +297,8 @@ def login():
         data = request.get_json()
         username = data.get('username')
         password = data.get('password')
+        captcha_id = data.get('captcha_id')
+        captcha_text = data.get('captcha_text')
         
         # 获取客户端IP地址
         ip_address = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
@@ -304,6 +306,12 @@ def login():
         if not username or not password:
             return jsonify({'success': False, 'error': '用户名和密码不能为空'})
 
+        # 验证图形验证码
+        if captcha_id and captcha_text:
+            success, message = verify_captcha(captcha_id, captcha_text)
+            if not success:
+                return jsonify({'success': False, 'error': message})
+        
         # 检查登录失败限制
         allowed, error_msg = check_login_failure_limit(username, ip_address)
         if not allowed:
@@ -371,6 +379,47 @@ def login():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': '登录失败，请稍后重试'})
+
+@app.route('/api/captcha', methods=['GET'])
+def get_captcha():
+    """获取图形验证码"""
+    try:
+        captcha_id, base64_str = generate_captcha()
+        
+        return jsonify({
+            'success': True,
+            'captcha_id': captcha_id,
+            'image': f'data:image/png;base64,{base64_str}'
+        })
+    except Exception as e:
+        print(f"获取验证码过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '获取验证码失败'})
+
+@app.route('/api/verify-captcha', methods=['POST'])
+def verify_captcha_api():
+    """验证图形验证码"""
+    try:
+        data = request.get_json()
+        captcha_id = data.get('captcha_id')
+        captcha_text = data.get('captcha_text')
+        
+        if not captcha_id or not captcha_text:
+            return jsonify({'success': False, 'error': '缺少验证码参数'})
+        
+        success, message = verify_captcha(captcha_id, captcha_text)
+        
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': message})
+            
+    except Exception as e:
+        print(f"验证验证码过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '验证失败'})
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
