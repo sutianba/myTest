@@ -1158,6 +1158,192 @@ def check_duplicate():
         traceback.print_exc()
         return jsonify({'success': False, 'error': '检查失败，请稍后重试'})
 
+# ==================== 植物信息API ====================
+
+@app.route('/api/plants', methods=['GET'])
+def get_plants():
+    """获取植物列表"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        query = """
+            SELECT id, name, scientific_name, category, family, image_url
+            FROM plants
+            ORDER BY name
+            LIMIT 100
+        """
+        cursor.execute(query)
+        plants = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        formatted_plants = []
+        for plant in plants:
+            formatted_plants.append({
+                'id': plant['id'],
+                'name': plant['name'],
+                'scientificName': plant['scientific_name'],
+                'category': plant['category'],
+                'family': plant['family'],
+                'imageUrl': plant['image_url']
+            })
+        
+        return jsonify({
+            'success': True,
+            'plants': formatted_plants
+        })
+        
+    except Exception as e:
+        print(f"获取植物列表过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '获取失败，请稍后重试'})
+
+@app.route('/api/plants/<int:plant_id>', methods=['GET'])
+def get_plant_detail(plant_id):
+    """获取植物详细信息"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        query = """
+            SELECT * FROM plants WHERE id = %s
+        """
+        cursor.execute(query, (plant_id,))
+        plant = cursor.fetchone()
+        
+        cursor.close()
+        connection.close()
+        
+        if not plant:
+            return jsonify({'success': False, 'error': '植物不存在'})
+        
+        formatted_plant = {
+            'id': plant['id'],
+            'name': plant['name'],
+            'scientificName': plant['scientific_name'],
+            'category': plant['category'],
+            'family': plant['family'],
+            'description': plant['description'],
+            'imageUrl': plant['image_url'],
+            'bloomingSeason': plant['blooming_season'],
+            'growthStage': plant['growth_stage'],
+            'sunlightRequirements': plant['sunlight_requirements'],
+            'waterNeeds': plant['water_needs'],
+            'origin': plant['origin'],
+            'toxicity': plant['toxicity'],
+            'careTips': plant['care_tips'],
+            'plantingInstructions': plant['planting_instructions'],
+            'propagationMethods': plant['propagation_methods'],
+            'pestsAndDiseases': plant['pests_and_diseases'],
+            'similarPlants': plant['similar_plants'],
+            'benefits': plant['benefits'],
+            'otherNames': plant['other_names'].split(',') if plant['other_names'] else []
+        }
+        
+        return jsonify({
+            'success': True,
+            'plant': formatted_plant
+        })
+        
+    except Exception as e:
+        print(f"获取植物详情过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '获取失败，请稍后重试'})
+
+@app.route('/api/plants/search', methods=['GET'])
+def search_plants():
+    """搜索植物"""
+    try:
+        query = request.args.get('q', '')
+        
+        if not query:
+            return jsonify({'success': False, 'error': '请输入搜索关键词'})
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        search_query = """
+            SELECT id, name, scientific_name, category, family, image_url
+            FROM plants
+            WHERE name LIKE %s OR scientific_name LIKE %s OR other_names LIKE %s
+            ORDER BY name
+            LIMIT 20
+        """
+        search_term = f'%{query}%'
+        cursor.execute(search_query, (search_term, search_term, search_term))
+        plants = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        formatted_plants = []
+        for plant in plants:
+            formatted_plants.append({
+                'id': plant['id'],
+                'name': plant['name'],
+                'scientificName': plant['scientific_name'],
+                'category': plant['category'],
+                'family': plant['family'],
+                'imageUrl': plant['image_url']
+            })
+        
+        return jsonify({
+            'success': True,
+            'plants': formatted_plants
+        })
+        
+    except Exception as e:
+        print(f"搜索植物过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '搜索失败，请稍后重试'})
+
+@app.route('/api/plants/category/<category>', methods=['GET'])
+def get_plants_by_category(category):
+    """按分类获取植物"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        query = """
+            SELECT id, name, scientific_name, category, family, image_url
+            FROM plants
+            WHERE category = %s
+            ORDER BY name
+            LIMIT 50
+        """
+        cursor.execute(query, (category,))
+        plants = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        formatted_plants = []
+        for plant in plants:
+            formatted_plants.append({
+                'id': plant['id'],
+                'name': plant['name'],
+                'scientificName': plant['scientific_name'],
+                'category': plant['category'],
+                'family': plant['family'],
+                'imageUrl': plant['image_url']
+            })
+        
+        return jsonify({
+            'success': True,
+            'plants': formatted_plants
+        })
+        
+    except Exception as e:
+        print(f"按分类获取植物过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '获取失败，请稍后重试'})
+
 # ==================== 静态文件服务 ====================
 
 @app.route('/')

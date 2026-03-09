@@ -3,13 +3,13 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { Plant, RecognitionResult as RecognitionResultType } from '../types/plant';
-import { plants } from '../mock/plants';
 import { toast } from 'sonner';
 
 const RecognitionResult: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [recognitionResult, setRecognitionResult] = useState<RecognitionResultType | null>(null);
+  const [candidates, setCandidates] = useState<{name: string, confidence: number, rank: number}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -29,6 +29,7 @@ const RecognitionResult: React.FC = () => {
     // 模拟API调用延迟
     setTimeout(() => {
       let result: RecognitionResultType | null = null;
+      let topCandidates: {name: string, confidence: number, rank: number}[] = [];
       
       if (resultStr) {
         // 如果有真实的识别结果，使用它
@@ -36,6 +37,15 @@ const RecognitionResult: React.FC = () => {
         
         // 从detections中获取植物识别结果
         const detection = recognitionData.detections && recognitionData.detections.length > 0 ? recognitionData.detections[0] : null;
+        
+        // 处理Top-N候选项
+        if (recognitionData.results && Array.isArray(recognitionData.results)) {
+          topCandidates = recognitionData.results.map((item: any, index: number) => ({
+            name: item.name,
+            confidence: item.confidence,
+            rank: item.rank || (index + 1)
+          }));
+        }
         
         // 从exif_info中获取日期和位置信息
         const exifInfo = recognitionData.exif_info || {};
@@ -74,22 +84,33 @@ const RecognitionResult: React.FC = () => {
         };
       } else {
         // 如果没有真实结果，使用模拟数据作为备用
-        const randomIndex = Math.floor(Math.random() * plants.length);
-        const recognizedPlant = plants[randomIndex];
+        // 模拟Top-5候选项
+        topCandidates = [
+          { name: '玫瑰', confidence: 0.95, rank: 1 },
+          { name: '月季', confidence: 0.87, rank: 2 },
+          { name: '蔷薇', confidence: 0.72, rank: 3 },
+          { name: '牡丹', confidence: 0.65, rank: 4 },
+          { name: '郁金香', confidence: 0.58, rank: 5 }
+        ];
         
-        // 生成随机置信度
-        const confidence = Math.round((0.85 + Math.random() * 0.15) * 100) / 100;
-        
-        // 生成相似植物列表（排除已识别的植物）
-        const similarPlants = plants
-          .filter(plant => plant.category === recognizedPlant.category && plant.id !== recognizedPlant.id)
-          .sort(() => 0.5 - Math.random())
-          .slice(0, 3);
+        const recognizedPlant: Plant = {
+          id: 'rose',
+          name: '玫瑰',
+          category: 'flower',
+          scientificName: 'Rosa',
+          description: '玫瑰是一种象征爱情与美丽的花卉，拥有丰富的花色和浓郁的香气。',
+          imageUrl: '',
+          characteristics: [],
+          habitat: '',
+          bloomingSeason: '夏季至秋季',
+          uses: [],
+          funFacts: []
+        };
         
         result = {
           plant: recognizedPlant,
-          confidence,
-          similarPlants,
+          confidence: 0.95,
+          similarPlants: [],
           imageUrl,
           recognizedAt: new Date().toISOString()
         };
@@ -97,6 +118,7 @@ const RecognitionResult: React.FC = () => {
       
       if (result) {
         setRecognitionResult(result);
+        setCandidates(topCandidates);
         
         // 保存到识别历史
         const history = JSON.parse(localStorage.getItem('recognitionHistory') || '[]');
@@ -402,6 +424,44 @@ const RecognitionResult: React.FC = () => {
               </div>
             </div>
           </motion.div>
+          
+          {/* Top-N 候选结果 */}
+          {candidates.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className={`mt-6 bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 border ${theme === 'light' ? 'border-gray-100' : 'border-gray-700'}`}
+            >
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">候选结果</h3>
+              
+              <div className="space-y-3">
+                {candidates.map((candidate) => (
+                  <div key={candidate.rank} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                    <div className="flex items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 font-bold ${candidate.rank === 1 ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                        {candidate.rank}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white">{candidate.name}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          置信度: {Math.round(candidate.confidence * 100)}%
+                        </p>
+                      </div>
+                    </div>
+                    <div className="w-24">
+                      <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full ${candidate.confidence >= 0.9 ? 'bg-emerald-500' : candidate.confidence >= 0.7 ? 'bg-amber-500' : 'bg-red-500'}`}
+                          style={{ width: `${candidate.confidence * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
           
           {/* 植物基本信息卡片 */}
           <motion.div
