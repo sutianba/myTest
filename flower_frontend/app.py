@@ -14,6 +14,10 @@ import secrets
 import jwt
 import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # 导入邮箱验证功能
 from email_config import generate_verification_token, send_verification_email, verify_token, mark_token_as_used
