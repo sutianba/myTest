@@ -609,11 +609,224 @@ const AdminDashboard: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-8 text-center"
+                className="bg-white dark:bg-gray-800 rounded-2xl shadow-md overflow-hidden"
               >
-                <i className="fas fa-history text-6xl text-gray-300 dark:text-gray-600 mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">操作日志</h3>
-                <p className="text-gray-600 dark:text-gray-400">此功能正在开发中...</p>
+                {/* 日志筛选栏 */}
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex flex-wrap gap-4 items-end">
+                    {/* 日志类型选择 */}
+                    <div className="flex-1 min-w-[200px]">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        日志类型
+                      </label>
+                      <select
+                        value={selectedLogType}
+                        onChange={(e) => {
+                          setSelectedLogType(e.target.value);
+                          setLogPage(1);
+                        }}
+                        className={`w-full px-4 py-2 rounded-lg border ${
+                          theme === 'light'
+                            ? 'border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500'
+                            : 'border-gray-700 bg-gray-900 text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500'
+                        } transition-all duration-300`}
+                      >
+                        {logTypes.map((type) => (
+                          <option key={type.key} value={type.key}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 关键词搜索 */}
+                    <div className="flex-1 min-w-[200px]">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        关键词搜索
+                      </label>
+                      <div className="relative">
+                        <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="搜索日志内容..."
+                          value={logKeyword}
+                          onChange={(e) => setLogKeyword(e.target.value)}
+                          className={`w-full pl-10 pr-4 py-2 rounded-lg border ${
+                            theme === 'light'
+                              ? 'border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500'
+                              : 'border-gray-700 bg-gray-900 text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500'
+                          } transition-all duration-300`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 开始日期 */}
+                    <div className="min-w-[150px]">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        开始日期
+                      </label>
+                      <input
+                        type="date"
+                        value={logStartDate}
+                        onChange={(e) => setLogStartDate(e.target.value)}
+                        className={`w-full px-4 py-2 rounded-lg border ${
+                          theme === 'light'
+                            ? 'border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500'
+                            : 'border-gray-700 bg-gray-900 text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500'
+                        } transition-all duration-300`}
+                      />
+                    </div>
+
+                    {/* 结束日期 */}
+                    <div className="min-w-[150px]">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        结束日期
+                      </label>
+                      <input
+                        type="date"
+                        value={logEndDate}
+                        onChange={(e) => setLogEndDate(e.target.value)}
+                        className={`w-full px-4 py-2 rounded-lg border ${
+                          theme === 'light'
+                            ? 'border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500'
+                            : 'border-gray-700 bg-gray-900 text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500'
+                        } transition-all duration-300`}
+                      />
+                    </div>
+
+                    {/* 搜索按钮 */}
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        setLogPage(1);
+                        fetchLogs();
+                      }}
+                      className="px-6 py-2 bg-purple-500 text-white rounded-lg font-medium hover:bg-purple-600 transition-colors"
+                    >
+                      <i className="fas fa-search mr-2" />
+                      搜索
+                    </motion.button>
+
+                    {/* 导出按钮 */}
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleExportLogs}
+                      className="px-6 py-2 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+                    >
+                      <i className="fas fa-download mr-2" />
+                      导出
+                    </motion.button>
+                  </div>
+
+                  {/* 当前日志类型描述 */}
+                  {logTypes.find(t => t.key === selectedLogType) && (
+                    <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                      {logTypes.find(t => t.key === selectedLogType)?.description}
+                    </p>
+                  )}
+                </div>
+
+                {/* 日志列表 */}
+                <div className="divide-y divide-gray-200 dark:divide-gray-700 max-h-[600px] overflow-y-auto">
+                  {logLoading ? (
+                    <div className="p-8 text-center">
+                      <i className="fas fa-spinner fa-spin text-2xl text-purple-500" />
+                    </div>
+                  ) : logs.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                      暂无日志数据
+                    </div>
+                  ) : (
+                    logs.map((log, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                      >
+                        <div className="flex items-start gap-4">
+                          {/* 时间戳 */}
+                          <div className="flex-shrink-0 w-40 text-sm text-gray-500 dark:text-gray-400 font-mono">
+                            {log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}
+                          </div>
+
+                          {/* 日志类型标签 */}
+                          <div className="flex-shrink-0">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              log.type?.includes('error') || log.type?.includes('ERROR')
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                : log.type?.includes('security') || log.type?.includes('SECURITY')
+                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                            }`}>
+                              {log.type || 'INFO'}
+                            </span>
+                          </div>
+
+                          {/* 日志内容 */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-800 dark:text-gray-200 font-medium truncate">
+                              {log.message}
+                            </p>
+                            {/* 显示额外信息 */}
+                            {Object.keys(log).filter(k => !['timestamp', 'type', 'message', 'raw'].includes(k)).length > 0 && (
+                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {Object.entries(log)
+                                  .filter(([k]) => !['timestamp', 'type', 'message', 'raw'].includes(k))
+                                  .map(([k, v]) => (
+                                    <span key={k} className="inline-block mr-4">
+                                      <span className="font-medium">{k}:</span> {String(v)}
+                                    </span>
+                                  ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+
+                {/* 分页 */}
+                {logTotalPages > 1 && (
+                  <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-center gap-2">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        if (logPage > 1) {
+                          setLogPage(logPage - 1);
+                          fetchLogs();
+                        }
+                      }}
+                      disabled={logPage === 1}
+                      className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      <i className="fas fa-chevron-left" />
+                    </motion.button>
+                    
+                    <span className="px-4 py-2 text-gray-700 dark:text-gray-300">
+                      第 {logPage} / {logTotalPages} 页
+                    </span>
+                    
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        if (logPage < logTotalPages) {
+                          setLogPage(logPage + 1);
+                          fetchLogs();
+                        }
+                      }}
+                      disabled={logPage === logTotalPages}
+                      className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      <i className="fas fa-chevron-right" />
+                    </motion.button>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
