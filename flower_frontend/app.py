@@ -6,7 +6,29 @@ import sys
 import base64
 import io
 import asyncio
+import uuid
 from concurrent.futures import ThreadPoolExecutor
+
+# imghdr 在 Python 3.13 中已被移除，使用替代方案
+def get_image_type(filepath):
+    """检测图片类型"""
+    try:
+        from PIL import Image
+        with Image.open(filepath) as img:
+            return img.format.lower() if img.format else None
+    except:
+        # 通过文件头检测
+        with open(filepath, 'rb') as f:
+            header = f.read(32)
+            if header.startswith(b'\xff\xd8'):
+                return 'jpeg'
+            elif header.startswith(b'\x89PNG'):
+                return 'png'
+            elif header.startswith(b'RIFF') and header[8:12] == b'WEBP':
+                return 'webp'
+            elif header.startswith(b'GIF'):
+                return 'gif'
+        return None
 from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for, make_response
 from flask_cors import CORS
 import hashlib
@@ -113,6 +135,7 @@ thread_pool = ThreadPoolExecutor(max_workers=4)  # 根据系统CPU核心数调�
 
 # 定义静态文件目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)  # 项目根目录
 
 # 使用MySQL数据库
 import sys
@@ -122,12 +145,6 @@ from db_config import get_db_connection, init_mysql_db
 # 初始化数据库
 # 启用MySQL数据库初始化功能
 init_mysql_db()
-
-# 注册个人账户API路由
-account_api(app)
-
-# 注册管理员后台API路由
-admin_api(app)
 
 # 路由保护装饰器
 def login_required(f):
@@ -588,40 +605,166 @@ def upload_image():
         if file.filename == '':
             return jsonify({'success': False, 'error': '文件名不能为空'})
         
-        # 读取文件内容
-        file_content = file.read()
-        
-        # 验证上传文件
-        valid, file_info, error = validate_upload(file_content, file.filename)
-        if not valid:
-            return jsonify({'success': False, 'error': error})
-        
-        # 获取上传目录
-        upload_dir = get_upload_dir(BASE_DIR)
-        
-        # 保存上传文件
-        success, filepath, error = save_upload_file(file_content, upload_dir, file.filename)
-        if not success:
-            cleanup_failed_upload(filepath)
-            return jsonify({'success': False, 'error': error})
-        
-        return jsonify({
-            'success': True,
-            'message': '上传成功',
-            'file_info': {
-                'original_name': file.filename,
-                'saved_name': os.path.basename(filepath),
-                'size': file_info['size'],
-                'mime_type': file_info['mime_type'],
-                'dimensions': file_info['dimensions']
-            }
-        })
+        if file:
+            filename = file.filename
+            upload_dir = os.path.join(BASE_DIR, 'uploads')
+            if not os.path.exists(upload_dir):
+                os.makedirs(upload_dir)
+            
+            filepath = os.path.join(upload_dir, filename)
+            file.save(filepath)
+            
+            try:
+                results = flower_model(filepath)
+                predictions = results.pandas().xyxy[0].to_dict(orient='records')
+                
+                if predictions:
+                    result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
+                else:
+                    result_str = '未识别到花卉'
+                
+                connection = get_db_connection()
+                cursor = connection.cursor()
+                
+                insert_query = """
+                    INSERT INTO recognition_results (user_id, image_path, result, confidence) 
+                    VALUES (%s, %s, %s, %s)
+                """
+                confidence = predictions[0]['conf'] if predictions else 0
+                cursor.execute(insert_query, (session['user_id'], filepath, result_str, confidence))
+                connection.commit()
+                
+                cursor.close()
+                connection.close()
+                
+                return jsonify({
+                    'success': True,
+                    'result': result_str,
+                    'predictions': predictions
+                })
+            except Exception as e:
+                print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
+                return jsonify({'success': False, 'error': f'识别失败: {str(e)}'})
         
     except Exception as e:
         print(f"上传过程中发生错误: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': '上传失败，请稍后重试'})
+
+@app.route('/api/results', methods=['GET'])
+@login_required
+def get_results():
+    """获取识别结果列表"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        query = """
+            SELECT id, image_path, result, confidence, created_at 
+            FROM recognition_results 
+            WHERE user_id = %s 
+            ORDER BY created_at DESC 
+            LIMIT 50
+        """
+        cursor.execute(query, (session['user_id'],))
+        results = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        formatted_results = []
+        for r in results:
+            formatted_results.append({
+                'id': r['id'],
+                'image_path': r['image_path'],
+                'result': r['result'],
+                'confidence': float(r['confidence']) if r['confidence'] else 0,
+                'created_at': r['created_at'].isoformat() if r['created_at'] else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'results': formatted_results
+        })
+        
+    except Exception as e:
+        print(f"获取识别结果过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '获取结果失败'})
+
+@app.route('/api/results/<int:result_id>', methods=['DELETE'])
+@login_required
+def delete_result(result_id):
+    """删除识别结果"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        delete_query = "DELETE FROM recognition_results WHERE id = %s AND user_id = %s"
+        cursor.execute(delete_query, (result_id, session['user_id']))
+        connection.commit()
+        
+        affected_rows = cursor.rowcount
+        cursor.close()
+        connection.close()
+        
+        if affected_rows > 0:
+            return jsonify({'success': True, 'message': '删除成功'})
+        else:
+            return jsonify({'success': False, 'error': '删除失败或记录不存在'})
+        
+    except Exception as e:
+        print(f"删除识别结果过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '删除失败，请稍后重试'})
+
+@app.route('/api/recognize', methods=['POST'])
+@login_required
+def recognize():
+    """识别图片API"""
+    try:
+        data = request.get_json()
+        image_path = data.get('image_path')
+        
+        if not image_path:
+            return jsonify({'success': False, 'error': '图片路径不能为空'})
+        
+        results = flower_model(image_path)
+        predictions = results.pandas().xyxy[0].to_dict(orient='records')
+        
+        if predictions:
+            result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
+        else:
+            result_str = '未识别到花卉'
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        insert_query = """
+            INSERT INTO recognition_results (user_id, image_path, result, confidence) 
+            VALUES (%s, %s, %s, %s)
+        """
+        confidence = predictions[0]['conf'] if predictions else 0
+        cursor.execute(insert_query, (session['user_id'], image_path, result_str, confidence))
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'success': True,
+            'result': result_str,
+            'predictions': predictions
+        })
+        
+    except Exception as e:
+        print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': '识别失败，请稍后重试'})
 
 # ==================== 静态文件服务 ====================
 

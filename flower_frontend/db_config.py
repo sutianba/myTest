@@ -8,7 +8,7 @@ import os
 DB_HOST = os.environ.get('DB_HOST', 'localhost')
 DB_PORT = int(os.environ.get('DB_PORT', 3306))
 DB_USER = os.environ.get('DB_USER', 'root')
-DB_PASSWORD = os.environ.get('DB_PASSWORD', '')
+DB_PASSWORD = os.environ.get('DB_PASSWORD', '20031221')
 DB_NAME = os.environ.get('DB_NAME', 'flower_recognition')
 
 # SQL文件路径
@@ -91,6 +91,4 @@ def init_mysql_db():
             
     except Exception as e:
         print(f"数据库初始化失败: {type(e).__name__}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        print("请检查MySQL数据库配置")
+        print("警告: 数据库初始化失败，但服务器将继续运行。请检查MySQL数据库配置。")
