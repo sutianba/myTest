@@ -73,6 +73,40 @@ from jwt_manager import (
 # 导入验证码功能
 from captcha import generate_captcha, verify_captcha, clear_captcha
 
+# 导入安全上传功能
+from upload_manager import (
+    validate_upload,
+    save_upload_file,
+    cleanup_failed_upload,
+    get_upload_dir,
+    MAX_FILE_SIZE
+)
+
+# 导入个人账户功能
+from account_manager import (
+    get_user_profile, update_user_profile, upload_avatar,
+    generate_password_reset_token, verify_password_reset_token, mark_password_reset_token_as_used,
+    reset_user_password, change_user_password,
+    generate_email_change_token, verify_email_change_token, mark_email_change_token_as_used,
+    change_user_email, delete_user_account, ban_user, unban_user,
+    log_user_action, get_user_action_logs, check_user_banned, get_user_info
+)
+
+from password_reset import (
+    generate_reset_token, verify_reset_token, mark_reset_token_as_used,
+    send_password_reset_email
+)
+
+from email_change import (
+    generate_change_token, verify_change_token, mark_change_token_as_used,
+    send_email_change_email
+)
+
+from account_api import account_api
+
+# 导入管理员后台功能
+from admin_api import admin_api
+
 # 导入图片EXIF信息提取所需模块
 from PIL import Image # 用于打开和处理图片
 from PIL.ExifTags import TAGS # 用于将EXIF标签ID映射到标签名称
@@ -89,12 +123,12 @@ CORS(app,
     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 )  # 启用CORS以允许前端访问，并支持会话cookie
 
-# 设置密钥用于会话管理
+# 设置密钥用于JWT认证
 app.secret_key = secrets.token_hex(16)
 
-# 配置session cookie以支持跨域
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_HTTPONLY'] = True
+# 设置JWT Secret Key
+from jwt_manager import set_secret_key
+set_secret_key(app.secret_key)
 
 # 配置线程池用于异步处理
 thread_pool = ThreadPoolExecutor(max_workers=4)  # 根据系统CPU核心数调整
@@ -111,30 +145,6 @@ from db_config import get_db_connection, init_mysql_db
 # 初始化数据库
 # 启用MySQL数据库初始化功能
 init_mysql_db()
-
-# 加载YOLOv5模型
-import torch
-
-# 使用正确路径加载模型
-MODEL_PATH = os.path.join(PROJECT_ROOT, 'testflowers.pt')
-print(f"正在加载模型: {MODEL_PATH}")
-
-try:
-    # 检查模型文件是否存在
-    if not os.path.exists(MODEL_PATH):
-        print(f"警告: 模型文件不存在: {MODEL_PATH}")
-        print("将使用模拟模式运行")
-        flower_model = None
-    else:
-        # 加载YOLOv5模型
-        flower_model = torch.hub.load('ultralytics/yolov5', 'custom', path=MODEL_PATH, force_reload=True)
-        flower_model.conf = 0.25  # 降低置信度阈值，保留更多检测结果
-        flower_model.iou = 0.5   # 保持NMS IOU阈值
-        print("成功加载YOLOv5花卉识别模型")
-except Exception as e:
-    print(f"无法加载YOLOv5模型: {e}")
-    print("将使用模拟模式运行")
-    flower_model = None
 
 # 路由保护装饰器
 def login_required(f):
@@ -468,9 +478,7 @@ def logout():
             expires_at = datetime.datetime.utcfromtimestamp(payload['exp'])
             add_to_blacklist(token, expires_at)
         
-        # 清除session
-        session.clear()
-        
+        # 登出成功，清除前端存储的Token
         return jsonify({'success': True, 'message': '已成功登出'})
     except Exception as e:
         print(f"登出过程中发生错误: {type(e).__name__}: {str(e)}")
@@ -575,17 +583,6 @@ def check_auth():
                 'username': current_user['username']
             }
         })
-        if 'username' in session:
-            return jsonify({
-                'success': True,
-                'authenticated': True,
-                'user': {'username': session['username']}
-            })
-        else:
-            return jsonify({
-                'success': True,
-                'authenticated': False
-            })
     except Exception as e:
         print(f"检查认证状态过程中发生错误: {type(e).__name__}: {str(e)}")
         return jsonify({
@@ -594,12 +591,12 @@ def check_auth():
             'error': '检查失败'
         })
 
-# ==================== 图片识别相关API ====================
+# ==================== 图片上传相关API ====================
 
 @app.route('/api/upload', methods=['POST'])
 @login_required
 def upload_image():
-    """上传图片进行识别"""
+    """上传图片（安全版本）"""
     try:
         if 'file' not in request.files:
             return jsonify({'success': False, 'error': '没有找到文件'})
@@ -608,60 +605,16 @@ def upload_image():
         if file.filename == '':
             return jsonify({'success': False, 'error': '文件名不能为空'})
         
-        # 文件大小限制（10MB）
-        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-        if file.content_length > MAX_FILE_SIZE:
-            return jsonify({'success': False, 'error': '文件大小超过限制（最大10MB）'})
-        
-        # 文件类型白名单校验
-        ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp'}
-        if '.' not in file.filename:
-            return jsonify({'success': False, 'error': '无效的文件名'})
-        ext = file.filename.rsplit('.', 1)[1].lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            return jsonify({'success': False, 'error': '不支持的文件类型，只允许 jpg、jpeg、png、webp'})
-        
-        # 生成随机文件名，防止文件覆盖
-        new_filename = f"{uuid.uuid4()}.{ext}"
-        upload_dir = os.path.join(BASE_DIR, 'uploads')
-        if not os.path.exists(upload_dir):
-            os.makedirs(upload_dir)
-        
-        filepath = os.path.join(upload_dir, new_filename)
-        
-        try:
-            # 保存文件
+        if file:
+            filename = file.filename
+            upload_dir = os.path.join(BASE_DIR, 'uploads')
+            if not os.path.exists(upload_dir):
+                os.makedirs(upload_dir)
+            
+            filepath = os.path.join(upload_dir, filename)
             file.save(filepath)
             
-            # MIME类型校验
-            img_type = get_image_type(filepath)
-            if not img_type:
-                os.remove(filepath)
-                return jsonify({'success': False, 'error': '无效的图片文件'})
-            
-            # 图片压缩
             try:
-                from PIL import Image
-                img = Image.open(filepath)
-                # 压缩到最大800x800
-                img.thumbnail((800, 800))
-                img.save(filepath, optimize=True, quality=85)
-            except Exception as e:
-                print(f"图片压缩失败: {e}")
-                # 压缩失败不影响识别，继续处理
-            
-            # 识别图片
-            if flower_model is None:
-                # 模拟模式：随机返回识别结果
-                import random
-                mock_plants = ['玫瑰', '郁金香', '薰衣草', '仙人掌', '绿萝']
-                predictions = [{
-                    'name': random.choice(mock_plants),
-                    'conf': round(random.uniform(0.7, 0.95), 2),
-                    'xmin': 10, 'ymin': 10, 'xmax': 100, 'ymax': 100
-                }]
-                result_str = f"{predictions[0]['name']} ({predictions[0]['conf']:.2f})"
-            else:
                 results = flower_model(filepath)
                 predictions = results.pandas().xyxy[0].to_dict(orient='records')
                 
@@ -669,33 +622,29 @@ def upload_image():
                     result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
                 else:
                     result_str = '未识别到花卉'
-            
-            # 保存识别结果到数据库
-            connection = get_db_connection()
-            cursor = connection.cursor()
-            
-            insert_query = """
-                INSERT INTO recognition_results (user_id, image_path, result, confidence) 
-                VALUES (%s, %s, %s, %s)
-            """
-            confidence = predictions[0]['conf'] if predictions else 0
-            cursor.execute(insert_query, (session['user_id'], filepath, result_str, confidence))
-            connection.commit()
-            
-            cursor.close()
-            connection.close()
-            
-            return jsonify({
-                'success': True,
-                'result': result_str,
-                'predictions': predictions
-            })
-        except Exception as e:
-            # 上传失败清理
-            if os.path.exists(filepath):
-                os.remove(filepath)
-            print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
-            return jsonify({'success': False, 'error': f'识别失败: {str(e)}'})
+                
+                connection = get_db_connection()
+                cursor = connection.cursor()
+                
+                insert_query = """
+                    INSERT INTO recognition_results (user_id, image_path, result, confidence) 
+                    VALUES (%s, %s, %s, %s)
+                """
+                confidence = predictions[0]['conf'] if predictions else 0
+                cursor.execute(insert_query, (session['user_id'], filepath, result_str, confidence))
+                connection.commit()
+                
+                cursor.close()
+                connection.close()
+                
+                return jsonify({
+                    'success': True,
+                    'result': result_str,
+                    'predictions': predictions
+                })
+            except Exception as e:
+                print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
+                return jsonify({'success': False, 'error': f'识别失败: {str(e)}'})
         
     except Exception as e:
         print(f"上传过程中发生错误: {type(e).__name__}: {str(e)}")
@@ -771,127 +720,6 @@ def delete_result(result_id):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': '删除失败，请稍后重试'})
-
-@app.route('/api/detect', methods=['POST'])
-@login_required
-def detect_flower():
-    """花卉识别API接口（接收Base64图片）"""
-    try:
-        # 获取请求数据
-        data = request.get_json()
-        
-        if 'image' not in data:
-            return jsonify({'success': False, 'error': '缺少图片数据'})
-        
-        base64_image = data['image']
-        
-        # 限制Base64大小（约10MB）
-        MAX_BASE64_SIZE = 10 * 1024 * 1024 * 1.33  # Base64会增加约33%大小
-        if len(base64_image) > MAX_BASE64_SIZE:
-            return jsonify({'success': False, 'error': '图片大小超过限制（最大10MB）'})
-        
-        # 验证Base64格式
-        if not base64_image.startswith('data:image/'):
-            return jsonify({'success': False, 'error': '无效的图片格式'})
-        
-        # 提取文件扩展名
-        import re
-        match = re.search(r'data:image/(\w+);base64,', base64_image)
-        if not match:
-            return jsonify({'success': False, 'error': '无效的图片格式'})
-        
-        ext = match.group(1)
-        # 白名单校验
-        ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp'}
-        if ext not in ALLOWED_EXTENSIONS:
-            return jsonify({'success': False, 'error': '不支持的文件类型'})
-        
-        # 生成随机文件名
-        new_filename = f"{uuid.uuid4()}.{ext}"
-        upload_dir = os.path.join(BASE_DIR, 'uploads')
-        if not os.path.exists(upload_dir):
-            os.makedirs(upload_dir)
-        
-        filepath = os.path.join(upload_dir, new_filename)
-        
-        try:
-            # 解码Base64
-            import base64
-            img_data = base64.b64decode(base64_image.split(',')[1])
-            
-            # 保存图片
-            with open(filepath, 'wb') as f:
-                f.write(img_data)
-            
-            # MIME类型校验
-            img_type = get_image_type(filepath)
-            if not img_type:
-                os.remove(filepath)
-                return jsonify({'success': False, 'error': '无效的图片文件'})
-            
-            # 图片压缩
-            try:
-                from PIL import Image
-                img = Image.open(filepath)
-                img.thumbnail((800, 800))
-                img.save(filepath, optimize=True, quality=85)
-            except Exception as e:
-                print(f"图片压缩失败: {e}")
-            
-            # 识别图片
-            results = flower_model(filepath)
-            predictions = results.pandas().xyxy[0].to_dict(orient='records')
-            
-            if predictions:
-                result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
-            else:
-                result_str = '未识别到花卉'
-            
-            # 保存识别结果
-            connection = get_db_connection()
-            cursor = connection.cursor()
-            
-            insert_query = """
-                INSERT INTO recognition_results (user_id, image_path, result, confidence) 
-                VALUES (%s, %s, %s, %s)
-            """
-            confidence = predictions[0]['conf'] if predictions else 0
-            cursor.execute(insert_query, (session['user_id'], filepath, result_str, confidence))
-            connection.commit()
-            
-            cursor.close()
-            connection.close()
-            
-            # 构建结果
-            formatted_results = []
-            for pred in predictions:
-                formatted_results.append({
-                    'name': pred['name'],
-                    'confidence': float(pred['conf']),
-                    'bbox': [
-                        float(pred['xmin']),
-                        float(pred['ymin']),
-                        float(pred['xmax']),
-                        float(pred['ymax'])
-                    ]
-                })
-            
-            return jsonify({
-                'success': True,
-                'results': formatted_results
-            })
-        except Exception as e:
-            # 清理文件
-            if os.path.exists(filepath):
-                os.remove(filepath)
-            print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
-            return jsonify({'success': False, 'error': f'识别失败: {str(e)}'})
-        
-    except Exception as e:
-        print(f"检测过程中发生错误: {type(e).__name__}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': '检测失败，请稍后重试'})
 
 @app.route('/api/recognize', methods=['POST'])
 @login_required

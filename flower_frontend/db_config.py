@@ -91,6 +91,4 @@ def init_mysql_db():
             
     except Exception as e:
         print(f"数据库初始化失败: {type(e).__name__}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        print("请检查MySQL数据库配置")
+        print("警告: 数据库初始化失败，但服务器将继续运行。请检查MySQL数据库配置。")
