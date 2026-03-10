@@ -14,6 +14,7 @@ import Community from "@/pages/Community";
 import PostDetail from "@/pages/PostDetail";
 import CreatePost from "@/pages/CreatePost";
 import AdminDashboard from "@/pages/AdminDashboard";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { useState } from "react";
 import { AuthContext } from '@/contexts/authContext';
 
@@ -45,25 +46,27 @@ export default function App() {
     <AuthContext.Provider
       value={{ isAuthenticated, currentUser, login, logout }}
     >
-       <Routes>
-         <Route path="/" element={isAuthenticated ? <Home /> : <Login />} />
-         <Route path="/login" element={<Login />} />
-         <Route path="/register" element={<Register />} />
-         <Route path="/explore" element={<PlantRecognition />} />
-         <Route path="/account" element={isAuthenticated ? <AccountManagement /> : <Login />} />
-         <Route path="/users" element={isAuthenticated ? <UserManagement /> : <Login />} />
-         <Route path="/permissions" element={isAuthenticated ? <PermissionManagement /> : <Login />} />
-         <Route path="/plant/:id" element={isAuthenticated ? <PlantDetail /> : <Login />} />
-         <Route path="/recognition-result" element={<RecognitionResult />} />
-         <Route path="/history" element={isAuthenticated ? <RecognitionHistory /> : <Login />} />
-         <Route path="/favorites" element={isAuthenticated ? <Favorites /> : <Login />} />
-         <Route path="/community" element={<Community />} />
-         <Route path="/community/post/:postId" element={<PostDetail />} />
-         <Route path="/community/create" element={isAuthenticated ? <CreatePost /> : <Login />} />
-         <Route path="/admin" element={isAuthenticated && currentUser?.role === 'admin' ? <AdminDashboard /> : <Login />} />
-         {/* 添加访客路线，方便用户直接访问主要功能 */}
-         <Route path="/guest" element={<Home />} />
-       </Routes>
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/" element={isAuthenticated ? <Home /> : <Login />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/explore" element={<PlantRecognition />} />
+          <Route path="/account" element={isAuthenticated ? <AccountManagement /> : <Login />} />
+          <Route path="/users" element={isAuthenticated ? <UserManagement /> : <Login />} />
+          <Route path="/permissions" element={isAuthenticated ? <PermissionManagement /> : <Login />} />
+          <Route path="/plant/:id" element={isAuthenticated ? <PlantDetail /> : <Login />} />
+          <Route path="/recognition-result" element={<RecognitionResult />} />
+          <Route path="/history" element={isAuthenticated ? <RecognitionHistory /> : <Login />} />
+          <Route path="/favorites" element={isAuthenticated ? <Favorites /> : <Login />} />
+          <Route path="/community" element={<Community />} />
+          <Route path="/community/post/:postId" element={<PostDetail />} />
+          <Route path="/community/create" element={isAuthenticated ? <CreatePost /> : <Login />} />
+          <Route path="/admin" element={isAuthenticated && currentUser?.role === 'admin' ? <AdminDashboard /> : <Login />} />
+          {/* 添加访客路线，方便用户直接访问主要功能 */}
+          <Route path="/guest" element={<Home />} />
+        </Routes>
+      </ErrorBoundary>
     </AuthContext.Provider>
   );
 }

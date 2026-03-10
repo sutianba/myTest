@@ -82,6 +82,12 @@ from upload_manager import (
     MAX_FILE_SIZE
 )
 
+# 导入认证装饰器
+from auth_decorator import require_auth, require_admin, optional_auth
+
+# 导入请求频率限制
+from rate_limit import rate_limit, rate_limit_by_user
+
 # 导入个人账户功能
 from account_manager import (
     get_user_profile, update_user_profile, upload_avatar,
@@ -172,6 +178,7 @@ def login_required(f):
 # ==================== 邮箱注册相关API ====================
 
 @app.route('/api/register', methods=['POST'])
+@rate_limit(max_requests=3, window_seconds=60)  # 每分钟最多3次注册请求
 def register():
     """用户注册API接口（需要邮箱验证）"""
     try:
