@@ -23,6 +23,19 @@ interface Report {
   created_at: string;
 }
 
+interface LogType {
+  key: string;
+  label: string;
+  description: string;
+}
+
+interface LogEntry {
+  timestamp: string;
+  type: string;
+  message: string;
+  [key: string]: any;
+}
+
 const AdminDashboard: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const { currentUser } = useContext(AuthContext);
@@ -32,6 +45,17 @@ const AdminDashboard: React.FC = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // 日志相关状态
+  const [logTypes, setLogTypes] = useState<LogType[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [selectedLogType, setSelectedLogType] = useState('main');
+  const [logKeyword, setLogKeyword] = useState('');
+  const [logStartDate, setLogStartDate] = useState('');
+  const [logEndDate, setLogEndDate] = useState('');
+  const [logPage, setLogPage] = useState(1);
+  const [logTotalPages, setLogTotalPages] = useState(1);
+  const [logLoading, setLogLoading] = useState(false);
 
   // 检查是否为管理员
   useEffect(() => {
@@ -88,8 +112,98 @@ const AdminDashboard: React.FC = () => {
       fetchUsers();
     } else if (activeTab === 'reports') {
       fetchReports();
+    } else if (activeTab === 'logs') {
+      fetchLogTypes();
+      fetchLogs();
     }
   }, [activeTab]);
+
+  // 获取日志类型列表
+  const fetchLogTypes = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/system-logs/types', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setLogTypes(data.data.log_types);
+      }
+    } catch (error) {
+      toast.error('获取日志类型失败');
+    }
+  };
+
+  // 获取日志列表
+  const fetchLogs = async () => {
+    setLogLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams({
+        log_type: selectedLogType,
+        page: logPage.toString(),
+        page_size: '50'
+      });
+      
+      if (logKeyword) params.append('keyword', logKeyword);
+      if (logStartDate) params.append('start_date', logStartDate);
+      if (logEndDate) params.append('end_date', logEndDate);
+      
+      const response = await fetch(`/api/admin/system-logs?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setLogs(data.data.logs);
+        setLogTotalPages(data.data.total_pages);
+      }
+    } catch (error) {
+      toast.error('获取日志失败');
+    } finally {
+      setLogLoading(false);
+    }
+  };
+
+  // 导出日志
+  const handleExportLogs = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/system-logs/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          log_type: selectedLogType,
+          keyword: logKeyword,
+          start_date: logStartDate,
+          end_date: logEndDate
+        })
+      });
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${selectedLogType}_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast.success('日志导出成功');
+      } else {
+        toast.error('日志导出失败');
+      }
+    } catch (error) {
+      toast.error('日志导出失败');
+    }
+  };
 
   // 封禁用户
   const handleBanUser = async (userId: number) => {

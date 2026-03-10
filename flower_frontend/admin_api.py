@@ -1213,3 +1213,291 @@ def admin_api(app):
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'error': '更新角色权限失败'}), 500
+
+    # ==================== 系统日志查看 ====================
+    
+    @app.route('/api/admin/system-logs', methods=['GET'])
+    def get_system_logs_api():
+        """获取系统日志文件内容（管理员）"""
+        try:
+            from jwt_manager import get_current_user_from_token
+            
+            # 获取Token
+            auth_header = request.headers.get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                return jsonify({'success': False, 'error': '未提供认证Token'}), 401
+            
+            token = auth_header.split(' ')[1]
+            current_user = get_current_user_from_token(token)
+            
+            if not current_user:
+                return jsonify({'success': False, 'error': 'Token无效或已过期'}), 401
+            
+            # 检查权限
+            if not check_admin_permission(current_user, 'log_view'):
+                return jsonify({'success': False, 'error': '无权查看系统日志'}), 403
+            
+            # 获取参数
+            log_type = request.args.get('log_type', 'main')
+            page = request.args.get('page', 1, type=int)
+            page_size = request.args.get('page_size', 50, type=int)
+            keyword = request.args.get('keyword', '')
+            start_date = request.args.get('start_date', '')
+            end_date = request.args.get('end_date', '')
+            
+            # 日志文件映射
+            log_files = {
+                'main': 'main.log',
+                'login': 'login.log',
+                'register': 'register.log',
+                'email': 'email.log',
+                'upload': 'upload.log',
+                'model_inference': 'model_inference.log',
+                'database': 'database.log',
+                'api_request': 'api_request.log',
+                'admin_action': 'admin_action.log',
+                'error': 'error.log',
+                'security': 'security.log'
+            }
+            
+            log_filename = log_files.get(log_type, 'main.log')
+            log_path = os.path.join('logs', log_filename)
+            
+            if not os.path.exists(log_path):
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'logs': [],
+                        'total': 0,
+                        'page': page,
+                        'page_size': page_size,
+                        'total_pages': 0
+                    }
+                })
+            
+            # 读取日志文件
+            logs = []
+            with open(log_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    # 解析日志行
+                    try:
+                        # 尝试解析JSON格式
+                        import json
+                        log_entry = json.loads(line)
+                        
+                        # 时间筛选
+                        if start_date and log_entry.get('timestamp', '') < start_date:
+                            continue
+                        if end_date and log_entry.get('timestamp', '') > end_date:
+                            continue
+                        
+                        # 关键词筛选
+                        if keyword:
+                            log_str = json.dumps(log_entry, ensure_ascii=False)
+                            if keyword.lower() not in log_str.lower():
+                                continue
+                        
+                        logs.append(log_entry)
+                    except:
+                        # 非JSON格式，按文本处理
+                        if keyword and keyword.lower() not in line.lower():
+                            continue
+                        logs.append({
+                            'timestamp': '',
+                            'message': line,
+                            'raw': True
+                        })
+            
+            # 分页
+            total = len(logs)
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_logs = logs[start_idx:end_idx]
+            
+            return jsonify({
+                'success': True,
+                'data': {
+                    'logs': paginated_logs,
+                    'total': total,
+                    'page': page,
+                    'page_size': page_size,
+                    'total_pages': (total + page_size - 1) // page_size
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"获取系统日志失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': '获取系统日志失败'}), 500
+    
+    @app.route('/api/admin/system-logs/types', methods=['GET'])
+    def get_log_types_api():
+        """获取日志类型列表（管理员）"""
+        try:
+            from jwt_manager import get_current_user_from_token
+            
+            # 获取Token
+            auth_header = request.headers.get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                return jsonify({'success': False, 'error': '未提供认证Token'}), 401
+            
+            token = auth_header.split(' ')[1]
+            current_user = get_current_user_from_token(token)
+            
+            if not current_user:
+                return jsonify({'success': False, 'error': 'Token无效或已过期'}), 401
+            
+            # 检查权限
+            if not check_admin_permission(current_user, 'log_view'):
+                return jsonify({'success': False, 'error': '无权查看系统日志'}), 403
+            
+            log_types = [
+                {'key': 'main', 'label': '主日志', 'description': '系统主要运行日志'},
+                {'key': 'login', 'label': '登录日志', 'description': '用户登录成功/失败记录'},
+                {'key': 'register', 'label': '注册日志', 'description': '用户注册成功/失败记录'},
+                {'key': 'email', 'label': '邮件日志', 'description': '邮件发送成功/失败记录'},
+                {'key': 'upload', 'label': '上传日志', 'description': '文件上传成功/失败记录'},
+                {'key': 'model_inference', 'label': '模型推理日志', 'description': 'AI识别推理记录'},
+                {'key': 'database', 'label': '数据库日志', 'description': '数据库操作记录'},
+                {'key': 'api_request', 'label': 'API请求日志', 'description': 'API接口调用记录'},
+                {'key': 'admin_action', 'label': '管理员操作日志', 'description': '管理员后台操作记录'},
+                {'key': 'error', 'label': '错误日志', 'description': '系统错误和异常记录'},
+                {'key': 'security', 'label': '安全日志', 'description': '安全相关事件记录'}
+            ]
+            
+            return jsonify({
+                'success': True,
+                'data': {
+                    'log_types': log_types
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"获取日志类型失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': '获取日志类型失败'}), 500
+    
+    @app.route('/api/admin/system-logs/export', methods=['POST'])
+    def export_system_logs_api():
+        """导出系统日志（管理员）"""
+        try:
+            from jwt_manager import get_current_user_from_token
+            
+            # 获取Token
+            auth_header = request.headers.get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                return jsonify({'success': False, 'error': '未提供认证Token'}), 401
+            
+            token = auth_header.split(' ')[1]
+            current_user = get_current_user_from_token(token)
+            
+            if not current_user:
+                return jsonify({'success': False, 'error': 'Token无效或已过期'}), 401
+            
+            # 检查权限
+            if not check_admin_permission(current_user, 'log_view'):
+                return jsonify({'success': False, 'error': '无权导出系统日志'}), 403
+            
+            # 获取请求数据
+            data = request.get_json()
+            log_type = data.get('log_type', 'main')
+            keyword = data.get('keyword', '')
+            start_date = data.get('start_date', '')
+            end_date = data.get('end_date', '')
+            
+            # 日志文件映射
+            log_files = {
+                'main': 'main.log',
+                'login': 'login.log',
+                'register': 'register.log',
+                'email': 'email.log',
+                'upload': 'upload.log',
+                'model_inference': 'model_inference.log',
+                'database': 'database.log',
+                'api_request': 'api_request.log',
+                'admin_action': 'admin_action.log',
+                'error': 'error.log',
+                'security': 'security.log'
+            }
+            
+            log_filename = log_files.get(log_type, 'main.log')
+            log_path = os.path.join('logs', log_filename)
+            
+            if not os.path.exists(log_path):
+                return jsonify({'success': False, 'error': '日志文件不存在'}), 404
+            
+            # 生成导出文件
+            import tempfile
+            import csv
+            from datetime import datetime
+            
+            export_filename = f"{log_type}_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            temp_path = os.path.join(tempfile.gettempdir(), export_filename)
+            
+            with open(log_path, 'r', encoding='utf-8') as f_in, \
+                 open(temp_path, 'w', newline='', encoding='utf-8-sig') as f_out:
+                writer = csv.writer(f_out)
+                writer.writerow(['时间戳', '类型', '消息', '详细信息'])
+                
+                for line in f_in:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    try:
+                        import json
+                        log_entry = json.loads(line)
+                        
+                        # 时间筛选
+                        if start_date and log_entry.get('timestamp', '') < start_date:
+                            continue
+                        if end_date and log_entry.get('timestamp', '') > end_date:
+                            continue
+                        
+                        # 关键词筛选
+                        if keyword:
+                            log_str = json.dumps(log_entry, ensure_ascii=False)
+                            if keyword.lower() not in log_str.lower():
+                                continue
+                        
+                        writer.writerow([
+                            log_entry.get('timestamp', ''),
+                            log_entry.get('type', ''),
+                            log_entry.get('message', ''),
+                            json.dumps({k: v for k, v in log_entry.items() 
+                                      if k not in ['timestamp', 'type', 'message']}, ensure_ascii=False)
+                        ])
+                    except:
+                        if keyword and keyword.lower() not in line.lower():
+                            continue
+                        writer.writerow(['', '', line, ''])
+            
+            # 记录操作日志
+            log_admin_action(
+                current_user['user_id'],
+                'export_logs',
+                'system',
+                0,
+                f"导出日志: {log_type}"
+            )
+            
+            # 返回文件
+            from flask import send_file
+            return send_file(
+                temp_path,
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=export_filename
+            )
+            
+        except Exception as e:
+            logger.error(f"导出系统日志失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': '导出系统日志失败'}), 500

@@ -88,6 +88,9 @@ from auth_decorator import require_auth, require_admin, optional_auth
 # 导入请求频率限制
 from rate_limit import rate_limit, rate_limit_by_user
 
+# 导入日志管理器
+from logger import logger, log_api_call, LogType
+
 # 导入个人账户功能
 from account_manager import (
     get_user_profile, update_user_profile, upload_avatar,
@@ -179,8 +182,12 @@ def login_required(f):
 
 @app.route('/api/register', methods=['POST'])
 @rate_limit(max_requests=3, window_seconds=60)  # 每分钟最多3次注册请求
+@log_api_call
 def register():
     """用户注册API接口（需要邮箱验证）"""
+    ip_address = request.remote_addr or request.headers.get('X-Forwarded-For', '')
+    user_agent = request.headers.get('User-Agent', '')
+    
     try:
         data = request.get_json()
         username = data.get('username')
@@ -188,9 +195,11 @@ def register():
         email = data.get('email')
 
         if not username or not password or not email:
+            logger.log_register(0, username or '', email or '', False, ip_address, '缺少必填字段')
             return jsonify({'success': False, 'error': '用户名、密码和邮箱不能为空'})
         
         if len(password) < 6:
+            logger.log_register(0, username, email, False, ip_address, '密码长度不足')
             return jsonify({'success': False, 'error': '密码长度不能少于6位'})
 
         # 检查用户名是否已存在
@@ -204,6 +213,7 @@ def register():
         if existing_user:
             cursor.close()
             connection.close()
+            logger.log_register(0, username, email, False, ip_address, '用户名或邮箱已存在')
             return jsonify({'success': False, 'error': '用户名或邮箱已存在'})
         
         # 密码哈希处理
@@ -211,6 +221,7 @@ def register():
         if not password_hash:
             cursor.close()
             connection.close()
+            logger.log_register(0, username, email, False, ip_address, '密码加密失败')
             return jsonify({'success': False, 'error': '密码加密失败'})
         
         # 创建待验证用户记录
@@ -232,18 +243,21 @@ def register():
         connection.close()
         
         if result['success']:
+            logger.log_register(user_id, username, email, True, ip_address)
             return jsonify({
                 'success': True, 
                 'message': '注册成功！请前往邮箱完成验证',
                 'email': email
             })
         else:
+            logger.log_register(user_id, username, email, False, ip_address, '邮件发送失败')
             return jsonify({
                 'success': False, 
                 'error': result.get('error', '注册成功但邮件发送失败，请重试')
             })
             
     except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/register', 'ip': ip_address})
         print(f"注册过程中发生错误: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
@@ -342,8 +356,13 @@ def resend_verification():
 # ==================== 原有登录API ====================
 
 @app.route('/api/login', methods=['POST'])
+@rate_limit(max_requests=5, window_seconds=60)  # 每分钟最多5次登录请求
+@log_api_call
 def login():
     """用户登录API接口（集成安全防护）"""
+    ip_address = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
+    user_agent = request.headers.get('User-Agent', '')
+    
     try:
         data = request.get_json()
         username = data.get('username')
@@ -351,26 +370,27 @@ def login():
         captcha_id = data.get('captcha_id')
         captcha_text = data.get('captcha_text')
         
-        # 获取客户端IP地址
-        ip_address = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown')
-        
         if not username or not password:
+            logger.log_login(0, username or '', False, ip_address, user_agent, '缺少用户名或密码')
             return jsonify({'success': False, 'error': '用户名和密码不能为空'})
 
         # 验证图形验证码
         if captcha_id and captcha_text:
             success, message = verify_captcha(captcha_id, captcha_text)
             if not success:
+                logger.log_login(0, username, False, ip_address, user_agent, '验证码错误')
                 return jsonify({'success': False, 'error': message})
         
         # 检查登录失败限制
         allowed, error_msg = check_login_failure_limit(username, ip_address)
         if not allowed:
+            logger.log_login(0, username, False, ip_address, user_agent, '登录失败次数过多')
             return jsonify({'success': False, 'error': error_msg})
         
         # 检查登录冷却时间
         allowed, error_msg = check_login_cooldown(username, ip_address)
         if not allowed:
+            logger.log_login(0, username, False, ip_address, user_agent, '登录冷却中')
             return jsonify({'success': False, 'error': error_msg})
 
         connection = get_db_connection()
@@ -384,6 +404,7 @@ def login():
             cursor.close()
             connection.close()
             record_login_failure(username, ip_address, '用户名不存在')
+            logger.log_login(0, username, False, ip_address, user_agent, '用户名不存在')
             return jsonify({'success': False, 'error': '用户名或密码错误'})
         
         # 检查用户状态
@@ -391,6 +412,7 @@ def login():
             cursor.close()
             connection.close()
             record_login_failure(username, ip_address, '账号未激活')
+            logger.log_login(user['id'], username, False, ip_address, user_agent, '账号未激活')
             return jsonify({'success': False, 'error': '账号未激活，请先验证邮箱'})
         
         # 验证密码
@@ -398,10 +420,12 @@ def login():
             cursor.close()
             connection.close()
             record_login_failure(username, ip_address, '密码错误')
+            logger.log_login(user['id'], username, False, ip_address, user_agent, '密码错误')
             return jsonify({'success': False, 'error': '用户名或密码错误'})
         
         # 登录成功
         record_login_success(username, ip_address)
+        logger.log_login(user['id'], username, True, ip_address, user_agent)
         
         # 生成JWT Token（Access Token + Refresh Token）
         access_token = generate_access_token(user['id'], user['username'], user['role'])
@@ -426,6 +450,7 @@ def login():
         })
         
     except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/login', 'ip': ip_address})
         print(f"登录过程中发生错误: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
