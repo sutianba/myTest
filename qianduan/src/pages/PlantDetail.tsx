@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Plant, PlantCategoryMap } from '../types/plant';
-import { plants } from '../mock/plants';
 import { useTheme } from '../hooks/useTheme';
 import { toast } from 'sonner';
 
@@ -11,24 +10,49 @@ const PlantDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [plant, setPlant] = useState<Plant | null>(null);
+  const [relatedPlants, setRelatedPlants] = useState<Plant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
-    // 模拟加载植物详情
-    setIsLoading(true);
-    
-    // 在实际应用中，这里会从API获取植物详情
-    setTimeout(() => {
-      const foundPlant = plants.find(p => p.id === id);
-      setPlant(foundPlant || null);
-      setIsLoading(false);
-      
-      // 检查是否在收藏夹中
-      const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-      setIsFavorite(favorites.includes(id));
-    }, 500);
+    const fetchPlantDetail = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`http://localhost:5000/api/plants/${id}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          setPlant(data.plant);
+          
+          // 获取相关植物
+          if (data.plant.category) {
+            const relatedResponse = await fetch(`http://localhost:5000/api/plants/category/${encodeURIComponent(data.plant.category)}`);
+            const relatedData = await relatedResponse.json();
+            if (relatedData.success) {
+              setRelatedPlants(relatedData.plants.filter((p: Plant) => p.id !== id).slice(0, 3));
+            }
+          }
+        } else {
+          toast.error('获取植物信息失败');
+          setPlant(null);
+        }
+      } catch (error) {
+        console.error('获取植物详情失败:', error);
+        toast.error('网络错误，请稍后重试');
+        setPlant(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (id) {
+      fetchPlantDetail();
+    }
+
+    // 检查是否在收藏夹中
+    const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
+    setIsFavorite(favorites.includes(id));
   }, [id]);
 
   if (isLoading) {
@@ -500,10 +524,7 @@ const PlantDetail: React.FC = () => {
           <div className="mt-8">
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">相关植物推荐</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {plants
-                .filter(p => p.category === plant.category && p.id !== plant.id)
-                .slice(0, 3)
-                .map(relatedPlant => (
+              {relatedPlants.map(relatedPlant => (
                   <motion.div
                     key={relatedPlant.id}
                     initial={{ opacity: 0, y: 20 }}
