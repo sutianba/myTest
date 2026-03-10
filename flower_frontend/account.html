@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* 头部 */
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 28px;
+        }
+
+        .logout-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        /* 主要内容 */
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .user-info {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .avatar-container {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 15px;
+        }
+
+        .avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid #667eea;
+        }
+
+        .avatar-upload-btn {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 35px;
+            height: 35px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .avatar-upload-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .user-info h2 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .user-info p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .menu {
+            list-style: none;
+        }
+
+        .menu-item {
+            padding: 12px 15px;
+            margin-bottom: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            color: #333;
+        }
+
+        .menu-item:hover {
+            background: #f8f9fa;
+            color: #667eea;
+        }
+
+        .menu-item i {
+            margin-right: 10px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .menu-item.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        /* 主内容区 */
+        .content-area {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            min-height: 500px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 25px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        /* 表单样式 */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+        }
+
+        /* 日志列表 */
+        .log-list {
+            list-style: none;
+        }
+
+        .log-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .log-item .log-time {
+            color: #999;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .log-item .log-action {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .log-item .log-details {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        /* 提示消息 */
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .message-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .message-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        /* 弹窗 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            color: #333;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .close-btn:hover {
+            color: #333;
+        }
+
+        /* 分页 */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .pagination button {
+            padding: 8px 16px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #f8f9fa;
+            color: #333;
+        }
+
+        .pagination button:hover {
+            background: #e0e0e0;
+        }
+
+        .pagination button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1><i class="fas fa-user"></i> 个人中心</h1>
+            <button class="logout-btn" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i> 退出登录
+            </button>
+        </div>
+
+        <!-- 主要内容 -->
+        <div class="main-content">
+            <!-- 侧边栏 -->
+            <div class="sidebar">
+                <div class="user-info">
+                    <div class="avatar-container">
+                        <img id="avatar" class="avatar" src="https://via.placeholder.com/120" alt="头像">
+                        <button class="avatar-upload-btn" onclick="document.getElementById('avatarInput').click()">
+                            <i class="fas fa-camera"></i>
+                        </button>
+                        <input type="file" id="avatarInput" accept="image/*" style="display: none;" onchange="uploadAvatar(this)">
+                    </div>
+                    <h2 id="username">用户名</h2>
+                    <p id="email">邮箱</p>
+                    <p id="status" style="margin-top: 5px;"></p>
+                </div>
+
+                <ul class="menu">
+                    <li class="menu-item active" onclick="showSection('profile')">
+                        <i class="fas fa-user"></i> 个人资料
+                    </li>
+                    <li class="menu-item" onclick="showSection('password')">
+                        <i class="fas fa-key"></i> 修改密码
+                    </li>
+                    <li class="menu-item" onclick="showSection('email')">
+                        <i class="fas fa-envelope"></i> 修改邮箱
+                    </li>
+                    <li class="menu-item" onclick="showSection('logs')">
+                        <i class="fas fa-history"></i> 操作记录
+                    </li>
+                    <li class="menu-item" onclick="showSection('delete')">
+                        <i class="fas fa-trash"></i> 注销账号
+                    </li>
+                </ul>
+            </div>
+
+            <!-- 主内容区 -->
+            <div class="content-area">
+                <!-- 个人资料 -->
+                <div id="profile-section" class="section">
+                    <h2 class="section-title">个人资料</h2>
+                    
+                    <div id="profile-message"></div>
+
+                    <form id="profileForm">
+                        <div class="form-group">
+                            <label>用户名</label>
+                            <input type="text" id="usernameDisplay" disabled>
+                        </div>
+
+                        <div class="form-group">
+                            <label>邮箱</label>
+                            <input type="email" id="emailDisplay" disabled>
+                        </div>
+
+                        <div class="form-group">
+                            <label>昵称</label>
+                            <input type="text" id="nickname" placeholder="请输入昵称">
+                        </div>
+
+                        <div class="form-group">
+                            <label>性别</label>
+                            <select id="gender">
+                                <option value="">请选择</option>
+                                <option value="male">男</option>
+                                <option value="female">女</option>
+                                <option value="other">其他</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>生日</label>
+                            <input type="date" id="birthday">
+                        </div>
+
+                        <div class="form-group">
+                            <label>所在地</label>
+                            <input type="text" id="location" placeholder="请输入所在地">
+                        </div>
+
+                        <div class="form-group">
+                            <label>个人简介</label>
+                            <textarea id="bio" placeholder="介绍一下自己吧..."></textarea>
+                        </div>
+
+                        <button type="button" class="btn btn-primary" onclick="updateProfile()">
+                            <i class="fas fa-save"></i> 保存资料
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 修改密码 -->
+                <div id="password-section" class="section" style="display: none;">
+                    <h2 class="section-title">修改密码</h2>
+                    
+                    <div id="password-message"></div>
+
+                    <form id="passwordForm">
+                        <div class="form-group">
+                            <label>原密码</label>
+                            <input type="password" id="oldPassword" placeholder="请输入原密码">
+                        </div>
+
+                        <div class="form-group">
+                            <label>新密码</label>
+                            <input type="password" id="newPassword" placeholder="请输入新密码（至少6位）">
+                        </div>
+
+                        <div class="form-group">
+                            <label>确认新密码</label>
+                            <input type="password" id="confirmPassword" placeholder="请再次输入新密码">
+                        </div>
+
+                        <button type="button" class="btn btn-primary" onclick="changePassword()">
+                            <i class="fas fa-key"></i> 修改密码
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 修改邮箱 -->
+                <div id="email-section" class="section" style="display: none;">
+                    <h2 class="section-title">修改邮箱</h2>
+                    
+                    <div id="email-message"></div>
+
+                    <form id="emailForm">
+                        <div class="form-group">
+                            <label>当前邮箱</label>
+                            <input type="email" id="currentEmail" disabled>
+                        </div>
+
+                        <div class="form-group">
+                            <label>新邮箱</label>
+                            <input type="email" id="newEmail" placeholder="请输入新邮箱">
+                        </div>
+
+                        <div class="form-group">
+                            <label>验证码</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="emailCode" placeholder="请输入验证码">
+                                <button type="button" class="btn btn-primary" onclick="sendEmailCode()">
+                                    <i class="fas fa-paper-plane"></i> 发送验证码
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-primary" onclick="changeEmail()">
+                            <i class="fas fa-envelope"></i> 修改邮箱
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 操作记录 -->
+                <div id="logs-section" class="section" style="display: none;">
+                    <h2 class="section-title">操作记录</h2>
+                    
+                    <div id="logs-message"></div>
+
+                    <ul id="logList" class="log-list">
+                        <!-- 日志项将通过JavaScript动态添加 -->
+                    </ul>
+
+                    <div class="pagination" id="pagination">
+                        <!-- 分页按钮将通过JavaScript动态添加 -->
+                    </div>
+                </div>
+
+                <!-- 注销账号 -->
+                <div id="delete-section" class="section" style="display: none;">
+                    <h2 class="section-title">注销账号</h2>
+                    
+                    <div id="delete-message"></div>
+
+                    <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="color: #856404; margin-bottom: 10px;">
+                            <i class="fas fa-exclamation-triangle"></i> 注意事项
+                        </h3>
+                        <p style="color: #856404; line-height: 1.6;">
+                            1. 注销账号后将无法恢复<br>
+                            2. 所有数据将被永久删除<br>
+                            3. 请谨慎操作
+                        </p>
+                    </div>
+
+                    <form id="deleteForm">
+                        <div class="form-group">
+                            <label>注销原因（可选）</label>
+                            <textarea id="deleteReason" placeholder="请告诉我们您注销的原因..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>确认密码</label>
+                            <input type="password" id="deletePassword" placeholder="请输入密码确认">
+                        </div>
+
+                        <button type="button" class="btn btn-danger" onclick="deleteAccount()">
+                            <i class="fas fa-trash"></i> 确认注销账号
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">提示</h3>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentUser = null;
+        let currentToken = null;
+        let currentPage = 1;
+        const pageSize = 20;
+
+        // 页面加载
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuth();
+        });
+
+        // 检查认证
+        function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                $.ajax({
+                    url: '/api/check_auth',
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            currentUser = response.user;
+                            currentToken = token;
+                            updateUI();
+                            loadUserProfile();
+                            loadLogs();
+                        } else {
+                            localStorage.removeItem('access_token');
+                            window.location.href = '/index.html';
+                        }
+                    },
+                    error: function() {
+                        localStorage.removeItem('access_token');
+                        window.location.href = '/index.html';
+                    }
+                });
+            } else {
+                window.location.href = '/index.html';
+            }
+        }
+
+        // 更新UI
+        function updateUI() {
+            if (currentUser) {
+                $('#username').text(currentUser.username);
+                $('#email').text(currentUser.email);
+                $('#usernameDisplay').val(currentUser.username);
+                $('#emailDisplay').val(currentUser.email);
+                $('#currentEmail').val(currentUser.email);
+                
+                if (currentUser.profile) {
+                    $('#nickname').val(currentUser.profile.nickname || '');
+                    $('#gender').val(currentUser.profile.gender || '');
+                    $('#birthday').val(currentUser.profile.birthday || '');
+                    $('#location').val(currentUser.profile.location || '');
+                    $('#bio').val(currentUser.profile.bio || '');
+                    
+                    if (currentUser.profile.avatar_url) {
+                        $('#avatar').attr('src', currentUser.profile.avatar_url);
+                    }
+                }
+                
+                // 显示状态
+                const statusMap = {
+                    'unverified': {text: '未验证', color: '#ffc107'},
+                    'active': {text: '正常', color: '#28a745'},
+                    'disabled': {text: '已禁用', color: '#dc3545'}
+                };
+                const status = statusMap[currentUser.status] || {text: '未知', color: '#6c757d'};
+                $('#status').text(status.text).css('color', status.color);
+            }
+        }
+
+        // 显示section
+        function showSection(section) {
+            // 隐藏所有section
+            $('.section').hide();
+            
+            // 显示选中的section
+            $('#' + section + '-section').show();
+            
+            // 更新菜单active状态
+            $('.menu-item').removeClass('active');
+            $('.menu-item').each(function() {
+                if ($(this).text().includes(section === 'password' ? '密码' : 
+                                          section === 'email' ? '邮箱' : 
+                                          section === 'logs' ? '记录' : 
+                                          section === 'delete' ? '注销' : '资料')) {
+                    $(this).addClass('active');
+                }
+            });
+            
+            // 加载对应数据
+            if (section === 'logs') {
+                loadLogs();
+            }
+        }
+
+        // 加载用户资料
+        function loadUserProfile() {
+            $.ajax({
+                url: '/api/user/profile',
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + currentToken
+                },
+                success: function(response) {
+                    if (response.success && response.profile) {
+                        const profile = response.profile;
+                        $('#nickname').val(profile.nickname || '');
+                        $('#gender').val(profile.gender || '');
+                        $('#birthday').val(profile.birthday || '');
+                        $('#location').val(profile.location || '');
+                        $('#bio').val(profile.bio || '');
+                        
+                        if (profile.avatar_url) {
+                            $('#avatar').attr('src', profile.avatar_url);
+                        }
+                    }
+                },
+                error: function(xhr) {
+                    showMessage('profile-message', xhr.responseJSON?.error || '获取用户资料失败', 'error');
+                }
+            });
+        }
+
+        // 更新资料
+        function updateProfile() {
+            const data = {
+                nickname: $('#nickname').val().trim(),
+                gender: $('#gender').val(),
+                birthday: $('#birthday').val(),
+                location: $('#location').val().trim(),
+                bio: $('#bio').val().trim()
+            };
+
+            $.ajax({
+                url: '/api/user/profile',
+                method: 'PUT',
+                headers: {
+                    'Authorization': 'Bearer ' + currentToken
+                },
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(response) {
+                    if (response.success) {
+                        showMessage('profile-message', '更新资料成功', 'success');
+                        loadUserProfile();
+                    } else {
+                        showMessage('profile-message', response.error || '更新资料失败', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showMessage('profile-message', xhr.responseJSON?.error || '更新资料失败', 'error');
+                }
+            });
+        }
+
+        // 上传头像
+        function uploadAvatar(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const formData = new FormData();
+                formData.append('file', file);
+
+                $.ajax({
+                    url: '/api/user/avatar',
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + currentToken
+                    },
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.success) {
+                            showMessage('profile-message', '上传头像成功', 'success');
+                            $('#avatar').attr('src', response.avatar_url);
+                            loadUserProfile();
+                        } else {
+                            showMessage('profile-message', response.error || '上传头像失败', 'error');
+                        }
+                    },
+                    error: function(xhr) {
+                        showMessage('profile-message', xhr.responseJSON?.error || '上传头像失败', 'error');
+                    }
+                });
+            }
+        }
+
+        // 修改密码
+        function changePassword() {
+            const oldPassword = $('#oldPassword').val().trim();
+            const newPassword = $('#newPassword').val().trim();
+            const confirmPassword = $('#confirmPassword').val().trim();
+
+            if (!oldPassword || !newPassword || !confirmPassword) {
+                showMessage('password-message', '请填写所有字段', 'error');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                showMessage('password-message', '两次输入的新密码不一致', 'error');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                showMessage('password-message', '新密码长度至少为6位', 'error');
+                return;
+            }
+
+            $.ajax({
+                url: '/api/change-password',
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + currentToken
+                },
+                contentType: 'application/json',
+                data: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+                success: function(response) {
+                    if (response.success) {
+                        showMessage('password-message', '修改密码成功，请重新登录', 'success');
+                        setTimeout(() => {
+                            localStorage.removeItem('access_token');
+                            window.location.href = '/index.html';
+                        }, 2000);
+                    } else {
+                        showMessage('password-message', response.error || '修改密码失败', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showMessage('password-message', xhr.responseJSON?.error || '修改密码失败', 'error');
+                }
+            });
+        }
+
+        // 发送邮箱验证码
+        function sendEmailCode() {
+            const newEmail = $('#newEmail').val().trim();
+
+            if (!newEmail) {
+                showMessage('email-message', '请输入新邮箱', 'error');
+                return;
+            }
+
+            $.ajax({
+                url: '/api/change-email',
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + currentToken
+                },
+                contentType: 'application/json',
+                data: JSON.stringify({ new_email: newEmail }),
+                success: function(response) {
+                    if (response.success) {
+                        showMessage('email-message', '验证码已发送，请查收', 'success');
+                    } else {
+                        showMessage('email-message', response.error || '发送验证码失败', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showMessage('email-message', xhr.responseJSON?.error || '发送验证码失败', 'error');
+                }
+            });
+        }
+
+        // 修改邮箱
+        function changeEmail() {
+            const newEmail = $('#newEmail').val().trim();
+            const code = $('#emailCode').val().trim();
+
+            if (!newEmail || !code) {
+                showMessage('email-message', '请填写所有字段', 'error');
+                return;
+            }
+
+            // 这里需要实现邮箱验证逻辑
+            // 暂时简化处理
+            showMessage('email-message', '邮箱验证功能开发中...', 'info');
+        }
+
+        // 加载操作日志
+        function loadLogs() {
+            $.ajax({
+                url: '/api/user/logs?page=' + currentPage + '&page_size=' + pageSize,
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + currentToken
+                },
+                success: function(response) {
+                    if (response.success) {
+                        renderLogs(response.logs);
+                        renderPagination(response.total, response.page, response.page_size, response.total_pages);
+                    } else {
+                        showMessage('logs-message', response.error || '获取操作日志失败', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showMessage('logs-message', xhr.responseJSON?.error || '获取操作日志失败', 'error');
+                }
+            });
+        }
+
+        // 渲染日志
+        function renderLogs(logs) {
+            const $list = $('#logList');
+            $list.empty();
+
+            if (logs.length === 0) {
+                $list.append('<li style="text-align: center; color: #999;">暂无操作记录</li>');
+                return;
+            }
+
+            logs.forEach(log => {
+                const $item = $(`
+                    <li class="log-item">
+                        <div class="log-time"><i class="far fa-clock"></i> ${log.created_at}</div>
+                        <div class="log-action"><i class="fas fa-info-circle"></i> ${log.action_type}</div>
+                        <div class="log-details">${log.action_details || ''}</div>
+                    </li>
+                `);
+                $list.append($item);
+            });
+        }
+
+        // 渲染分页
+        function renderPagination(total, page, page_size, total_pages) {
+            const $pagination = $('#pagination');
+            $pagination.empty();
+
+            if (total_pages <= 1) return;
+
+            const $prev = $('<button>').text('上一页').prop('disabled', page === 1);
+            if (page > 1) {
+                $prev.click(() => {
+                    currentPage = page - 1;
+                    loadLogs();
+                });
+            }
+            $pagination.append($prev);
+
+            for (let i = 1; i <= total_pages; i++) {
+                const $btn = $('<button>').text(i).prop('class', i === page ? 'active' : '');
+                if (i !== page) {
+                    $btn.click(() => {
+                        currentPage = i;
+                        loadLogs();
+                    });
+                }
+                $pagination.append($btn);
+            }
+
+            const $next = $('<button>').text('下一页').prop('disabled', page === total_pages);
+            if (page < total_pages) {
+                $next.click(() => {
+                    currentPage = page + 1;
+                    loadLogs();
+                });
+            }
+            $pagination.append($next);
+        }
+
+        // 注销账号
+        function deleteAccount() {
+            const reason = $('#deleteReason').val().trim();
+            const password = $('#deletePassword').val().trim();
+
+            if (!password) {
+                showMessage('delete-message', '请输入密码确认', 'error');
+                return;
+            }
+
+            if (!confirm('确定要注销账号吗？此操作不可恢复！')) {
+                return;
+            }
+
+            $.ajax({
+                url: '/api/delete-account',
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + currentToken
+                },
+                contentType: 'application/json',
+                data: JSON.stringify({ reason: reason, password: password }),
+                success: function(response) {
+                    if (response.success) {
+                        showMessage('delete-message', '注销账号成功', 'success');
+                        setTimeout(() => {
+                            localStorage.removeItem('access_token');
+                            window.location.href = '/index.html';
+                        }, 2000);
+                    } else {
+                        showMessage('delete-message', response.error || '注销账号失败', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showMessage('delete-message', xhr.responseJSON?.error || '注销账号失败', 'error');
+                }
+            });
+        }
+
+        // 退出登录
+        function logout() {
+            $.ajax({
+                url: '/api/logout',
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + currentToken
+                },
+                success: function(response) {
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    window.location.href = '/index.html';
+                },
+                error: function() {
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    window.location.href = '/index.html';
+                }
+            });
+        }
+
+        // 显示消息
+        function showMessage(elementId, message, type) {
+            const $message = $('#' + elementId);
+            $message.empty();
+            
+            const $alert = $(`
+                <div class="message message-${type === 'success' ? 'success' : type === 'error' ? 'error' : 'info'}">
+                    ${message}
+                </div>
+            `);
+            $message.append($alert);
+            
+            setTimeout(() => {
+                $alert.fadeOut(500, function() {
+                    $(this).remove();
+                });
+            }, 3000);
+        }
+
+        // 关闭弹窗
+        function closeModal() {
+            $('#modal').removeClass('active');
+        }
+
+        // 显示弹窗
+        function showModal(title, content) {
+            $('#modalTitle').text(title);
+            $('#modalBody').html(content);
+            $('#modal').addClass('active');
+        }
+    </script>
+</body>
+</html>

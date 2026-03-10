@@ -24,9 +24,23 @@ blacklisted_refresh_tokens: set = set()
 # 线程锁
 lock = threading.Lock()
 
+# Secret Key（在app.py中设置）
+secret_key = None
+
+
+def set_secret_key(key: str):
+    """设置Secret Key"""
+    global secret_key
+    secret_key = key
+
 
 def generate_access_token(user_id: int, username: str, role: str = 'user') -> str:
     """生成Access Token"""
+    global secret_key
+    
+    if not secret_key:
+        raise ValueError("Secret Key未设置，请先调用set_secret_key()")
+    
     payload = {
         'user_id': user_id,
         'username': username,
@@ -37,7 +51,7 @@ def generate_access_token(user_id: int, username: str, role: str = 'user') -> st
         'jti': secrets.token_urlsafe(16)  # Token唯一标识
     }
     
-    token = jwt.encode(payload, app.secret_key, algorithm='HS256')
+    token = jwt.encode(payload, secret_key, algorithm='HS256')
     
     with lock:
         access_tokens[token] = payload.copy()
@@ -47,6 +61,11 @@ def generate_access_token(user_id: int, username: str, role: str = 'user') -> st
 
 def generate_refresh_token(user_id: int, username: str) -> str:
     """生成Refresh Token"""
+    global secret_key
+    
+    if not secret_key:
+        raise ValueError("Secret Key未设置，请先调用set_secret_key()")
+    
     payload = {
         'user_id': user_id,
         'username': username,
@@ -56,7 +75,7 @@ def generate_refresh_token(user_id: int, username: str) -> str:
         'jti': secrets.token_urlsafe(16)
     }
     
-    token = jwt.encode(payload, app.secret_key, algorithm='HS256')
+    token = jwt.encode(payload, secret_key, algorithm='HS256')
     
     with lock:
         refresh_tokens[token] = payload.copy()
@@ -66,8 +85,13 @@ def generate_refresh_token(user_id: int, username: str) -> str:
 
 def verify_token(token: str, token_type: str = 'access') -> Tuple[bool, Optional[Dict], Optional[str]]:
     """验证Token"""
+    global secret_key
+    
+    if not secret_key:
+        return False, None, 'Secret Key未设置'
+    
     try:
-        payload = jwt.decode(token, app.secret_key, algorithms=['HS256'])
+        payload = jwt.decode(token, secret_key, algorithms=['HS256'])
         
         # 检查Token类型
         if payload.get('type') != token_type:
