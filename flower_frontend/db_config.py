@@ -3,6 +3,7 @@
 """MySQL数据库配置"""
 
 import os
+from contextlib import contextmanager
 
 # 数据库配置
 DB_HOST = os.environ.get('DB_HOST', 'localhost')
@@ -28,6 +29,32 @@ def get_db_connection():
         cursorclass=pymysql.cursors.DictCursor
     )
     return conn
+
+@contextmanager
+def get_db_cursor():
+    """上下文管理器：自动管理数据库连接和游标
+    
+    使用示例：
+        with get_db_cursor() as cursor:
+            cursor.execute("SELECT * FROM users")
+            result = cursor.fetchall()
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        yield cursor
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def init_mysql_db():
     """初始化MySQL数据库"""

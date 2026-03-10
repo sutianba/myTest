@@ -1,17 +1,33 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { AuthContext } from '../contexts/authContext';
 import { useTheme } from '../hooks/useTheme';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 const AccountManagement: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const { currentUser } = useContext(AuthContext);
+  const navigate = useNavigate();
+  
+  // 修复：添加安全检查和默认值
   const [formData, setFormData] = useState({
-    username: currentUser.username,
-    email: currentUser.email,
-    avatar: `https://ui-avatars.com/api/?name=${currentUser.username}&background=random&color=fff`
+    username: currentUser?.username || '',
+    email: currentUser?.email || '',
+    avatar: `https://ui-avatars.com/api/?name=${currentUser?.username || 'User'}&background=random&color=fff`
   });
+  
+  // 修复：如果currentUser变化，更新表单数据
+  useEffect(() => {
+    if (currentUser) {
+      setFormData(prev => ({
+        ...prev,
+        username: currentUser.username || '',
+        email: currentUser.email || '',
+        avatar: `https://ui-avatars.com/api/?name=${currentUser.username || 'User'}&background=random&color=fff`
+      }));
+    }
+  }, [currentUser]);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [passwordData, setPasswordData] = useState({
@@ -381,11 +397,40 @@ const AccountManagement: React.FC = () => {
             </div>
           </motion.div>
 
+          {/* 管理员入口 - 仅管理员可见 */}
+          {currentUser?.role === 'admin' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl p-5 border border-purple-200 dark:border-purple-800/30 mb-6"
+            >
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                <i className="fas fa-crown text-purple-500 mr-2" />
+                管理员控制台
+              </h3>
+              
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                您拥有管理员权限，可以访问管理后台进行用户管理、内容审核、举报处理等操作。
+              </p>
+              
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => navigate('/admin')}
+                className="w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-600 hover:to-indigo-700 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center"
+              >
+                <i className="fas fa-cog mr-2" />
+                进入管理后台
+              </motion.button>
+            </motion.div>
+          )}
+
           {/* 账号安全提示 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.4 }}
             className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-5 border border-emerald-100 dark:border-emerald-800/30"
           >
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center">

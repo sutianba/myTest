@@ -47,13 +47,21 @@ const Login: React.FC = () => {
       const data = await response.json();
       
       if (data.success) {
-        // 登录成功
+        // 修复：使用后端返回的真实用户数据
         const userData = {
-          id: '1', // 后端可能没有返回id，暂时使用固定值
-          username: formData.username,
-          email: `${formData.username}@example.com`,
+          id: data.user_id || data.id || String(Date.now()), // 使用后端返回的ID或生成唯一ID
+          username: data.username || formData.username,
+          email: data.email || `${formData.username}@example.com`,
           role: data.role || 'user'
         };
+        
+        // 保存token到localStorage
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+        }
+        if (data.refresh_token) {
+          localStorage.setItem('refresh_token', data.refresh_token);
+        }
         
         login(userData);
         toast.success('登录成功！');

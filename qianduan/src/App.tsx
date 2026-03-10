@@ -13,6 +13,7 @@ import Favorites from "@/pages/Favorites";
 import Community from "@/pages/Community";
 import PostDetail from "@/pages/PostDetail";
 import CreatePost from "@/pages/CreatePost";
+import AdminDashboard from "@/pages/AdminDashboard";
 import { useState } from "react";
 import { AuthContext } from '@/contexts/authContext';
 
@@ -59,6 +60,7 @@ export default function App() {
          <Route path="/community" element={<Community />} />
          <Route path="/community/post/:postId" element={<PostDetail />} />
          <Route path="/community/create" element={isAuthenticated ? <CreatePost /> : <Login />} />
+         <Route path="/admin" element={isAuthenticated && currentUser?.role === 'admin' ? <AdminDashboard /> : <Login />} />
          {/* 添加访客路线，方便用户直接访问主要功能 */}
          <Route path="/guest" element={<Home />} />
        </Routes>
