@@ -15,6 +15,7 @@ import PostDetail from "@/pages/PostDetail";
 import CreatePost from "@/pages/CreatePost";
 import UserProfile from "@/pages/UserProfile";
 import MyPosts from "@/pages/MyPosts";
+import CommunityManagement from "@/pages/CommunityManagement";
 import AdminDashboard from "@/pages/AdminDashboard";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { useState } from "react";
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/community/post/:postId" element={<PostDetail />} />
           <Route path="/community/create" element={isAuthenticated ? <CreatePost /> : <Login />} />
           <Route path="/community/my-posts" element={isAuthenticated ? <MyPosts /> : <Login />} />
+          <Route path="/community/management" element={isAuthenticated && currentUser?.role === 'admin' ? <CommunityManagement /> : <Login />} />
           <Route path="/user/:username" element={<UserProfile />} />
           <Route path="/admin" element={isAuthenticated && currentUser?.role === 'admin' ? <AdminDashboard /> : <Login />} />
           {/* 添加访客路线，方便用户直接访问主要功能 */}

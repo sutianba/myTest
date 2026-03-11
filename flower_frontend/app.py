@@ -2137,6 +2137,234 @@ def add_comment(post_id):
         print(f"添加评论失败: {type(e).__name__}: {str(e)}")
         return jsonify({"success": False, "error": "操作失败"})
 
+# ==================== 社区管理功能 API ====================
+
+@app.route('/api/community/report', methods=['POST'])
+def report_content():
+    """举报内容"""
+    try:
+        data = request.get_json()
+        reporter_id = data.get('reporter_id')
+        target_type = data.get('target_type')
+        target_id = data.get('target_id')
+        reason = data.get('reason')
+        
+        if not reporter_id or not target_type or not target_id or not reason:
+            return jsonify({"success": False, "error": "缺少必要参数"})
+        
+        # 这里可以将举报信息保存到数据库
+        # 现在返回成功响应
+        return jsonify({"success": True, "message": "举报成功，我们会尽快处理"})
+    except Exception as e:
+        print(f"举报失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/posts/<int:post_id>/status', methods=['PUT'])
+def update_post_status(post_id):
+    """更新帖子状态（审核）"""
+    try:
+        data = request.get_json()
+        status = data.get('status')
+        
+        if not status or status not in ['pending', 'approved', 'rejected']:
+            return jsonify({"success": False, "error": "无效的状态"})
+        
+        # 这里可以更新帖子状态
+        # 现在返回成功响应
+        return jsonify({"success": True, "message": "状态更新成功"})
+    except Exception as e:
+        print(f"更新帖子状态失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/comments/<int:comment_id>/status', methods=['PUT'])
+def update_comment_status(comment_id):
+    """更新评论状态（审核）"""
+    try:
+        data = request.get_json()
+        status = data.get('status')
+        
+        if not status or status not in ['pending', 'approved', 'rejected']:
+            return jsonify({"success": False, "error": "无效的状态"})
+        
+        # 这里可以更新评论状态
+        # 现在返回成功响应
+        return jsonify({"success": True, "message": "状态更新成功"})
+    except Exception as e:
+        print(f"更新评论状态失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/sensitive-words', methods=['GET', 'POST'])
+def manage_sensitive_words():
+    """管理敏感词"""
+    try:
+        if request.method == 'GET':
+            # 获取敏感词列表
+            # 现在返回模拟数据
+            words = [
+                {"id": 1, "word": "敏感词1", "replacement": "***"},
+                {"id": 2, "word": "敏感词2", "replacement": "***"},
+                {"id": 3, "word": "不良内容", "replacement": "***"}
+            ]
+            return jsonify({"success": True, "words": words})
+        
+        elif request.method == 'POST':
+            # 添加敏感词
+            data = request.get_json()
+            word = data.get('word')
+            replacement = data.get('replacement', '***')
+            
+            if not word:
+                return jsonify({"success": False, "error": "敏感词不能为空"})
+            
+            # 这里可以添加敏感词
+            # 现在返回成功响应
+            return jsonify({"success": True, "message": "敏感词添加成功"})
+    except Exception as e:
+        print(f"管理敏感词失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/sensitive-words/<int:word_id>', methods=['DELETE'])
+def delete_sensitive_word(word_id):
+    """删除敏感词"""
+    try:
+        # 这里可以删除敏感词
+        # 现在返回成功响应
+        return jsonify({"success": True, "message": "敏感词删除成功"})
+    except Exception as e:
+        print(f"删除敏感词失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/announcements', methods=['GET', 'POST'])
+def manage_announcements():
+    """管理公告"""
+    try:
+        if request.method == 'GET':
+            # 获取公告列表
+            # 现在返回模拟数据
+            announcements = [
+                {
+                    "id": 1,
+                    "title": "欢迎使用花卉社区",
+                    "content": "欢迎加入花卉社区，这里是花卉爱好者的交流平台。请遵守社区规范，文明发言。",
+                    "is_active": True,
+                    "created_at": "2023-01-01T00:00:00"
+                }
+            ]
+            return jsonify({"success": True, "announcements": announcements})
+        
+        elif request.method == 'POST':
+            # 添加公告
+            data = request.get_json()
+            title = data.get('title')
+            content = data.get('content')
+            
+            if not title or not content:
+                return jsonify({"success": False, "error": "标题和内容不能为空"})
+            
+            # 这里可以添加公告
+            # 现在返回成功响应
+            return jsonify({"success": True, "message": "公告添加成功"})
+    except Exception as e:
+        print(f"管理公告失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/announcements/<int:announcement_id>', methods=['PUT', 'DELETE'])
+def update_announcement(announcement_id):
+    """更新或删除公告"""
+    try:
+        if request.method == 'PUT':
+            # 更新公告
+            data = request.get_json()
+            title = data.get('title')
+            content = data.get('content')
+            is_active = data.get('is_active')
+            
+            # 这里可以更新公告
+            # 现在返回成功响应
+            return jsonify({"success": True, "message": "公告更新成功"})
+        
+        elif request.method == 'DELETE':
+            # 删除公告
+            # 这里可以删除公告
+            # 现在返回成功响应
+            return jsonify({"success": True, "message": "公告删除成功"})
+    except Exception as e:
+        print(f"更新或删除公告失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/users/ban', methods=['POST'])
+def ban_user():
+    """封禁用户"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        reason = data.get('reason')
+        ban_end = data.get('ban_end')
+        
+        if not user_id or not reason:
+            return jsonify({"success": False, "error": "缺少必要参数"})
+        
+        # 这里可以封禁用户
+        # 现在返回成功响应
+        return jsonify({"success": True, "message": "用户封禁成功"})
+    except Exception as e:
+        print(f"封禁用户失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/users/unban/<int:user_id>', methods=['POST'])
+def unban_user(user_id):
+    """解封用户"""
+    try:
+        data = request.get_json()
+        reason = data.get('reason')
+        
+        # 这里可以解封用户
+        # 现在返回成功响应
+        return jsonify({"success": True, "message": "用户解封成功"})
+    except Exception as e:
+        print(f"解封用户失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/reports', methods=['GET'])
+def get_reports():
+    """获取举报列表"""
+    try:
+        # 获取举报列表
+        # 现在返回模拟数据
+        reports = [
+            {
+                "id": 1,
+                "reporter_id": 1,
+                "reporter_name": "testuser",
+                "target_type": "post",
+                "target_id": 1,
+                "reason": "内容违规",
+                "status": "pending",
+                "created_at": "2023-01-01T00:00:00"
+            }
+        ]
+        return jsonify({"success": True, "reports": reports})
+    except Exception as e:
+        print(f"获取举报列表失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/reports/<int:report_id>', methods=['PUT'])
+def process_report(report_id):
+    """处理举报"""
+    try:
+        data = request.get_json()
+        status = data.get('status')
+        
+        if not status or status not in ['processed', 'dismissed']:
+            return jsonify({"success": False, "error": "无效的状态"})
+        
+        # 这里可以处理举报
+        # 现在返回成功响应
+        return jsonify({"success": True, "message": "举报处理成功"})
+    except Exception as e:
+        print(f"处理举报失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
 # ==================== 静态文件服务 ====================
 
 @app.route('/')
