@@ -127,7 +127,7 @@ import time # 用于处理时间相关操作
 app = Flask(__name__)
 CORS(app, 
     supports_credentials=True,
-    origins=['http://localhost:3000', 'http://127.0.0.1:3000'],
+    origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001'],
     allow_headers=['Content-Type', 'Authorization'],
     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 )  # 启用CORS以允许前端访问，并支持会话cookie

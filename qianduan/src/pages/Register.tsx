@@ -11,6 +11,7 @@ const Register: React.FC = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     username: '',
+    email: '',
     password: '',
     confirmPassword: ''
   });
@@ -53,6 +54,7 @@ const Register: React.FC = () => {
         },
         body: JSON.stringify({
           username: formData.username,
+          email: formData.email || null,
           password: formData.password
         })
       });
@@ -127,7 +129,24 @@ const Register: React.FC = () => {
               />
             </div>
 
-
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                邮箱（可选）
+              </label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="请输入邮箱地址（可选）"
+                className={`w-full px-4 py-3 rounded-lg border ${
+                  theme === 'light'
+                    ? 'border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500'
+                    : 'border-gray-700 bg-gray-900 text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500'
+                } transition-all duration-300`}
+              />
+            </div>
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
