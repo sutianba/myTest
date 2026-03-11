@@ -1987,6 +1987,156 @@ def user_settings():
         traceback.print_exc()
         return jsonify({'success': False, 'error': '操作失败'})
 
+# ==================== 社区功能 API ====================
+
+@app.route('/api/community/topics', methods=['GET'])
+def get_community_topics():
+    """获取社区话题列表"""
+    try:
+        # 这里可以从数据库获取话题列表，现在返回模拟数据
+        topics = [
+            {"name": "花卉识别", "display_name": "花卉识别", "post_count": 123},
+            {"name": "植物养护", "display_name": "植物养护", "post_count": 89},
+            {"name": "园艺经验", "display_name": "园艺经验", "post_count": 67},
+            {"name": "花卉摄影", "display_name": "花卉摄影", "post_count": 45},
+            {"name": "花卉市场", "display_name": "花卉市场", "post_count": 32}
+        ]
+        return jsonify({"success": True, "topics": topics})
+    except Exception as e:
+        print(f"获取话题列表失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "获取失败"})
+
+@app.route('/api/community/posts', methods=['GET', 'POST'])
+def community_posts():
+    """获取帖子列表或发布新帖子"""
+    try:
+        if request.method == 'GET':
+            # 获取帖子列表
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 10, type=int)
+            category = request.args.get('category', 'all')
+            
+            # 这里可以从数据库获取帖子列表，现在返回模拟数据
+            posts = []
+            for i in range(1, per_page + 1):
+                post_id = (page - 1) * per_page + i
+                posts.append({
+                    "id": post_id,
+                    "user_id": 1,
+                    "username": "testuser",
+                    "title": f"测试帖子 {post_id}",
+                    "content": f"这是测试帖子 {post_id} 的内容，包含花卉识别和养护的相关信息。",
+                    "image_data": "https://space.coze.cn/api/coze_space/gen_image?image_size=square_hd&prompt=Beautiful%20flower%20garden&sign=test",
+                    "recognition_result": "识别结果: 玫瑰 (置信度: 95.2%)",
+                    "category": category if category != 'all' else 'general',
+                    "views": 100 + post_id,
+                    "comment_count": 10 + post_id % 5,
+                    "like_count": 20 + post_id % 10,
+                    "created_at": (datetime.datetime.now() - datetime.timedelta(days=post_id)).isoformat(),
+                    "topics": ["花卉识别", "植物养护"]
+                })
+            
+            return jsonify({"success": True, "posts": posts})
+        
+        elif request.method == 'POST':
+            # 发布新帖子
+            data = request.get_json()
+            username = data.get('username')
+            title = data.get('title')
+            content = data.get('content')
+            image_data = data.get('image_data')
+            recognition_result = data.get('recognition_result')
+            category = data.get('category', 'general')
+            
+            if not title or not content:
+                return jsonify({"success": False, "error": "标题和内容不能为空"})
+            
+            # 这里可以将帖子保存到数据库
+            # 现在返回成功响应
+            return jsonify({"success": True, "message": "帖子发布成功"})
+            
+    except Exception as e:
+        print(f"社区帖子操作失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/posts/<int:post_id>', methods=['GET'])
+def get_post_detail(post_id):
+    """获取帖子详情"""
+    try:
+        # 这里可以从数据库获取帖子详情，现在返回模拟数据
+        post = {
+            "id": post_id,
+            "user_id": 1,
+            "username": "testuser",
+            "title": f"测试帖子 {post_id}",
+            "content": f"这是测试帖子 {post_id} 的详细内容，包含花卉识别和养护的相关信息。\n\n花卉识别是一项有趣的技术，可以帮助我们快速了解植物的种类和特征。\n\n养护建议：保持适当的光照和水分，定期施肥。",
+            "image_data": "https://space.coze.cn/api/coze_space/gen_image?image_size=square_hd&prompt=Beautiful%20flower%20garden&sign=test",
+            "recognition_result": "识别结果: 玫瑰 (置信度: 95.2%)",
+            "category": "flower",
+            "views": 150,
+            "comment_count": 8,
+            "like_count": 25,
+            "created_at": (datetime.datetime.now() - datetime.timedelta(days=post_id)).isoformat(),
+            "comments": [
+                {
+                    "id": 1,
+                    "user_id": 2,
+                    "username": "user2",
+                    "content": "这个帖子很有用，谢谢分享！",
+                    "created_at": (datetime.datetime.now() - datetime.timedelta(days=post_id, hours=2)).isoformat()
+                },
+                {
+                    "id": 2,
+                    "user_id": 3,
+                    "username": "user3",
+                    "content": "我也遇到过类似的问题，你的建议很有帮助。",
+                    "created_at": (datetime.datetime.now() - datetime.timedelta(days=post_id, hours=1)).isoformat()
+                }
+            ]
+        }
+        
+        return jsonify({"success": True, "post": post})
+    except Exception as e:
+        print(f"获取帖子详情失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "获取失败"})
+
+@app.route('/api/community/like', methods=['POST'])
+def like_post():
+    """点赞/取消点赞"""
+    try:
+        data = request.get_json()
+        target_type = data.get('target_type')
+        target_id = data.get('target_id')
+        
+        if not target_type or not target_id:
+            return jsonify({"success": False, "error": "缺少必要参数"})
+        
+        # 这里可以处理点赞逻辑，现在返回模拟响应
+        liked = True  # 模拟点赞状态
+        message = "点赞成功" if liked else "取消点赞成功"
+        
+        return jsonify({"success": True, "liked": liked, "message": message})
+    except Exception as e:
+        print(f"点赞操作失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
+@app.route('/api/community/posts/<int:post_id>/comments', methods=['POST'])
+def add_comment(post_id):
+    """添加评论"""
+    try:
+        data = request.get_json()
+        content = data.get('content')
+        
+        if not content:
+            return jsonify({"success": False, "error": "评论内容不能为空"})
+        
+        # 这里可以将评论保存到数据库
+        # 现在返回成功响应
+        return jsonify({"success": True, "message": "评论成功"})
+    except Exception as e:
+        print(f"添加评论失败: {type(e).__name__}: {str(e)}")
+        return jsonify({"success": False, "error": "操作失败"})
+
 # ==================== 静态文件服务 ====================
 
 @app.route('/')

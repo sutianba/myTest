@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 
 interface Comment {
@@ -37,6 +37,7 @@ const PostDetail: React.FC = () => {
   const [commentContent, setCommentContent] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const fetchPostDetail = async () => {
     try {
@@ -83,6 +84,17 @@ const PostDetail: React.FC = () => {
       }
     } catch (error) {
       console.error('点赞操作失败:', error);
+      toast.error('操作失败');
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      // 这里可以处理收藏逻辑
+      setSaved(!saved);
+      toast.success(saved ? '已取消收藏' : '收藏成功');
+    } catch (error) {
+      console.error('收藏操作失败:', error);
       toast.error('操作失败');
     }
   };
@@ -199,28 +211,43 @@ const PostDetail: React.FC = () => {
                   <i className="fas fa-user text-emerald-500 text-xl" />
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900 dark:text-white text-lg">
+                  <Link to={`/user/${post.username}`} className="font-semibold text-gray-900 dark:text-white text-lg hover:text-emerald-500 transition-colors">
                     {post.username}
-                  </p>
+                  </Link>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {formatTime(post.created_at)}
                   </p>
                 </div>
               </div>
               
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={handleLike}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
-                  liked
-                    ? 'bg-red-100 text-red-500'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                <i className={`fas fa-heart ${liked ? 'text-red-500' : ''}`} />
-                <span>{post.like_count}</span>
-              </motion.button>
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleLike}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
+                    liked
+                      ? 'bg-red-100 text-red-500'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  <i className={`fas fa-heart ${liked ? 'text-red-500' : ''}`} />
+                  <span>{post.like_count}</span>
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleSave}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
+                    saved
+                      ? 'bg-blue-100 text-blue-500'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  <i className={`fas fa-bookmark ${saved ? 'text-blue-500' : ''}`} />
+                  <span>收藏</span>
+                </motion.button>
+              </div>
             </div>
 
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
