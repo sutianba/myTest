@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS plants (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+<<<<<<< HEAD
 -- ----------------------------
 -- Table structure for roles
 -- ----------------------------
@@ -198,6 +199,22 @@ CREATE TABLE `role_permissions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------
+-- Table structure for recognition_results
+-- ----------------------------
+DROP TABLE IF EXISTS `recognition_results`;
+CREATE TABLE `recognition_results` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `user_id` INT DEFAULT NULL,
+  `image_path` VARCHAR(255) DEFAULT NULL,
+  `result` VARCHAR(255) DEFAULT NULL,
+  `confidence` DECIMAL(5,2) DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  CONSTRAINT `fk_recognition_results_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------
 -- Table structure for posts
 -- ----------------------------
 DROP TABLE IF EXISTS `posts`;
@@ -208,12 +225,10 @@ CREATE TABLE `posts` (
   `image_url` VARCHAR(500) DEFAULT NULL,
   `likes_count` INT NOT NULL DEFAULT 0,
   `comments_count` INT NOT NULL DEFAULT 0,
-  `status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`),
-  KEY `idx_status` (`status`),
   CONSTRAINT `fk_posts_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -226,12 +241,10 @@ CREATE TABLE `comments` (
   `post_id` INT NOT NULL,
   `user_id` INT NOT NULL,
   `content` TEXT NOT NULL,
-  `status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_post_id` (`post_id`),
   KEY `idx_user_id` (`user_id`),
-  KEY `idx_status` (`status`),
   CONSTRAINT `fk_comments_post` FOREIGN KEY (`post_id`) REFERENCES `posts` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_comments_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -437,6 +450,53 @@ CREATE TABLE `user_sessions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------
+-- Insert initial data
+-- ----------------------------
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- Insert users (password: password123, status: active)
+INSERT INTO `users` (`id`, `username`, `email`, `password_hash`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'testuser', 'test@example.com', 'pbkdf2:sha256:1000000$A3wkEuJm94FlOPHg$7b215c12d3c301d920da0a8f6629eba4d69e0804a51a0f6f929f8b5fbbef5a60', 'active', FROM_UNIXTIME(1769563038), FROM_UNIXTIME(1769563038));
+
+-- Insert roles
+INSERT INTO `roles` (`id`, `name`, `description`) VALUES
+(1, 'admin', '系统管理员'),
+(2, 'user', '普通用户');
+
+-- Insert permissions
+INSERT INTO `permissions` (`id`, `name`, `description`) VALUES
+(1, 'view_results', '查看识别结果'),
+(2, 'upload_images', '上传图片'),
+(3, 'manage_users', '管理用户'),
+(4, 'manage_roles', '管理角色和权限'),
+(5, 'view_community', '查看社区内容'),
+(6, 'create_posts', '创建帖子'),
+(7, 'comment_posts', '评论帖子'),
+(8, 'like_posts', '点赞帖子'),
+(9, 'follow_users', '关注用户');
+
+-- Insert user_roles
+INSERT INTO `user_roles` (`user_id`, `role_id`) VALUES
+(1, 2);
+
+-- Insert role_permissions
+INSERT INTO `role_permissions` (`role_id`, `permission_id`) VALUES
+(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8), (1, 9),
+(2, 1), (2, 2), (2, 5), (2, 6), (2, 7), (2, 8), (2, 9);
+
+-- Insert posts
+INSERT INTO `posts` (`id`, `user_id`, `content`, `image_url`, `likes_count`, `comments_count`, `created_at`, `updated_at`) VALUES
+(1, 1, '测试帖子内容，这是我的第一篇社区帖子！', 'https://example.com/flower.jpg', 1, 1, FROM_UNIXTIME(1769563050), FROM_UNIXTIME(1769563050));
+
+-- Insert comments
+INSERT INTO `comments` (`id`, `post_id`, `user_id`, `content`, `created_at`) VALUES
+(1, 1, 1, '这是对测试帖子的评论！', FROM_UNIXTIME(1769563065));
+
+-- Insert likes
+INSERT INTO `likes` (`id`, `post_id`, `user_id`, `created_at`) VALUES
+(1, 1, 1, FROM_UNIXTIME(1769563083));
+
+-- ----------------------------
 -- Table structure for login_attempts
 -- ----------------------------
 DROP TABLE IF EXISTS `login_attempts`;
@@ -500,125 +560,7 @@ CREATE TABLE `registration_attempts` (
   KEY `idx_ip_address` (`ip_address`),
   KEY `idx_attempt_time` (`attempt_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ----------------------------
--- Table structure for reports
--- ----------------------------
-DROP TABLE IF EXISTS `reports`;
-CREATE TABLE `reports` (
-  `id` INT NOT NULL AUTO_INCREMENT,
-  `reporter_id` INT NOT NULL,
-  `target_type` ENUM('post', 'comment', 'user') NOT NULL,
-  `target_id` INT NOT NULL,
-  `reason` VARCHAR(500) NOT NULL,
-  `status` ENUM('pending', 'processed', 'dismissed') DEFAULT 'pending',
-  `processed_by` INT DEFAULT NULL,
-  `processed_at` TIMESTAMP NULL DEFAULT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_reporter_id` (`reporter_id`),
-  KEY `idx_target` (`target_type`, `target_id`),
-  KEY `idx_status` (`status`),
-  CONSTRAINT `fk_reports_reporter` FOREIGN KEY (`reporter_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_reports_processor` FOREIGN KEY (`processed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ----------------------------
--- Table structure for sensitive_words
--- ----------------------------
-DROP TABLE IF EXISTS `sensitive_words`;
-CREATE TABLE `sensitive_words` (
-  `id` INT NOT NULL AUTO_INCREMENT,
-  `word` VARCHAR(100) NOT NULL,
-  `replacement` VARCHAR(100) DEFAULT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_word` (`word`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ----------------------------
--- Table structure for announcements
--- ----------------------------
-DROP TABLE IF EXISTS `announcements`;
-CREATE TABLE `announcements` (
-  `id` INT NOT NULL AUTO_INCREMENT,
-  `title` VARCHAR(255) NOT NULL,
-  `content` TEXT NOT NULL,
-  `is_active` TINYINT NOT NULL DEFAULT 1,
-  `start_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `end_time` TIMESTAMP NULL DEFAULT NULL,
-  `created_by` INT NOT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_is_active` (`is_active`),
-  KEY `idx_time_range` (`start_time`, `end_time`),
-  CONSTRAINT `fk_announcements_creator` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ----------------------------
--- Insert initial data
--- ----------------------------
-SET FOREIGN_KEY_CHECKS = 0;
-
--- Insert users (password: password123, status: active)
-INSERT INTO `users` (`id`, `username`, `email`, `password`, `is_verified`, `created_at`) VALUES
-(1, 'testuser', 'test@example.com', 'password123', 1, FROM_UNIXTIME(1769563038)),
-(2, 'admin', 'admin@example.com', 'admin123', 1, FROM_UNIXTIME(1769563038));
-
--- Insert roles
-INSERT INTO `roles` (`id`, `name`, `description`) VALUES
-(1, 'admin', '系统管理员'),
-(2, 'user', '普通用户');
-
--- Insert permissions
-INSERT INTO `permissions` (`id`, `name`, `description`) VALUES
-(1, 'view_results', '查看识别结果'),
-(2, 'upload_images', '上传图片'),
-(3, 'manage_users', '管理用户'),
-(4, 'manage_roles', '管理角色和权限'),
-(5, 'view_community', '查看社区内容'),
-(6, 'create_posts', '创建帖子'),
-(7, 'comment_posts', '评论帖子'),
-(8, 'like_posts', '点赞帖子'),
-(9, 'follow_users', '关注用户'),
-(10, 'report_content', '举报内容'),
-(11, 'manage_reports', '管理举报'),
-(12, 'manage_announcements', '管理公告'),
-(13, 'manage_sensitive_words', '管理敏感词');
-
--- Insert user_roles
-INSERT INTO `user_roles` (`user_id`, `role_id`) VALUES
-(1, 2),
-(2, 1);
-
--- Insert role_permissions
-INSERT INTO `role_permissions` (`role_id`, `permission_id`) VALUES
-(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8), (1, 9), (1, 10), (1, 11), (1, 12), (1, 13),
-(2, 1), (2, 2), (2, 5), (2, 6), (2, 7), (2, 8), (2, 9), (2, 10);
-
--- Insert posts
-INSERT INTO `posts` (`id`, `user_id`, `content`, `image_url`, `likes_count`, `comments_count`, `status`, `created_at`, `updated_at`) VALUES
-(1, 1, '测试帖子内容，这是我的第一篇社区帖子！', 'https://example.com/flower.jpg', 1, 1, 'approved', FROM_UNIXTIME(1769563050), FROM_UNIXTIME(1769563050));
-
--- Insert comments
-INSERT INTO `comments` (`id`, `post_id`, `user_id`, `content`, `status`, `created_at`) VALUES
-(1, 1, 1, '这是对测试帖子的评论！', 'approved', FROM_UNIXTIME(1769563065));
-
--- Insert likes
-INSERT INTO `likes` (`id`, `post_id`, `user_id`, `created_at`) VALUES
-(1, 1, 1, FROM_UNIXTIME(1769563083));
-
--- Insert sensitive words
-INSERT INTO `sensitive_words` (`id`, `word`, `replacement`) VALUES
-(1, '敏感词1', '***'),
-(2, '敏感词2', '***'),
-(3, '不良内容', '***');
-
--- Insert announcements
-INSERT INTO `announcements` (`id`, `title`, `content`, `is_active`, `created_by`) VALUES
-(1, '欢迎使用花卉社区', '欢迎加入花卉社区，这里是花卉爱好者的交流平台。请遵守社区规范，文明发言。', 1, 2);
-
+=======
 -- 插入基础植物数据
 INSERT IGNORE INTO plants (name, scientific_name, category, family, description, image_url, blooming_season, growth_stage, sunlight_requirements, water_needs, origin, toxicity, care_tips, planting_instructions, propagation_methods, pests_and_diseases, similar_plants, benefits, other_names) VALUES
 ('玫瑰', 'Rosa', '花卉', '蔷薇科', '玫瑰是一种象征爱情与美丽的花卉，拥有丰富的花色和浓郁的香气。在世界各地广泛栽培，是最受欢迎的观赏花卉之一。', 'https://space.coze.cn/api/coze_space/gen_image?image_size=square_hd&prompt=Beautiful%20rose%20flower%2C%20garden&sign=25015e95c4b359ce0e75c1b8c4e55e4b', '夏季至秋季', '春季发芽，夏季开花，秋季结果，冬季休眠', '充足阳光（每天至少6小时）', '中等（保持土壤湿润但不过湿）', '欧洲、亚洲、中东', '轻微（刺可能引起皮肤刺激）', '保持土壤湿润但不过湿，定期施肥。避免叶片沾水，以防真菌病害。', '选择排水良好的肥沃土壤，种植在阳光充足的位置。种植前添加有机肥料。', '可以通过扦插、嫁接或分株繁殖。扦插最好在春季或夏季进行。', '常见病虫害有蚜虫、红蜘蛛和白粉病。定期检查并及时防治。', '月季：花型相似但花期更长；蔷薇：攀缘性更强，花小而多', '花朵可用于制作香料、精油和花茶，具有舒缓情绪、促进血液循环的功效。', '玫瑰花,月季'),
@@ -626,3 +568,4 @@ INSERT IGNORE INTO plants (name, scientific_name, category, family, description,
 ('薰衣草', 'Lavandula', '花卉', '唇形科', '薰衣草是一种芳香植物，以其紫色的花朵和独特的香气而闻名。主要用于香料、药用和观赏。', 'https://space.coze.cn/api/coze_space/gen_image?image_size=square_hd&prompt=Lavender%20field%2C%20purple%20flowers&sign=18ec56878cd00dafb53d98d7474ef2d4', '夏季', '春季生长，夏季开花，秋季结籽，冬季休眠', '充足阳光（每天至少6-8小时）', '低（耐旱，避免过度浇水）', '地中海地区', '无（但过量使用精油可能引起不适）', '种植在干燥、排水良好的土壤中，避免过度浇水。开花后修剪促进新枝生长。', '选择排水良好的沙质土壤，种植在阳光充足的位置。避免土壤过于湿润。', '可以通过扦插、分株或播种繁殖。扦插繁殖最常用且成功率高。', '较少受到病虫害影响。可能的问题包括根腐病（由于土壤过湿）和蚜虫。', '迷迭香：叶片针状，香气不同；薄荷：叶片较大，生长更旺盛', '具有镇静、抗菌和抗炎作用。常用于制作香水、香薰、护肤品和草药茶。', '灵香草,黄香草'),
 ('仙人掌', 'Cactaceae', '多肉', '仙人掌科', '仙人掌是一类适应干旱环境的多肉植物，形态各异，易于养护。原产于美洲，现广泛栽培作为观赏植物。', 'https://space.coze.cn/api/coze_space/gen_image?image_size=square_hd&prompt=Cactus%20plant%2C%20desert&sign=21bd44f25b466835546afac78d000ba0', '春季至夏季（部分品种）', '全年生长缓慢，冬季休眠', '充足阳光（每天至少4-6小时）', '很低（生长期适度浇水，休眠期几乎不浇水）', '美洲', '大多数无', '极少浇水，避免积水，冬季减少浇水频率。使用排水良好的多肉植物专用土。', '使用排水良好的多肉植物专用土壤，种植在阳光充足的位置。花盆底部可添加碎石增加排水性。', '可以通过扦插、分株或播种繁殖。许多种类可以通过单个茎段繁殖。', '常见问题有红蜘蛛、粉蚧和根腐病（由于浇水过多）。', '仙人球：球形，刺密集；多肉植物：形态多样，刺较少', '作为室内观赏植物可以净化空气，减少空气中的污染物。', '仙人球,刺球'),
 ('绿萝', 'Epipremnum aureum', '藤蔓', '天南星科', '绿萝是一种常见的室内观叶植物，生长迅速，易于养护。因其心形叶片和藤蔓生长习性而受欢迎。', 'https://space.coze.cn/api/coze_space/gen_image?image_size=square_hd&prompt=Pothos%20plant%2C%20indoor%20green&sign=80cca437f333913280f156947d70cc9f', '极少开花（室内几乎不开花）', '全年生长，夏季生长旺盛', '散射光（避免阳光直射）', '中等（待土壤表面干燥后再浇水）', '所罗门群岛', '轻微（对宠物）', '保持土壤湿润但不过湿，避免阳光直射。定期擦拭叶片保持清洁。', '选择排水良好的土壤，种植在散射光充足的位置。可以垂吊或攀爬生长。', '可以通过扦插繁殖，将茎段插入水中或土壤中即可生根。', '可能受到蚜虫、介壳虫和根腐病的影响。保持通风良好可减少病虫害。', '常春藤：叶片较小，攀缘能力强；龟背竹：叶片孔洞状', '可以净化室内空气，吸收甲醛等有害物质。', '黄金葛,魔鬼藤');
+>>>>>>> 9520226914016f304ca8bed39d8b1e907ffc795a

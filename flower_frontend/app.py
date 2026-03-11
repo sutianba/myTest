@@ -194,9 +194,9 @@ def register():
         password = data.get('password')
         email = data.get('email')
 
-        if not username or not password or not email:
+        if not username or not password:
             logger.log_register(0, username or '', email or '', False, ip_address, '缺少必填字段')
-            return jsonify({'success': False, 'error': '用户名、密码和邮箱不能为空'})
+            return jsonify({'success': False, 'error': '用户名和密码不能为空'})
         
         if len(password) < 6:
             logger.log_register(0, username, email, False, ip_address, '密码长度不足')
@@ -206,8 +206,12 @@ def register():
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        check_query = "SELECT * FROM users WHERE username = %s OR email = %s"
-        cursor.execute(check_query, (username, email))
+        if email:
+            check_query = "SELECT * FROM users WHERE username = %s OR email = %s"
+            cursor.execute(check_query, (username, email))
+        else:
+            check_query = "SELECT * FROM users WHERE username = %s"
+            cursor.execute(check_query, (username,))
         existing_user = cursor.fetchone()
         
         if existing_user:
@@ -233,27 +237,36 @@ def register():
         user_id = cursor.lastrowid
         connection.commit()
         
-        # 生成验证token
-        token = generate_verification_token(user_id, email)
-        
-        # 发送验证邮件
-        result = send_verification_email(email, username, token)
-        
         cursor.close()
         connection.close()
         
-        if result['success']:
+        if email:
+            # 生成验证token
+            token = generate_verification_token(user_id, email)
+            
+            # 发送验证邮件
+            result = send_verification_email(email, username, token)
+            
+            if result['success']:
+                logger.log_register(user_id, username, email, True, ip_address)
+                return jsonify({
+                    'success': True, 
+                    'message': '注册成功！请前往邮箱完成验证',
+                    'email': email
+                })
+            else:
+                logger.log_register(user_id, username, email, False, ip_address, '邮件发送失败')
+                return jsonify({
+                    'success': False, 
+                    'error': result.get('error', '注册成功但邮件发送失败，请重试')
+                })
+        else:
+            # 没有提供邮箱，直接注册成功
             logger.log_register(user_id, username, email, True, ip_address)
             return jsonify({
                 'success': True, 
-                'message': '注册成功！请前往邮箱完成验证',
+                'message': '注册成功！',
                 'email': email
-            })
-        else:
-            logger.log_register(user_id, username, email, False, ip_address, '邮件发送失败')
-            return jsonify({
-                'success': False, 
-                'error': result.get('error', '注册成功但邮件发送失败，请重试')
             })
             
     except Exception as e:
@@ -416,7 +429,7 @@ def login():
             return jsonify({'success': False, 'error': '账号未激活，请先验证邮箱'})
         
         # 验证密码
-        if not verify_password(password, user['password_hash']):
+        if not verify_password(password, user['password']):
             cursor.close()
             connection.close()
             record_login_failure(username, ip_address, '密码错误')
@@ -1986,384 +1999,6 @@ def user_settings():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': '操作失败'})
-
-# ==================== 社区功能 API ====================
-
-@app.route('/api/community/topics', methods=['GET'])
-def get_community_topics():
-    """获取社区话题列表"""
-    try:
-        # 这里可以从数据库获取话题列表，现在返回模拟数据
-        topics = [
-            {"name": "花卉识别", "display_name": "花卉识别", "post_count": 123},
-            {"name": "植物养护", "display_name": "植物养护", "post_count": 89},
-            {"name": "园艺经验", "display_name": "园艺经验", "post_count": 67},
-            {"name": "花卉摄影", "display_name": "花卉摄影", "post_count": 45},
-            {"name": "花卉市场", "display_name": "花卉市场", "post_count": 32}
-        ]
-        return jsonify({"success": True, "topics": topics})
-    except Exception as e:
-        print(f"获取话题列表失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "获取失败"})
-
-@app.route('/api/community/posts', methods=['GET', 'POST'])
-def community_posts():
-    """获取帖子列表或发布新帖子"""
-    try:
-        if request.method == 'GET':
-            # 获取帖子列表
-            page = request.args.get('page', 1, type=int)
-            per_page = request.args.get('per_page', 10, type=int)
-            category = request.args.get('category', 'all')
-            
-            # 这里可以从数据库获取帖子列表，现在返回模拟数据
-            posts = []
-            for i in range(1, per_page + 1):
-                post_id = (page - 1) * per_page + i
-                posts.append({
-                    "id": post_id,
-                    "user_id": 1,
-                    "username": "testuser",
-                    "title": f"测试帖子 {post_id}",
-                    "content": f"这是测试帖子 {post_id} 的内容，包含花卉识别和养护的相关信息。",
-                    "image_data": "https://space.coze.cn/api/coze_space/gen_image?image_size=square_hd&prompt=Beautiful%20flower%20garden&sign=test",
-                    "recognition_result": "识别结果: 玫瑰 (置信度: 95.2%)",
-                    "category": category if category != 'all' else 'general',
-                    "views": 100 + post_id,
-                    "comment_count": 10 + post_id % 5,
-                    "like_count": 20 + post_id % 10,
-                    "created_at": (datetime.datetime.now() - datetime.timedelta(days=post_id)).isoformat(),
-                    "topics": ["花卉识别", "植物养护"]
-                })
-            
-            return jsonify({"success": True, "posts": posts})
-        
-        elif request.method == 'POST':
-            # 发布新帖子
-            data = request.get_json()
-            username = data.get('username')
-            title = data.get('title')
-            content = data.get('content')
-            image_data = data.get('image_data')
-            recognition_result = data.get('recognition_result')
-            category = data.get('category', 'general')
-            
-            if not title or not content:
-                return jsonify({"success": False, "error": "标题和内容不能为空"})
-            
-            # 这里可以将帖子保存到数据库
-            # 现在返回成功响应
-            return jsonify({"success": True, "message": "帖子发布成功"})
-            
-    except Exception as e:
-        print(f"社区帖子操作失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/posts/<int:post_id>', methods=['GET'])
-def get_post_detail(post_id):
-    """获取帖子详情"""
-    try:
-        # 这里可以从数据库获取帖子详情，现在返回模拟数据
-        post = {
-            "id": post_id,
-            "user_id": 1,
-            "username": "testuser",
-            "title": f"测试帖子 {post_id}",
-            "content": f"这是测试帖子 {post_id} 的详细内容，包含花卉识别和养护的相关信息。\n\n花卉识别是一项有趣的技术，可以帮助我们快速了解植物的种类和特征。\n\n养护建议：保持适当的光照和水分，定期施肥。",
-            "image_data": "https://space.coze.cn/api/coze_space/gen_image?image_size=square_hd&prompt=Beautiful%20flower%20garden&sign=test",
-            "recognition_result": "识别结果: 玫瑰 (置信度: 95.2%)",
-            "category": "flower",
-            "views": 150,
-            "comment_count": 8,
-            "like_count": 25,
-            "created_at": (datetime.datetime.now() - datetime.timedelta(days=post_id)).isoformat(),
-            "comments": [
-                {
-                    "id": 1,
-                    "user_id": 2,
-                    "username": "user2",
-                    "content": "这个帖子很有用，谢谢分享！",
-                    "created_at": (datetime.datetime.now() - datetime.timedelta(days=post_id, hours=2)).isoformat()
-                },
-                {
-                    "id": 2,
-                    "user_id": 3,
-                    "username": "user3",
-                    "content": "我也遇到过类似的问题，你的建议很有帮助。",
-                    "created_at": (datetime.datetime.now() - datetime.timedelta(days=post_id, hours=1)).isoformat()
-                }
-            ]
-        }
-        
-        return jsonify({"success": True, "post": post})
-    except Exception as e:
-        print(f"获取帖子详情失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "获取失败"})
-
-@app.route('/api/community/like', methods=['POST'])
-def like_post():
-    """点赞/取消点赞"""
-    try:
-        data = request.get_json()
-        target_type = data.get('target_type')
-        target_id = data.get('target_id')
-        
-        if not target_type or not target_id:
-            return jsonify({"success": False, "error": "缺少必要参数"})
-        
-        # 这里可以处理点赞逻辑，现在返回模拟响应
-        liked = True  # 模拟点赞状态
-        message = "点赞成功" if liked else "取消点赞成功"
-        
-        return jsonify({"success": True, "liked": liked, "message": message})
-    except Exception as e:
-        print(f"点赞操作失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/posts/<int:post_id>/comments', methods=['POST'])
-def add_comment(post_id):
-    """添加评论"""
-    try:
-        data = request.get_json()
-        content = data.get('content')
-        
-        if not content:
-            return jsonify({"success": False, "error": "评论内容不能为空"})
-        
-        # 这里可以将评论保存到数据库
-        # 现在返回成功响应
-        return jsonify({"success": True, "message": "评论成功"})
-    except Exception as e:
-        print(f"添加评论失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-# ==================== 社区管理功能 API ====================
-
-@app.route('/api/community/report', methods=['POST'])
-def report_content():
-    """举报内容"""
-    try:
-        data = request.get_json()
-        reporter_id = data.get('reporter_id')
-        target_type = data.get('target_type')
-        target_id = data.get('target_id')
-        reason = data.get('reason')
-        
-        if not reporter_id or not target_type or not target_id or not reason:
-            return jsonify({"success": False, "error": "缺少必要参数"})
-        
-        # 这里可以将举报信息保存到数据库
-        # 现在返回成功响应
-        return jsonify({"success": True, "message": "举报成功，我们会尽快处理"})
-    except Exception as e:
-        print(f"举报失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/posts/<int:post_id>/status', methods=['PUT'])
-def update_post_status(post_id):
-    """更新帖子状态（审核）"""
-    try:
-        data = request.get_json()
-        status = data.get('status')
-        
-        if not status or status not in ['pending', 'approved', 'rejected']:
-            return jsonify({"success": False, "error": "无效的状态"})
-        
-        # 这里可以更新帖子状态
-        # 现在返回成功响应
-        return jsonify({"success": True, "message": "状态更新成功"})
-    except Exception as e:
-        print(f"更新帖子状态失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/comments/<int:comment_id>/status', methods=['PUT'])
-def update_comment_status(comment_id):
-    """更新评论状态（审核）"""
-    try:
-        data = request.get_json()
-        status = data.get('status')
-        
-        if not status or status not in ['pending', 'approved', 'rejected']:
-            return jsonify({"success": False, "error": "无效的状态"})
-        
-        # 这里可以更新评论状态
-        # 现在返回成功响应
-        return jsonify({"success": True, "message": "状态更新成功"})
-    except Exception as e:
-        print(f"更新评论状态失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/sensitive-words', methods=['GET', 'POST'])
-def manage_sensitive_words():
-    """管理敏感词"""
-    try:
-        if request.method == 'GET':
-            # 获取敏感词列表
-            # 现在返回模拟数据
-            words = [
-                {"id": 1, "word": "敏感词1", "replacement": "***"},
-                {"id": 2, "word": "敏感词2", "replacement": "***"},
-                {"id": 3, "word": "不良内容", "replacement": "***"}
-            ]
-            return jsonify({"success": True, "words": words})
-        
-        elif request.method == 'POST':
-            # 添加敏感词
-            data = request.get_json()
-            word = data.get('word')
-            replacement = data.get('replacement', '***')
-            
-            if not word:
-                return jsonify({"success": False, "error": "敏感词不能为空"})
-            
-            # 这里可以添加敏感词
-            # 现在返回成功响应
-            return jsonify({"success": True, "message": "敏感词添加成功"})
-    except Exception as e:
-        print(f"管理敏感词失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/sensitive-words/<int:word_id>', methods=['DELETE'])
-def delete_sensitive_word(word_id):
-    """删除敏感词"""
-    try:
-        # 这里可以删除敏感词
-        # 现在返回成功响应
-        return jsonify({"success": True, "message": "敏感词删除成功"})
-    except Exception as e:
-        print(f"删除敏感词失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/announcements', methods=['GET', 'POST'])
-def manage_announcements():
-    """管理公告"""
-    try:
-        if request.method == 'GET':
-            # 获取公告列表
-            # 现在返回模拟数据
-            announcements = [
-                {
-                    "id": 1,
-                    "title": "欢迎使用花卉社区",
-                    "content": "欢迎加入花卉社区，这里是花卉爱好者的交流平台。请遵守社区规范，文明发言。",
-                    "is_active": True,
-                    "created_at": "2023-01-01T00:00:00"
-                }
-            ]
-            return jsonify({"success": True, "announcements": announcements})
-        
-        elif request.method == 'POST':
-            # 添加公告
-            data = request.get_json()
-            title = data.get('title')
-            content = data.get('content')
-            
-            if not title or not content:
-                return jsonify({"success": False, "error": "标题和内容不能为空"})
-            
-            # 这里可以添加公告
-            # 现在返回成功响应
-            return jsonify({"success": True, "message": "公告添加成功"})
-    except Exception as e:
-        print(f"管理公告失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/announcements/<int:announcement_id>', methods=['PUT', 'DELETE'])
-def update_announcement(announcement_id):
-    """更新或删除公告"""
-    try:
-        if request.method == 'PUT':
-            # 更新公告
-            data = request.get_json()
-            title = data.get('title')
-            content = data.get('content')
-            is_active = data.get('is_active')
-            
-            # 这里可以更新公告
-            # 现在返回成功响应
-            return jsonify({"success": True, "message": "公告更新成功"})
-        
-        elif request.method == 'DELETE':
-            # 删除公告
-            # 这里可以删除公告
-            # 现在返回成功响应
-            return jsonify({"success": True, "message": "公告删除成功"})
-    except Exception as e:
-        print(f"更新或删除公告失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/users/ban', methods=['POST'])
-def ban_user():
-    """封禁用户"""
-    try:
-        data = request.get_json()
-        user_id = data.get('user_id')
-        reason = data.get('reason')
-        ban_end = data.get('ban_end')
-        
-        if not user_id or not reason:
-            return jsonify({"success": False, "error": "缺少必要参数"})
-        
-        # 这里可以封禁用户
-        # 现在返回成功响应
-        return jsonify({"success": True, "message": "用户封禁成功"})
-    except Exception as e:
-        print(f"封禁用户失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/users/unban/<int:user_id>', methods=['POST'])
-def unban_user(user_id):
-    """解封用户"""
-    try:
-        data = request.get_json()
-        reason = data.get('reason')
-        
-        # 这里可以解封用户
-        # 现在返回成功响应
-        return jsonify({"success": True, "message": "用户解封成功"})
-    except Exception as e:
-        print(f"解封用户失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/reports', methods=['GET'])
-def get_reports():
-    """获取举报列表"""
-    try:
-        # 获取举报列表
-        # 现在返回模拟数据
-        reports = [
-            {
-                "id": 1,
-                "reporter_id": 1,
-                "reporter_name": "testuser",
-                "target_type": "post",
-                "target_id": 1,
-                "reason": "内容违规",
-                "status": "pending",
-                "created_at": "2023-01-01T00:00:00"
-            }
-        ]
-        return jsonify({"success": True, "reports": reports})
-    except Exception as e:
-        print(f"获取举报列表失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
-
-@app.route('/api/community/reports/<int:report_id>', methods=['PUT'])
-def process_report(report_id):
-    """处理举报"""
-    try:
-        data = request.get_json()
-        status = data.get('status')
-        
-        if not status or status not in ['processed', 'dismissed']:
-            return jsonify({"success": False, "error": "无效的状态"})
-        
-        # 这里可以处理举报
-        # 现在返回成功响应
-        return jsonify({"success": True, "message": "举报处理成功"})
-    except Exception as e:
-        print(f"处理举报失败: {type(e).__name__}: {str(e)}")
-        return jsonify({"success": False, "error": "操作失败"})
 
 # ==================== 静态文件服务 ====================
 

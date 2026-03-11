@@ -344,7 +344,7 @@ def change_user_password(user_id: int, old_password: str, new_password: str) -> 
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT password_hash FROM users WHERE id = %s", (user_id,))
+        cursor.execute("SELECT password FROM users WHERE id = %s", (user_id,))
         result = cursor.fetchone()
         
         if not result:
@@ -353,7 +353,7 @@ def change_user_password(user_id: int, old_password: str, new_password: str) -> 
             return False, "用户不存在"
         
         # 验证旧密码
-        if not verify_password(old_password, result['password_hash']):
+        if not verify_password(old_password, result['password']):
             cursor.close()
             conn.close()
             return False, "原密码错误"
@@ -373,7 +373,7 @@ def change_user_password(user_id: int, old_password: str, new_password: str) -> 
         
         # 更新密码
         cursor.execute(
-            "UPDATE users SET password_hash = %s WHERE id = %s",
+            "UPDATE users SET password = %s WHERE id = %s",
             (new_password_hash, user_id)
         )
         conn.commit()
@@ -410,7 +410,7 @@ def reset_user_password(user_id: int, new_password: str) -> Tuple[bool, Optional
         cursor = conn.cursor()
         
         cursor.execute(
-            "UPDATE users SET password_hash = %s WHERE id = %s",
+            "UPDATE users SET password = %s WHERE id = %s",
             (new_password_hash, user_id)
         )
         conn.commit()

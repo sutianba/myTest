@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 
 interface Comment {
@@ -37,10 +37,6 @@ const PostDetail: React.FC = () => {
   const [commentContent, setCommentContent] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [liked, setLiked] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [reportReason, setReportReason] = useState('');
-  const [submittingReport, setSubmittingReport] = useState(false);
 
   const fetchPostDetail = async () => {
     try {
@@ -88,61 +84,6 @@ const PostDetail: React.FC = () => {
     } catch (error) {
       console.error('点赞操作失败:', error);
       toast.error('操作失败');
-    }
-  };
-
-  const handleSave = async () => {
-    try {
-      // 这里可以处理收藏逻辑
-      setSaved(!saved);
-      toast.success(saved ? '已取消收藏' : '收藏成功');
-    } catch (error) {
-      console.error('收藏操作失败:', error);
-      toast.error('操作失败');
-    }
-  };
-
-  const handleReport = () => {
-    setShowReportModal(true);
-  };
-
-  const handleReportSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!reportReason.trim()) {
-      toast.warning('请填写举报原因');
-      return;
-    }
-
-    setSubmittingReport(true);
-    
-    try {
-      const response = await fetch('http://localhost:5000/api/community/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          reporter_id: 1, // 实际应用中应该从当前用户获取
-          target_type: 'post',
-          target_id: postId,
-          reason: reportReason
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        toast.success(data.message);
-        setShowReportModal(false);
-        setReportReason('');
-      } else {
-        toast.error(data.error || '举报失败');
-      }
-    } catch (error) {
-      console.error('举报失败:', error);
-      toast.error('举报失败');
-    } finally {
-      setSubmittingReport(false);
     }
   };
 
@@ -258,52 +199,28 @@ const PostDetail: React.FC = () => {
                   <i className="fas fa-user text-emerald-500 text-xl" />
                 </div>
                 <div>
-                  <Link to={`/user/${post.username}`} className="font-semibold text-gray-900 dark:text-white text-lg hover:text-emerald-500 transition-colors">
+                  <p className="font-semibold text-gray-900 dark:text-white text-lg">
                     {post.username}
-                  </Link>
+                  </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {formatTime(post.created_at)}
                   </p>
                 </div>
               </div>
               
-              <div className="flex gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleLike}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
-                    liked
-                      ? 'bg-red-100 text-red-500'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                  }`}
-                >
-                  <i className={`fas fa-heart ${liked ? 'text-red-500' : ''}`} />
-                  <span>{post.like_count}</span>
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleSave}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
-                    saved
-                      ? 'bg-blue-100 text-blue-500'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                  }`}
-                >
-                  <i className={`fas fa-bookmark ${saved ? 'text-blue-500' : ''}`} />
-                  <span>收藏</span>
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleReport}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <i className="fas fa-flag" />
-                  <span>举报</span>
-                </motion.button>
-              </div>
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={handleLike}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
+                  liked
+                    ? 'bg-red-100 text-red-500'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                }`}
+              >
+                <i className={`fas fa-heart ${liked ? 'text-red-500' : ''}`} />
+                <span>{post.like_count}</span>
+              </motion.button>
             </div>
 
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
@@ -423,59 +340,6 @@ const PostDetail: React.FC = () => {
             </div>
           )}
         </motion.div>
-
-        {/* 举报模态框 */}
-        {showReportModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full"
-            >
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                举报帖子
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                请填写举报原因，我们会尽快处理
-              </p>
-              <form onSubmit={handleReportSubmit}>
-                <textarea
-                  value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
-                  placeholder="请输入举报原因..."
-                  className="w-full h-32 p-3 border border-gray-300 dark:border-gray-600 rounded-lg resize-none bg-transparent text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-                <div className="flex gap-3 mt-4">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    type="button"
-                    onClick={() => setShowReportModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    取消
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    type="submit"
-                    disabled={submittingReport || !reportReason.trim()}
-                    className="flex-1 px-4 py-2 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {submittingReport ? (
-                      <>
-                        <i className="fas fa-spinner fa-spin" />
-                        提交中...
-                      </>
-                    ) : (
-                      '提交举报'
-                    )}
-                  </motion.button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
       </div>
     </motion.div>
   );
