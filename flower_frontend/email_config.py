@@ -25,13 +25,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger('EmailSender')
 
+# 导入配置管理
+from config import config
+
 # 邮箱配置（支持环境变量和配置文件）
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.163.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 25))
-EMAIL_FROM = os.environ.get('EMAIL_FROM', 'your_email@163.com')
-EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', 'your_email_password')
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'False').lower() == 'true'
-EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() == 'true'
+EMAIL_HOST = config.SMTP_SERVER
+EMAIL_PORT = config.SMTP_PORT
+EMAIL_FROM = config.SMTP_USER
+EMAIL_PASSWORD = config.SMTP_PASSWORD
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
 
 # 验证链接基础URL
 VERIFY_URL_BASE = os.environ.get('VERIFY_URL_BASE', 'http://localhost:5000/api/verify-email')

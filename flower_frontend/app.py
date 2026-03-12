@@ -41,6 +41,9 @@ from dotenv import load_dotenv
 # 加载环境变量
 load_dotenv()
 
+# 导入配置管理
+from config import config
+
 # 导入邮箱验证功能
 from email_config import generate_verification_token, send_verification_email, verify_token, mark_token_as_used
 
@@ -53,6 +56,7 @@ from api_response import (
     success_response, error_response, ErrorCode,
     validate_params, handle_exception, get_pagination_params, format_pagination_response
 )
+from database import get_db_connection, close_db_connection
 from security import (
     record_login_failure, 
     record_login_success, 
@@ -132,7 +136,7 @@ import time # 用于处理时间相关操作
 app = Flask(__name__)
 CORS(app, 
     supports_credentials=True,
-    origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001'],
+    origins=config.CORS_ORIGINS,
     allow_headers=['Content-Type', 'Authorization'],
     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 )  # 启用CORS以允许前端访问，并支持会话cookie
@@ -145,7 +149,7 @@ app.register_blueprint(swaggerui_blueprint, url_prefix='/api/docs')
 save_swagger_json()
 
 # 设置密钥用于JWT认证
-app.secret_key = secrets.token_hex(16)
+app.secret_key = config.JWT_SECRET_KEY or secrets.token_hex(16)
 
 # 设置JWT Secret Key
 from jwt_manager import set_secret_key

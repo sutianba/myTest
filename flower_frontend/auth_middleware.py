@@ -12,10 +12,12 @@ logger = logging.getLogger(__name__)
 
 # ==================== JWT配置 ====================
 
-SECRET_KEY = "your-secret-key-here"  # 从环境变量读取
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+from config import config
+
+SECRET_KEY = config.JWT_SECRET_KEY
+ALGORITHM = config.JWT_ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+REFRESH_TOKEN_EXPIRE_DAYS = config.JWT_REFRESH_TOKEN_EXPIRE_DAYS
 
 # ==================== JWT工具函数 ====================
 
