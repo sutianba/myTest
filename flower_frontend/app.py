@@ -48,6 +48,11 @@ from email_config import generate_verification_token, send_verification_email, v
 from password_hash import hash_password, verify_password
 
 # 导入安全防护功能
+# 导入API统一响应格式
+from api_response import (
+    success_response, error_response, ErrorCode,
+    validate_params, handle_exception, get_pagination_params, format_pagination_response
+)
 from security import (
     record_login_failure, 
     record_login_success, 
@@ -132,6 +137,13 @@ CORS(app,
     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 )  # 启用CORS以允许前端访问，并支持会话cookie
 
+# 注册Swagger UI
+from swagger_config import swaggerui_blueprint, save_swagger_json
+app.register_blueprint(swaggerui_blueprint, url_prefix='/api/docs')
+
+# 生成Swagger JSON文档
+save_swagger_json()
+
 # 设置密钥用于JWT认证
 app.secret_key = secrets.token_hex(16)
 
@@ -196,11 +208,11 @@ def register():
 
         if not username or not password:
             logger.log_register(0, username or '', email or '', False, ip_address, '缺少必填字段')
-            return jsonify({'success': False, 'error': '用户名和密码不能为空'})
+            return error_response(ErrorCode.PARAMETER_ERROR, '用户名和密码不能为空')
         
         if len(password) < 6:
             logger.log_register(0, username, email, False, ip_address, '密码长度不足')
-            return jsonify({'success': False, 'error': '密码长度不能少于6位'})
+            return error_response(ErrorCode.PARAMETER_ERROR, '密码长度不能少于6位')
 
         # 检查用户名是否已存在
         connection = get_db_connection()
@@ -218,7 +230,7 @@ def register():
             cursor.close()
             connection.close()
             logger.log_register(0, username, email, False, ip_address, '用户名或邮箱已存在')
-            return jsonify({'success': False, 'error': '用户名或邮箱已存在'})
+            return error_response(ErrorCode.USER_ALREADY_EXISTS, '用户名或邮箱已存在')
         
         # 密码哈希处理
         password_hash = hash_password(password)
@@ -226,12 +238,12 @@ def register():
             cursor.close()
             connection.close()
             logger.log_register(0, username, email, False, ip_address, '密码加密失败')
-            return jsonify({'success': False, 'error': '密码加密失败'})
+            return error_response(ErrorCode.INTERNAL_SERVER_ERROR, '密码加密失败')
         
         # 创建待验证用户记录
         insert_query = """
-            INSERT INTO users (username, email, password_hash, status) 
-            VALUES (%s, %s, %s, 'unverified')
+            INSERT INTO users (username, email, password, is_verified) 
+            VALUES (%s, %s, %s, 0)
         """
         cursor.execute(insert_query, (username, email, password_hash))
         user_id = cursor.lastrowid
@@ -249,32 +261,27 @@ def register():
             
             if result['success']:
                 logger.log_register(user_id, username, email, True, ip_address)
-                return jsonify({
-                    'success': True, 
-                    'message': '注册成功！请前往邮箱完成验证',
-                    'email': email
-                })
+                return success_response({
+                    'email': email,
+                    'user_id': user_id
+                }, '注册成功！请前往邮箱完成验证')
             else:
                 logger.log_register(user_id, username, email, False, ip_address, '邮件发送失败')
-                return jsonify({
-                    'success': False, 
-                    'error': result.get('error', '注册成功但邮件发送失败，请重试')
-                })
+                return error_response(ErrorCode.EXTERNAL_SERVICE_ERROR, result.get('error', '注册成功但邮件发送失败，请重试'))
         else:
             # 没有提供邮箱，直接注册成功
             logger.log_register(user_id, username, email, True, ip_address)
-            return jsonify({
-                'success': True, 
-                'message': '注册成功！',
-                'email': email
-            })
+            return success_response({
+                'email': email,
+                'user_id': user_id
+            }, '注册成功！')
             
     except Exception as e:
         logger.log_error(e, {'endpoint': '/api/register', 'ip': ip_address})
         print(f"注册过程中发生错误: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': '注册失败，请稍后重试'})
+        return handle_exception(e)
 
 @app.route('/api/verify-email', methods=['GET'])
 def verify_email():

@@ -1,73 +1,253 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-"""
-JWT认证中间件
-统一使用JWT作为认证机制，逐步移除Session依赖
-"""
+"""鉴权中间件"""
 
 from functools import wraps
-from flask import request, jsonify
-from jwt_manager import get_current_user_from_token
+from flask import request, jsonify, g
+import jwt
+from datetime import datetime
+import logging
 
-def jwt_required(f):
-    """
-    JWT认证装饰器
-    替代原来的 @login_required
-    """
+logger = logging.getLogger(__name__)
+
+# ==================== JWT配置 ====================
+
+SECRET_KEY = "your-secret-key-here"  # 从环境变量读取
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+# ==================== JWT工具函数 ====================
+
+def generate_access_token(user_id: int, username: str, role: str = 'user') -> str:
+    """生成访问令牌"""
+    payload = {
+        'user_id': user_id,
+        'username': username,
+        'role': role,
+        'type': 'access',
+        'exp': datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        'iat': datetime.utcnow()
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def generate_refresh_token(user_id: int, username: str) -> str:
+    """生成刷新令牌"""
+    payload = {
+        'user_id': user_id,
+        'username': username,
+        'type': 'refresh',
+        'exp': datetime.utcnow() + datetime.timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        'iat': datetime.utcnow()
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def decode_token(token: str) -> dict:
+    """解码令牌"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return {
+            'valid': True,
+            'payload': payload
+        }
+    except jwt.ExpiredSignatureError:
+        return {
+            'valid': False,
+            'error': 'token_expired',
+            'message': '令牌已过期'
+        }
+    except jwt.InvalidTokenError as e:
+        return {
+            'valid': False,
+            'error': 'token_invalid',
+            'message': f'令牌无效: {str(e)}'
+        }
+
+def verify_token(token: str) -> tuple[bool, dict]:
+    """验证令牌"""
+    result = decode_token(token)
+    if not result['valid']:
+        return False, {'error': result['error'], 'message': result['message']}
+    
+    payload = result['payload']
+    
+    # 检查令牌类型
+    if payload.get('type') != 'access':
+        return False, {'error': 'token_type_error', 'message': '令牌类型错误'}
+    
+    return True, payload
+
+# ==================== 鉴权装饰器 ====================
+
+def auth_required(f):
+    """需要认证的装饰器"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # 从请求头获取token
+        auth_header = request.headers.get('Authorization')
+        
+        if not auth_header:
+            return jsonify({
+                'code': 2001,
+                'message': '未授权，缺少认证信息',
+                'data': None,
+                'timestamp': datetime.now().isoformat()
+            }), 401
+        
+        # 提取Bearer token
         try:
-            # 获取Token
-            auth_header = request.headers.get('Authorization')
-            if not auth_header or not auth_header.startswith('Bearer '):
-                return jsonify({'success': False, 'error': '未提供认证Token'}), 401
-            
-            token = auth_header.split(' ')[1]
-            
-            # 验证Token
-            current_user = get_current_user_from_token(token)
-            if not current_user:
-                return jsonify({'success': False, 'error': 'Token无效或已过期'}), 401
-            
-            # 将用户信息添加到request对象，方便后续使用
-            request.current_user = current_user
-            
-            return f(*args, **kwargs)
-        except Exception as e:
-            print(f"JWT认证过程中发生错误: {type(e).__name__}: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({'success': False, 'error': '认证失败'}), 401
+            token = auth_header.split(' ')[1] if auth_header.startswith('Bearer ') else auth_header
+        except IndexError:
+            return jsonify({
+                'code': 2001,
+                'message': '未授权，认证格式错误',
+                'data': None,
+                'timestamp': datetime.now().isoformat()
+            }), 401
+        
+        # 验证token
+        is_valid, result = verify_token(token)
+        if not is_valid:
+            error_code = 2002 if result.get('error') == 'token_expired' else 2003
+            return jsonify({
+                'code': error_code,
+                'message': result.get('message', '令牌无效'),
+                'data': None,
+                'timestamp': datetime.now().isoformat()
+            }), 401
+        
+        # 将用户信息存储到g对象中
+        g.user_id = result.get('user_id')
+        g.username = result.get('username')
+        g.role = result.get('role', 'user')
+        
+        return f(*args, **kwargs)
     
     return decorated_function
 
-def get_current_user():
-    """
-    获取当前用户信息
-    在视图函数中使用: user = get_current_user()
-    """
-    if hasattr(request, 'current_user'):
-        return request.current_user
-    return None
-
-def require_jwt_auth():
-    """
-    强制要求JWT认证
-    用于需要严格JWT认证的场景
-    """
+def role_required(*required_roles):
+    """需要特定角色的装饰器"""
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            auth_header = request.headers.get('Authorization')
-            if not auth_header or not auth_header.startswith('Bearer '):
-                return jsonify({'success': False, 'error': '未提供认证Token'}), 401
+            # 检查是否已认证
+            if not hasattr(g, 'user_id'):
+                return jsonify({
+                    'code': 2001,
+                    'message': '未授权，请先登录',
+                    'data': None,
+                    'timestamp': datetime.now().isoformat()
+                }), 401
             
-            token = auth_header.split(' ')[1]
-            current_user = get_current_user_from_token(token)
-            if not current_user:
-                return jsonify({'success': False, 'error': 'Token无效或已过期'}), 401
+            # 检查角色
+            user_role = g.role if hasattr(g, 'role') else 'user'
+            if user_role not in required_roles:
+                return jsonify({
+                    'code': 2004,
+                    'message': '权限不足',
+                    'data': None,
+                    'timestamp': datetime.now().isoformat()
+                }), 403
             
-            request.current_user = current_user
             return f(*args, **kwargs)
+        
         return decorated_function
     return decorator
+
+def admin_required(f):
+    """需要管理员权限的装饰器"""
+    return role_required('admin')(f)
+
+def optional_auth(f):
+    """可选认证的装饰器"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # 尝试从请求头获取token
+        auth_header = request.headers.get('Authorization')
+        
+        if auth_header:
+            try:
+                token = auth_header.split(' ')[1] if auth_header.startswith('Bearer ') else auth_header
+                is_valid, result = verify_token(token)
+                
+                if is_valid:
+                    g.user_id = result.get('user_id')
+                    g.username = result.get('username')
+                    g.role = result.get('role', 'user')
+                else:
+                    g.user_id = None
+                    g.username = None
+                    g.role = None
+            except Exception as e:
+                logger.warning(f"Token解析失败: {str(e)}")
+                g.user_id = None
+                g.username = None
+                g.role = None
+        else:
+            g.user_id = None
+            g.username = None
+            g.role = None
+        
+        return f(*args, **kwargs)
+    
+    return decorated_function
+
+# ==================== 权限检查函数 ====================
+
+def check_permission(user_role: str, required_role: str) -> bool:
+    """检查用户权限"""
+    # 管理员拥有所有权限
+    if user_role == 'admin':
+        return True
+    
+    # 普通用户只能访问普通用户权限
+    if user_role == 'user' and required_role == 'user':
+        return True
+    
+    return False
+
+def get_current_user() -> dict:
+    """获取当前登录用户信息"""
+    return {
+        'user_id': getattr(g, 'user_id', None),
+        'username': getattr(g, 'username', None),
+        'role': getattr(g, 'role', None)
+    }
+
+def is_authenticated() -> bool:
+    """检查用户是否已认证"""
+    return hasattr(g, 'user_id') and g.user_id is not None
+
+def is_admin() -> bool:
+    """检查用户是否是管理员"""
+    return hasattr(g, 'role') and g.role == 'admin'
+
+# ==================== Token刷新 ====================
+
+def refresh_access_token(refresh_token: str) -> tuple[bool, dict]:
+    """刷新访问令牌"""
+    try:
+        # 解码刷新令牌
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        
+        # 检查令牌类型
+        if payload.get('type') != 'refresh':
+            return False, {'error': 'token_type_error', 'message': '令牌类型错误'}
+        
+        # 生成新的访问令牌
+        user_id = payload.get('user_id')
+        username = payload.get('username')
+        role = payload.get('role', 'user')
+        
+        new_access_token = generate_access_token(user_id, username, role)
+        
+        return True, {
+            'access_token': new_access_token,
+            'token_type': 'Bearer',
+            'expires_in': ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        }
+    
+    except jwt.ExpiredSignatureError:
+        return False, {'error': 'token_expired', 'message': '刷新令牌已过期'}
+    except jwt.InvalidTokenError as e:
+        return False, {'error': 'token_invalid', 'message': f'刷新令牌无效: {str(e)}'}
