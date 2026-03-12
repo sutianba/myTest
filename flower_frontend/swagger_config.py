@@ -2,8 +2,7 @@
 # -*- coding: UTF-8 -*-
 """API文档配置"""
 
-from flask import jsonify
-from flask_swagger_ui import get_swaggerui_blueprint
+from flask import jsonify, Blueprint
 import os
 
 # ==================== Swagger UI配置 ====================
@@ -11,23 +10,28 @@ import os
 SWAGGER_URL = '/api/docs'
 API_URL = '/static/swagger.json'
 
-swaggerui_blueprint = get_swaggerui_blueprint(
-    SWAGGER_URL,
-    API_URL,
-    config={
-        'app_name': "花卉识别与社区系统 API",
-        'dom_id': '#swagger-ui',
-        'defaultModelsExpandDepth': 1,
-        'defaultModelExpandDepth': 1,
-        'docExpansion': 'list',
-        'deepLinking': True,
-        'persistAuthorization': True,
-        'displayRequestDuration': True,
-        'filter': True,
-        'showRequestHeaders': True,
-        'supportedSubmitMethods': ['get', 'post', 'put', 'delete', 'patch']
-    }
-)
+# 暂时注释掉 Swagger UI 导入，因为 flask-swagger-ui 包不存在
+# from flask_swagger_ui import get_swaggerui_blueprint
+# swaggerui_blueprint = get_swaggerui_blueprint(
+#     SWAGGER_URL,
+#     API_URL,
+#     config={
+#         'app_name': "花卉识别与社区系统 API",
+#         'dom_id': '#swagger-ui',
+#         'defaultModelsExpandDepth': 1,
+#         'defaultModelExpandDepth': 1,
+#         'docExpansion': 'list',
+#         'deepLinking': True,
+#         'persistAuthorization': True,
+#         'displayRequestDuration': True,
+#         'filter': True,
+#         'showRequestHeaders': True,
+#         'supportedSubmitMethods': ['get', 'post', 'put', 'delete', 'patch']
+#     }
+# )
+
+# 创建一个空的蓝图，避免导入错误
+swaggerui_blueprint = Blueprint('swagger_ui', __name__)
 
 # ==================== API文档生成 ====================
 
