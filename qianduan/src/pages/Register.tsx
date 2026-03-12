@@ -61,13 +61,13 @@ const Register: React.FC = () => {
       
       const data = await response.json();
       
-      if (data.success) {
+      if (data.code === 200) {
         // 注册成功后跳转到登录页面
-        toast.success('注册成功，请登录！');
+        toast.success(data.message || '注册成功，请登录！');
         navigate('/login');
       } else {
         // 注册失败
-        toast.error(data.error || '注册失败，请稍后重试');
+        toast.error(data.message || '注册失败，请稍后重试');
       }
     } catch (error) {
       console.error('注册错误:', error);
