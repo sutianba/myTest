@@ -14,59 +14,35 @@ import Community from "@/pages/Community";
 import PostDetail from "@/pages/PostDetail";
 import CreatePost from "@/pages/CreatePost";
 import AdminDashboard from "@/pages/AdminDashboard";
+import AlbumManagement from "@/pages/AlbumManagement";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { useState } from "react";
-import { AuthContext } from '@/contexts/authContext';
+import { AuthProvider } from '@/contexts/authContext';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState({
-    id: '1',
-    username: 'admin',
-    email: 'admin@example.com',
-    role: 'admin'
-  });
-
-  const login = (userData: any) => {
-    setIsAuthenticated(true);
-    setCurrentUser(userData);
-  };
-
-  const logout = () => {
-    setIsAuthenticated(false);
-    setCurrentUser({
-      id: '',
-      username: '',
-      email: '',
-      role: 'user'
-    });
-  };
-
   return (
-    <AuthContext.Provider
-      value={{ isAuthenticated, currentUser, login, logout }}
-    >
+    <AuthProvider>
       <ErrorBoundary>
         <Routes>
-          <Route path="/" element={isAuthenticated ? <Home /> : <Login />} />
+          <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/explore" element={<PlantRecognition />} />
-          <Route path="/account" element={isAuthenticated ? <AccountManagement /> : <Login />} />
-          <Route path="/users" element={isAuthenticated ? <UserManagement /> : <Login />} />
-          <Route path="/permissions" element={isAuthenticated ? <PermissionManagement /> : <Login />} />
-          <Route path="/plant/:id" element={isAuthenticated ? <PlantDetail /> : <Login />} />
+          <Route path="/account" element={<AccountManagement />} />
+          <Route path="/users" element={<UserManagement />} />
+          <Route path="/permissions" element={<PermissionManagement />} />
+          <Route path="/plant/:id" element={<PlantDetail />} />
           <Route path="/recognition-result" element={<RecognitionResult />} />
-          <Route path="/history" element={isAuthenticated ? <RecognitionHistory /> : <Login />} />
-          <Route path="/favorites" element={isAuthenticated ? <Favorites /> : <Login />} />
+          <Route path="/history" element={<RecognitionHistory />} />
+          <Route path="/favorites" element={<Favorites />} />
           <Route path="/community" element={<Community />} />
           <Route path="/community/post/:postId" element={<PostDetail />} />
-          <Route path="/community/create" element={isAuthenticated ? <CreatePost /> : <Login />} />
-          <Route path="/admin" element={isAuthenticated && currentUser?.role === 'admin' ? <AdminDashboard /> : <Login />} />
+          <Route path="/community/create" element={<CreatePost />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/albums" element={<AlbumManagement />} />
           {/* 添加访客路线，方便用户直接访问主要功能 */}
           <Route path="/guest" element={<Home />} />
         </Routes>
       </ErrorBoundary>
-    </AuthContext.Provider>
+    </AuthProvider>
   );
 }

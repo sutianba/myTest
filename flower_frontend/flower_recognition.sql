@@ -95,6 +95,66 @@ CREATE TABLE IF NOT EXISTS sync_records (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+-- 创建相册表
+CREATE TABLE IF NOT EXISTS albums (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    cover_image VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 创建相册图片表
+CREATE TABLE IF NOT EXISTS album_photos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    album_id INT,
+    user_id INT,
+    image_path VARCHAR(255) NOT NULL,
+    thumbnail_path VARCHAR(255),
+    filename VARCHAR(255) NOT NULL,
+    plant_name VARCHAR(255),
+    confidence FLOAT,
+    tags JSON,
+    notes TEXT,
+    location VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 创建分类规则表
+CREATE TABLE IF NOT EXISTS classification_rules (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    rule_type ENUM('auto', 'manual') DEFAULT 'auto',
+    parameters JSON,
+    enabled TINYINT DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 创建用户反馈表
+CREATE TABLE IF NOT EXISTS user_feedback (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    photo_id INT,
+    original_plant_name VARCHAR(255),
+    corrected_plant_name VARCHAR(255),
+    confidence FLOAT,
+    feedback TEXT,
+    is_correct TINYINT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (photo_id) REFERENCES album_photos(id) ON DELETE CASCADE
+);
+
 -- 创建用户设置表
 CREATE TABLE IF NOT EXISTS user_settings (
     id INT AUTO_INCREMENT PRIMARY KEY,

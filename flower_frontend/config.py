@@ -44,6 +44,19 @@ class BaseConfig:
     PLANT_RECOGNITION_MODEL = "plant_model.h5"
     PLANT_RECOGNITION_LABELS = "plant_labels.json"
     
+    # 相册配置
+    ALBUM_DIR = os.path.join(BASE_DIR, "albums")
+    THUMBNAIL_DIR = os.path.join(BASE_DIR, "thumbnails")
+    
+    # 分类引擎配置
+    CLASSIFICATION_THRESHOLD = 0.8
+    BATCH_PROCESS_SIZE = 10
+    
+    # 图片处理配置
+    THUMBNAIL_SIZE = (200, 200)
+    MAX_IMAGE_WIDTH = 1920
+    MAX_IMAGE_HEIGHT = 1080
+    
     # 安全配置
     MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
@@ -74,7 +87,7 @@ class BaseConfig:
     @classmethod
     def ensure_directories(cls) -> None:
         """确保必要的目录存在"""
-        for directory in [cls.UPLOAD_DIR, cls.LOG_DIR, cls.MODEL_DIR]:
+        for directory in [cls.UPLOAD_DIR, cls.LOG_DIR, cls.MODEL_DIR, cls.ALBUM_DIR, cls.THUMBNAIL_DIR]:
             if not os.path.exists(directory):
                 os.makedirs(directory)
                 print(f"Created directory: {directory}")

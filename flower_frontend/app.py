@@ -91,6 +91,9 @@ from upload_manager import (
     MAX_FILE_SIZE
 )
 
+# 导入图片处理和分类引擎
+from image_processor import process_image, classify_image, batch_classify
+
 # 导入认证装饰器
 from auth_decorator import require_auth, require_admin, optional_auth
 
@@ -2010,6 +2013,605 @@ def user_settings():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': '操作失败'})
+
+# ==================== 园艺相册自动分类API ====================
+
+@app.route('/api/albums', methods=['GET'])
+@login_required
+def get_albums(current_user):
+    """获取用户相册列表"""
+    try:
+        user_id = current_user['id']
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        
+        # 查询用户的相册
+        query = """
+        SELECT id, name, description, cover_image, created_at, updated_at 
+        FROM albums 
+        WHERE user_id = %s 
+        ORDER BY updated_at DESC
+        """
+        cursor.execute(query, (user_id,))
+        albums = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response(albums, '获取相册列表成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/albums', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/albums', methods=['POST'])
+@login_required
+def create_album(current_user):
+    """创建新相册"""
+    try:
+        user_id = current_user['id']
+        data = request.get_json()
+        name = data.get('name')
+        description = data.get('description', '')
+        
+        if not name:
+            return error_response(ErrorCode.PARAMETER_ERROR, '相册名称不能为空')
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 创建相册
+        insert_query = """
+        INSERT INTO albums (user_id, name, description) 
+        VALUES (%s, %s, %s)
+        """
+        cursor.execute(insert_query, (user_id, name, description))
+        album_id = cursor.lastrowid
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response({'album_id': album_id}, '相册创建成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/albums', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/albums/<int:album_id>', methods=['GET'])
+@login_required
+def get_album(current_user, album_id):
+    """获取相册详情"""
+    try:
+        user_id = current_user['id']
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        
+        # 查询相册信息
+        album_query = """
+        SELECT id, name, description, cover_image, created_at, updated_at 
+        FROM albums 
+        WHERE id = %s AND user_id = %s
+        """
+        cursor.execute(album_query, (album_id, user_id))
+        album = cursor.fetchone()
+        
+        if not album:
+            cursor.close()
+            connection.close()
+            return error_response(ErrorCode.RESOURCE_NOT_FOUND, '相册不存在')
+        
+        # 查询相册中的图片
+        photos_query = """
+        SELECT id, album_id, image_path, thumbnail_path, filename, 
+               plant_name, confidence, tags, created_at, updated_at 
+        FROM album_photos 
+        WHERE album_id = %s 
+        ORDER BY created_at DESC
+        """
+        cursor.execute(photos_query, (album_id,))
+        photos = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        album['photos'] = photos
+        return success_response(album, '获取相册详情成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': f'/api/albums/{album_id}', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/albums/<int:album_id>', methods=['PUT'])
+@login_required
+def update_album(current_user, album_id):
+    """更新相册信息"""
+    try:
+        user_id = current_user['id']
+        data = request.get_json()
+        name = data.get('name')
+        description = data.get('description')
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 检查相册是否存在且属于当前用户
+        check_query = "SELECT id FROM albums WHERE id = %s AND user_id = %s"
+        cursor.execute(check_query, (album_id, user_id))
+        if not cursor.fetchone():
+            cursor.close()
+            connection.close()
+            return error_response(ErrorCode.RESOURCE_NOT_FOUND, '相册不存在')
+        
+        # 更新相册信息
+        update_query = "UPDATE albums SET name = %s, description = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s"
+        cursor.execute(update_query, (name, description, album_id))
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response({}, '相册更新成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': f'/api/albums/{album_id}', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/albums/<int:album_id>', methods=['DELETE'])
+@login_required
+def delete_album(current_user, album_id):
+    """删除相册"""
+    try:
+        user_id = current_user['id']
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 检查相册是否存在且属于当前用户
+        check_query = "SELECT id FROM albums WHERE id = %s AND user_id = %s"
+        cursor.execute(check_query, (album_id, user_id))
+        if not cursor.fetchone():
+            cursor.close()
+            connection.close()
+            return error_response(ErrorCode.RESOURCE_NOT_FOUND, '相册不存在')
+        
+        # 删除相册（级联删除相册中的图片）
+        delete_query = "DELETE FROM albums WHERE id = %s"
+        cursor.execute(delete_query, (album_id,))
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response({}, '相册删除成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': f'/api/albums/{album_id}', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/photos/upload', methods=['POST'])
+@login_required
+def upload_photos(current_user):
+    """上传图片到相册"""
+    try:
+        user_id = current_user['id']
+        album_id = request.form.get('album_id')
+        
+        if not album_id:
+            return error_response(ErrorCode.PARAMETER_ERROR, '相册ID不能为空')
+        
+        # 检查相册是否存在且属于当前用户
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        check_query = "SELECT id FROM albums WHERE id = %s AND user_id = %s"
+        cursor.execute(check_query, (album_id, user_id))
+        if not cursor.fetchone():
+            cursor.close()
+            connection.close()
+            return error_response(ErrorCode.RESOURCE_NOT_FOUND, '相册不存在')
+        
+        # 处理上传的文件
+        if 'files' not in request.files:
+            cursor.close()
+            connection.close()
+            return error_response(ErrorCode.PARAMETER_ERROR, '没有上传文件')
+        
+        files = request.files.getlist('files')
+        uploaded_files = []
+        
+        for file in files:
+            if file and file.filename:
+                # 验证文件
+                if not validate_upload(file):
+                    continue
+                
+                # 保存文件
+                filename = save_upload_file(file)
+                if not filename:
+                    continue
+                
+                # 处理图片
+                image_path = os.path.join(config.UPLOAD_DIR, filename)
+                processed = process_image(image_path, config.UPLOAD_DIR)
+                
+                # 生成缩略图路径
+                thumbnail_path = processed.get('thumbnail', '')
+                if thumbnail_path:
+                    thumbnail_path = os.path.basename(thumbnail_path)
+                
+                # 识别植物
+                classification = classify_image(image_path)
+                plant_name = classification.get('plant_name', '') if classification else ''
+                confidence = classification.get('confidence', 0.0) if classification else 0.0
+                
+                # 保存到数据库
+                insert_query = """
+                INSERT INTO album_photos (album_id, image_path, thumbnail_path, filename, 
+                                         plant_name, confidence, user_id) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(insert_query, (album_id, filename, thumbnail_path, 
+                                             file.filename, plant_name, confidence, user_id))
+                photo_id = cursor.lastrowid
+                
+                uploaded_files.append({
+                    'id': photo_id, 
+                    'filename': file.filename, 
+                    'path': filename,
+                    'plant_name': plant_name,
+                    'confidence': confidence
+                })
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return success_response(uploaded_files, f'成功上传 {len(uploaded_files)} 张图片')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/photos/upload', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/photos/<int:photo_id>', methods=['GET'])
+@login_required
+def get_photo(current_user, photo_id):
+    """获取图片详情"""
+    try:
+        user_id = current_user['id']
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        
+        # 查询图片信息
+        query = """
+        SELECT p.id, p.album_id, p.image_path, p.thumbnail_path, p.filename, 
+               p.plant_name, p.confidence, p.tags, p.notes, p.location, 
+               p.created_at, p.updated_at, a.name as album_name 
+        FROM album_photos p 
+        JOIN albums a ON p.album_id = a.id 
+        WHERE p.id = %s AND a.user_id = %s
+        """
+        cursor.execute(query, (photo_id, user_id))
+        photo = cursor.fetchone()
+        
+        if not photo:
+            cursor.close()
+            connection.close()
+            return error_response(ErrorCode.RESOURCE_NOT_FOUND, '图片不存在')
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response(photo, '获取图片详情成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': f'/api/photos/{photo_id}', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/photos/<int:photo_id>', methods=['PUT'])
+@login_required
+def update_photo(current_user, photo_id):
+    """更新图片信息"""
+    try:
+        user_id = current_user['id']
+        data = request.get_json()
+        plant_name = data.get('plant_name')
+        tags = data.get('tags')
+        notes = data.get('notes')
+        location = data.get('location')
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 检查图片是否存在且属于当前用户
+        check_query = """
+        SELECT p.id FROM album_photos p 
+        JOIN albums a ON p.album_id = a.id 
+        WHERE p.id = %s AND a.user_id = %s
+        """
+        cursor.execute(check_query, (photo_id, user_id))
+        if not cursor.fetchone():
+            cursor.close()
+            connection.close()
+            return error_response(ErrorCode.RESOURCE_NOT_FOUND, '图片不存在')
+        
+        # 更新图片信息
+        update_query = """
+        UPDATE album_photos 
+        SET plant_name = %s, tags = %s, notes = %s, location = %s, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = %s
+        """
+        cursor.execute(update_query, (plant_name, tags, notes, location, photo_id))
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response({}, '图片信息更新成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': f'/api/photos/{photo_id}', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/photos/<int:photo_id>', methods=['DELETE'])
+@login_required
+def delete_photo(current_user, photo_id):
+    """删除图片"""
+    try:
+        user_id = current_user['id']
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 检查图片是否存在且属于当前用户
+        check_query = """
+        SELECT p.id FROM album_photos p 
+        JOIN albums a ON p.album_id = a.id 
+        WHERE p.id = %s AND a.user_id = %s
+        """
+        cursor.execute(check_query, (photo_id, user_id))
+        if not cursor.fetchone():
+            cursor.close()
+            connection.close()
+            return error_response(ErrorCode.RESOURCE_NOT_FOUND, '图片不存在')
+        
+        # 删除图片
+        delete_query = "DELETE FROM album_photos WHERE id = %s"
+        cursor.execute(delete_query, (photo_id,))
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response({}, '图片删除成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': f'/api/photos/{photo_id}', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/classify', methods=['POST'])
+@login_required
+def classify_photos(current_user):
+    """批量分类图片"""
+    try:
+        user_id = current_user['id']
+        data = request.get_json()
+        photo_ids = data.get('photo_ids', [])
+        
+        if not photo_ids:
+            return error_response(ErrorCode.PARAMETER_ERROR, '请选择要分类的图片')
+        
+        # 查询图片信息
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        
+        # 查询图片路径
+        query = """
+        SELECT id, image_path 
+        FROM album_photos 
+        WHERE id IN (%s) AND user_id = %s
+        """
+        placeholders = ','.join(['%s'] * len(photo_ids))
+        query = query % (placeholders, '%s')
+        cursor.execute(query, photo_ids + [user_id])
+        photos = cursor.fetchall()
+        
+        if not photos:
+            cursor.close()
+            connection.close()
+            return error_response(ErrorCode.RESOURCE_NOT_FOUND, '未找到要分类的图片')
+        
+        # 准备图片路径
+        image_paths = []
+        photo_map = {}
+        for photo in photos:
+            image_path = os.path.join(config.UPLOAD_DIR, photo['image_path'])
+            image_paths.append(image_path)
+            photo_map[image_path] = photo['id']
+        
+        # 批量分类图片
+        results = batch_classify(image_paths)
+        
+        # 更新数据库
+        updated_count = 0
+        for result in results:
+            image_path = result['image_path']
+            photo_id = photo_map.get(image_path)
+            if photo_id:
+                classification = result['result']
+                plant_name = classification.get('plant_name', '')
+                confidence = classification.get('confidence', 0.0)
+                
+                # 更新图片信息
+                update_query = """
+                UPDATE album_photos 
+                SET plant_name = %s, confidence = %s, updated_at = CURRENT_TIMESTAMP 
+                WHERE id = %s
+                """
+                cursor.execute(update_query, (plant_name, confidence, photo_id))
+                updated_count += 1
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return success_response({}, f'成功分类 {updated_count} 张图片')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/classify', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/tags', methods=['GET'])
+@login_required
+def get_tags(current_user):
+    """获取用户标签列表"""
+    try:
+        user_id = current_user['id']
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        
+        # 查询用户的标签
+        query = """
+        SELECT id, name, color, created_at 
+        FROM tags 
+        WHERE user_id = %s 
+        ORDER BY name
+        """
+        cursor.execute(query, (user_id,))
+        tags = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response(tags, '获取标签列表成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/tags', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/tags', methods=['POST'])
+@login_required
+def create_tag(current_user):
+    """创建新标签"""
+    try:
+        user_id = current_user['id']
+        data = request.get_json()
+        name = data.get('name')
+        color = data.get('color', '#4CAF50')
+        
+        if not name:
+            return error_response(ErrorCode.PARAMETER_ERROR, '标签名称不能为空')
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 创建标签
+        insert_query = """
+        INSERT INTO tags (user_id, name, color) 
+        VALUES (%s, %s, %s)
+        """
+        cursor.execute(insert_query, (user_id, name, color))
+        tag_id = cursor.lastrowid
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response({'tag_id': tag_id}, '标签创建成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/tags', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/feedback', methods=['POST'])
+@login_required
+def submit_feedback_general(current_user):
+    """提交用户反馈"""
+    try:
+        user_id = current_user['id']
+        data = request.get_json()
+        photo_id = data.get('photo_id')
+        original_plant_name = data.get('original_plant_name')
+        corrected_plant_name = data.get('corrected_plant_name')
+        confidence = data.get('confidence')
+        feedback = data.get('feedback')
+        is_correct = data.get('is_correct', 0)
+        
+        if not photo_id:
+            return error_response(ErrorCode.PARAMETER_ERROR, '图片ID不能为空')
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 检查图片是否存在且属于当前用户
+        check_query = """
+        SELECT p.id FROM album_photos p 
+        JOIN albums a ON p.album_id = a.id 
+        WHERE p.id = %s AND a.user_id = %s
+        """
+        cursor.execute(check_query, (photo_id, user_id))
+        if not cursor.fetchone():
+            cursor.close()
+            connection.close()
+            return error_response(ErrorCode.RESOURCE_NOT_FOUND, '图片不存在')
+        
+        # 提交反馈
+        insert_query = """
+        INSERT INTO user_feedback (user_id, photo_id, original_plant_name, 
+                                 corrected_plant_name, confidence, feedback, is_correct) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(insert_query, (user_id, photo_id, original_plant_name, 
+                                   corrected_plant_name, confidence, feedback, is_correct))
+        feedback_id = cursor.lastrowid
+        connection.commit()
+        
+        # 如果用户认为识别错误，更新图片的植物名称
+        if not is_correct and corrected_plant_name:
+            update_query = """
+            UPDATE album_photos 
+            SET plant_name = %s, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = %s
+            """
+            cursor.execute(update_query, (corrected_plant_name, photo_id))
+            connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response({'feedback_id': feedback_id}, '反馈提交成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/feedback', 'user_id': current_user['id']})
+        return handle_exception(e)
+
+@app.route('/api/feedback', methods=['GET'])
+@login_required
+def get_feedback(current_user):
+    """获取用户反馈历史"""
+    try:
+        user_id = current_user['id']
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        
+        # 查询用户的反馈历史
+        query = """
+        SELECT f.id, f.photo_id, f.original_plant_name, f.corrected_plant_name, 
+               f.confidence, f.feedback, f.is_correct, f.created_at, 
+               p.filename, p.image_path 
+        FROM user_feedback f 
+        JOIN album_photos p ON f.photo_id = p.id 
+        WHERE f.user_id = %s 
+        ORDER BY f.created_at DESC
+        """
+        cursor.execute(query, (user_id,))
+        feedbacks = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        return success_response(feedbacks, '获取反馈历史成功')
+        
+    except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/feedback', 'user_id': current_user['id']})
+        return handle_exception(e)
 
 # ==================== 静态文件服务 ====================
 

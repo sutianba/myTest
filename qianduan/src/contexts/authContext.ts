@@ -1,4 +1,4 @@
-import { createContext } from "react";
+import { createContext, useState, useEffect, ReactNode } from "react";
 
 interface User {
   id: string;
@@ -10,7 +10,8 @@ interface User {
 interface AuthContextType {
   isAuthenticated: boolean;
   currentUser: User;
-  login: (userData: User) => void;
+  token: string | null;
+  login: (userData: User, token: string) => void;
   logout: () => void;
 }
 
@@ -22,6 +23,68 @@ export const AuthContext = createContext<AuthContextType>({
     email: '',
     role: 'user'
   },
+  token: null,
   login: () => {},
   logout: () => {},
 });
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User>({
+    id: '',
+    username: '',
+    email: '',
+    role: 'user'
+  });
+  const [token, setToken] = useState<string | null>(null);
+
+  // 从本地存储加载认证状态
+  useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+
+    if (storedToken && storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        setIsAuthenticated(true);
+        setCurrentUser(userData);
+        setToken(storedToken);
+      } catch (error) {
+        console.error('Failed to parse stored user data:', error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    }
+  }, []);
+
+  const login = (userData: User, token: string) => {
+    setIsAuthenticated(true);
+    setCurrentUser(userData);
+    setToken(token);
+    
+    // 保存到本地存储
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser({
+      id: '',
+      username: '',
+      email: '',
+      role: 'user'
+    });
+    setToken(null);
+    
+    // 从本地存储移除
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  };
+
+  return (
+    <AuthContext.Provider value={{ isAuthenticated, currentUser, token, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};

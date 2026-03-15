@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { motion } from 'framer-motion';
 import ImageUpload from '../components/ImageUpload';
 import PlantRecognition, { PlantClassificationRules } from './PlantRecognition';
 import { useTheme } from '../hooks/useTheme';
 import { toast } from 'sonner';
 import { AuthContext } from '../contexts/authContext';
+import { useNavigate } from 'react-router-dom';
 
 type TabType = 'upload' | 'explore';
 
 const Home: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
-  const { isAuthenticated, logout, currentUser } = React.useContext(AuthContext);
+  const { isAuthenticated, logout, currentUser } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('upload');
 
   const tabs = [
@@ -30,6 +32,7 @@ const Home: React.FC = () => {
   const extraFeatures = [
     { id: 'favorites', label: '我的收藏', icon: 'fas fa-heart', description: '查看您收藏的植物', route: '/favorites' },
     { id: 'history', label: '识别历史', icon: 'fas fa-history', description: '查看您的识别记录', route: '/history' },
+    { id: 'albums', label: '相册管理', icon: 'fas fa-images', description: '管理您的植物相册', route: '/albums' },
     { id: 'community', label: '花卉社区', icon: 'fas fa-comments', description: '分享您的花卉识别经验', route: '/community' },
     { id: 'encyclopedia', label: '植物百科', icon: 'fas fa-book', description: '浏览植物知识库', route: '/explore' },
     { id: 'care-guide', label: '养护建议', icon: 'fas fa-trowel', description: '获取植物养护指南', route: '/other' }
@@ -38,7 +41,7 @@ const Home: React.FC = () => {
   // 处理额外功能点击
   const handleFeatureClick = (feature: { id: string, label: string, route?: string }) => {
     if (feature.route) {
-      window.location.href = feature.route;
+      navigate(feature.route);
     } else {
       toast.info(`${feature.label}功能即将上线，敬请期待！`);
     }
@@ -81,7 +84,7 @@ const Home: React.FC = () => {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => {
                   logout();
-                  window.location.href = '/login';
+                  navigate('/login');
                 }}
                 className="px-4 py-2 bg-red-500 text-white rounded-full text-sm font-medium hover:bg-red-600 transition-colors flex items-center"
               >

@@ -15,11 +15,22 @@ DB_NAME = os.environ.get('DB_NAME', 'flower_recognition')
 # SQL文件路径
 SCHEMA_SQL = 'flower_recognition.sql'
 
-def get_db_connection():
-    """获取MySQL数据库连接"""
-    import pymysql
+# 数据库连接池
+import pymysql
+try:
+    from DBUtils.PooledDB import PooledDB
     
-    conn = pymysql.connect(
+    # 创建数据库连接池
+    db_pool = PooledDB(
+        creator=pymysql,
+        maxconnections=10,
+        mincached=2,
+        maxcached=5,
+        maxshared=3,
+        blocking=True,
+        maxusage=None,
+        setsession=[],
+        ping=0,
         host=DB_HOST,
         port=DB_PORT,
         user=DB_USER,
@@ -28,7 +39,27 @@ def get_db_connection():
         charset='utf8mb4',
         cursorclass=pymysql.cursors.DictCursor
     )
-    return conn
+    
+    def get_db_connection():
+        """获取MySQL数据库连接"""
+        return db_pool.connection()
+        
+except ImportError:
+    # 如果没有DBUtils库，使用普通连接
+    def get_db_connection():
+        """获取MySQL数据库连接"""
+        import pymysql
+        
+        conn = pymysql.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        return conn
 
 @contextmanager
 def get_db_cursor():
@@ -53,6 +84,7 @@ def get_db_cursor():
     finally:
         if cursor:
             cursor.close()
+        # 注意：当使用连接池时，conn.close()会将连接返回给池，而不是真正关闭
         if conn:
             conn.close()
 
