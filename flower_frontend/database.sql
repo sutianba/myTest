@@ -146,3 +146,90 @@ SELECT '初始角色：admin, user' AS info;
 SELECT '初始权限：view_results, upload_images, manage_users, manage_roles, view_community, create_posts, comment_posts, like_posts, follow_users' AS info;
 SELECT 'admin角色已分配所有权限' AS info;
 SELECT 'user角色已分配基本权限' AS info;
+
+-- ========================================
+-- 超级管理员端相关表
+-- ========================================
+
+-- 系统日志表
+CREATE TABLE IF NOT EXISTS system_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    log_level TEXT NOT NULL,
+    module TEXT NOT NULL,
+    message TEXT NOT NULL,
+    user_id INTEGER,
+    username TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at INTEGER NOT NULL
+);
+
+-- 访问流量统计表
+CREATE TABLE IF NOT EXISTS traffic_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    hour INTEGER,
+    endpoint TEXT NOT NULL,
+    method TEXT NOT NULL,
+    ip_address TEXT,
+    user_id INTEGER,
+    response_status INTEGER,
+    response_time INTEGER,
+    created_at INTEGER NOT NULL
+);
+
+-- 访问统计汇总表（按日期汇总）
+CREATE TABLE IF NOT EXISTS daily_traffic_summary (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL UNIQUE,
+    total_requests INTEGER DEFAULT 0,
+    unique_visitors INTEGER DEFAULT 0,
+    avg_response_time REAL DEFAULT 0,
+    error_count INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- 服务器运行状态表
+CREATE TABLE IF NOT EXISTS server_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    metric_name TEXT NOT NULL,
+    metric_value REAL NOT NULL,
+    unit TEXT,
+    status TEXT DEFAULT 'normal',
+    created_at INTEGER NOT NULL
+);
+
+-- 管理员操作记录表
+CREATE TABLE IF NOT EXISTS admin_operations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id INTEGER NOT NULL,
+    admin_username TEXT NOT NULL,
+    operation_type TEXT NOT NULL,
+    target_type TEXT,
+    target_id INTEGER,
+    description TEXT,
+    ip_address TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (admin_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- 插入超级管理员角色
+INSERT OR IGNORE INTO roles (name, description) VALUES
+('super_admin', '超级管理员');
+
+-- 插入超级管理员权限
+INSERT OR IGNORE INTO permissions (name, description) VALUES
+('manage_admins', '管理管理员'),
+('view_system_logs', '查看系统日志'),
+('view_traffic_stats', '查看流量统计'),
+('monitor_server', '监控服务器状态'),
+('system_settings', '系统设置');
+
+-- 为super_admin角色分配所有权限（包括新增权限）
+INSERT OR IGNORE INTO role_permissions (role_id, permission_id) 
+SELECT (SELECT id FROM roles WHERE name = 'super_admin'), id FROM permissions;
+
+-- 添加超级管理员专属权限
+INSERT OR IGNORE INTO permissions (name, description) VALUES
+('super_admin', '超级管理员所有权限');

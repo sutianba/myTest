@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>超级管理员控制台</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 250px;
+            background: #2c3e50;
+            color: white;
+            padding: 20px 0;
+        }
+
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #34495e;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+        }
+
+        .sidebar-menu li {
+            margin: 5px 0;
+        }
+
+        .sidebar-menu a {
+            display: block;
+            padding: 12px 20px;
+            color: #ecf0f1;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-menu a:hover {
+            background: #34495e;
+            padding-left: 25px;
+        }
+
+        .sidebar-menu a.active {
+            background: #3498db;
+            border-left: 4px solid #2980b9;
+        }
+
+        /* 主内容区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部导航 */
+        .top-nav {
+            background: white;
+            padding: 15px 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .top-nav h1 {
+            font-size: 1.5em;
+            color: #34495e;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .user-info span {
+            margin-right: 15px;
+            color: #34495e;
+        }
+
+        .user-info button {
+            padding: 6px 12px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* 内容区域 */
+        .content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .content-header {
+            margin-bottom: 30px;
+        }
+
+        .content-header h2 {
+            color: #34495e;
+            margin-bottom: 10px;
+        }
+
+        .content-header p {
+            color: #7f8c8d;
+        }
+
+        /* 卡片样式 */
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .card h3 {
+            color: #34495e;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        /* 表格样式 */
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #34495e;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        /* 表单样式 */
+        .form-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #34495e;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-group button {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        /* 错误提示 */
+        .error {
+            background: #ffeaa7;
+            color: #d63031;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 200px;
+            }
+
+            .cards {
+                grid-template-columns: 1fr;
+            }
+
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>超级管理员</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="#dashboard" class="active" data-section="dashboard">仪表盘</a></li>
+                <li><a href="#system-logs" data-section="system-logs">系统日志</a></li>
+                <li><a href="#traffic-stats" data-section="traffic-stats">流量统计</a></li>
+                <li><a href="#server-status" data-section="server-status">服务器状态</a></li>
+                <li><a href="#admin-management" data-section="admin-management">管理员管理</a></li>
+                <li><a href="#operations" data-section="operations">操作记录</a></li>
+            </ul>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 顶部导航 -->
+            <div class="top-nav">
+                <h1>花卉识别系统管理控制台</h1>
+                <div class="user-info">
+                    <span id="username">管理员</span>
+                    <button onclick="logout()">退出登录</button>
+                </div>
+            </div>
+
+            <!-- 内容区域 -->
+            <div class="content">
+                <!-- 仪表盘 -->
+                <div id="dashboard" class="section">
+                    <div class="content-header">
+                        <h2>系统概览</h2>
+                        <p>实时监控系统运行状态</p>
+                    </div>
+                    
+                    <div class="cards" id="summary-cards">
+                        <div class="card">
+                            <h3>总用户数</h3>
+                            <div class="value" id="total-users">0</div>
+                        </div>
+                        <div class="card">
+                            <h3>今日请求数</h3>
+                            <div class="value" id="today-requests">0</div>
+                        </div>
+                        <div class="card">
+                            <h3>今日访客数</h3>
+                            <div class="value" id="today-visitors">0</div>
+                        </div>
+                        <div class="card">
+                            <h3>识别总数</h3>
+                            <div class="value" id="total-recognitions">0</div>
+                        </div>
+                        <div class="card">
+                            <h3>今日日志数</h3>
+                            <div class="value" id="today-logs">0</div>
+                        </div>
+                        <div class="card">
+                            <h3>总帖子数</h3>
+                            <div class="value" id="total-posts">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统日志 -->
+                <div id="system-logs" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>系统日志</h2>
+                        <p>查看系统运行日志</p>
+                    </div>
+                    
+                    <div class="form-container" style="margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                            <div class="form-group">
+                                <label>日志级别</label>
+                                <select id="log-level">
+                                    <option value="">全部</option>
+                                    <option value="INFO">INFO</option>
+                                    <option value="ERROR">ERROR</option>
+                                    <option value="WARNING">WARNING</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>模块</label>
+                                <input type="text" id="log-module" placeholder="模块名称">
+                            </div>
+                            <div class="form-group">
+                                <label>记录数</label>
+                                <select id="log-limit">
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                    <option value="200">200</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="align-self: flex-end;">
+                                <button onclick="loadSystemLogs()">查询</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="logs-table">
+                            <thead>
+                                <tr>
+                                    <th>时间</th>
+                                    <th>级别</th>
+                                    <th>模块</th>
+                                    <th>消息</th>
+                                    <th>用户</th>
+                                    <th>IP地址</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-body">
+                                <tr><td colspan="6" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 流量统计 -->
+                <div id="traffic-stats" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>流量统计</h2>
+                        <p>分析系统访问流量</p>
+                    </div>
+                    
+                    <div class="form-container" style="margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                            <div class="form-group">
+                                <label>开始日期</label>
+                                <input type="date" id="start-date">
+                            </div>
+                            <div class="form-group">
+                                <label>结束日期</label>
+                                <input type="date" id="end-date">
+                            </div>
+                            <div class="form-group" style="align-self: flex-end;">
+                                <button onclick="loadTrafficStats()">查询</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container" style="margin-bottom: 30px;">
+                        <table id="traffic-table">
+                            <thead>
+                                <tr>
+                                    <th>日期</th>
+                                    <th>请求数</th>
+                                    <th>独立访客</th>
+                                    <th>平均响应时间(ms)</th>
+                                    <th>错误数</th>
+                                </tr>
+                            </thead>
+                            <tbody id="traffic-body">
+                                <tr><td colspan="5" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <h3>热门端点</h3>
+                    <div class="table-container">
+                        <table id="endpoints-table">
+                            <thead>
+                                <tr>
+                                    <th>端点</th>
+                                    <th>方法</th>
+                                    <th>请求数</th>
+                                    <th>平均响应时间(ms)</th>
+                                    <th>错误数</th>
+                                </tr>
+                            </thead>
+                            <tbody id="endpoints-body">
+                                <tr><td colspan="5" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 服务器状态 -->
+                <div id="server-status" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>服务器状态</h2>
+                        <p>监控服务器运行指标</p>
+                    </div>
+                    
+                    <div class="cards" id="server-metrics">
+                        <div class="card">
+                            <h3>CPU使用率</h3>
+                            <div class="value" id="cpu-usage">0%</div>
+                        </div>
+                        <div class="card">
+                            <h3>内存使用率</h3>
+                            <div class="value" id="memory-usage">0%</div>
+                        </div>
+                        <div class="card">
+                            <h3>磁盘使用率</h3>
+                            <div class="value" id="disk-usage">0%</div>
+                        </div>
+                        <div class="card">
+                            <h3>网络流量</h3>
+                            <div class="value" id="network-traffic">0 MB</div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container" style="margin-top: 30px;">
+                        <table id="server-status-table">
+                            <thead>
+                                <tr>
+                                    <th>指标名称</th>
+                                    <th>值</th>
+                                    <th>单位</th>
+                                    <th>状态</th>
+                                    <th>时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="server-status-body">
+                                <tr><td colspan="5" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 管理员管理 -->
+                <div id="admin-management" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>管理员管理</h2>
+                        <p>管理系统管理员账户</p>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="admins-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户名</th>
+                                    <th>邮箱</th>
+                                    <th>角色</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admins-body">
+                                <tr><td colspan="6" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 操作记录 -->
+                <div id="operations" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>操作记录</h2>
+                        <p>查看管理员操作历史</p>
+                    </div>
+                    
+                    <div class="form-container" style="margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                            <div class="form-group">
+                                <label>操作类型</label>
+                                <select id="operation-type">
+                                    <option value="">全部</option>
+                                    <option value="update_role">更新角色</option>
+                                    <option value="delete_user">删除用户</option>
+                                    <option value="system_settings">系统设置</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>记录数</label>
+                                <select id="operation-limit">
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                    <option value="200">200</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="align-self: flex-end;">
+                                <button onclick="loadAdminOperations()">查询</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="operations-table">
+                            <thead>
+                                <tr>
+                                    <th>时间</th>
+                                    <th>管理员</th>
+                                    <th>操作类型</th>
+                                    <th>目标类型</th>
+                                    <th>描述</th>
+                                    <th>IP地址</th>
+                                </tr>
+                            </thead>
+                            <tbody id="operations-body">
+                                <tr><td colspan="6" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 角色更新对话框 -->
+    <div id="role-dialog" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; width: 400px;">
+            <h3>更新用户角色</h3>
+            <div class="form-group">
+                <label>用户</label>
+                <input type="text" id="user-info" readonly>
+            </div>
+            <div class="form-group">
+                <label>新角色</label>
+                <select id="new-role">
+                    <option value="user">普通用户</option>
+                    <option value="admin">管理员</option>
+                    <option value="super_admin">超级管理员</option>
+                </select>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button onclick="closeRoleDialog()">取消</button>
+                <button onclick="saveRole()" style="background: #3498db; color: white;">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 当前选中的用户ID
+        let currentUserId = null;
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 加载系统概要
+            loadSystemSummary();
+            
+            // 加载服务器指标
+            loadServerMetrics();
+            
+            // 侧边栏导航
+            document.querySelectorAll('.sidebar-menu a').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // 移除所有active类
+                    document.querySelectorAll('.sidebar-menu a').forEach(a => a.classList.remove('active'));
+                    
+                    // 添加active类到当前链接
+                    this.classList.add('active');
+                    
+                    // 隐藏所有section
+                    document.querySelectorAll('.section').forEach(section => {
+                        section.style.display = 'none';
+                    });
+                    
+                    // 显示选中的section
+                    const sectionId = this.getAttribute('data-section');
+                    document.getElementById(sectionId).style.display = 'block';
+                    
+                    // 加载对应的数据
+                    if (sectionId === 'system-logs') {
+                        loadSystemLogs();
+                    } else if (sectionId === 'traffic-stats') {
+                        loadTrafficStats();
+                    } else if (sectionId === 'server-status') {
+                        loadServerStatus();
+                    } else if (sectionId === 'admin-management') {
+                        loadAdmins();
+                    } else if (sectionId === 'operations') {
+                        loadAdminOperations();
+                    }
+                });
+            });
+        });
+
+        // 加载系统概要
+        function loadSystemSummary() {
+            fetch('/api/admin/system/summary', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const summary = data.summary;
+                    document.getElementById('total-users').textContent = summary.total_users || 0;
+                    document.getElementById('today-requests').textContent = summary.today_requests || 0;
+                    document.getElementById('today-visitors').textContent = summary.today_visitors || 0;
+                    document.getElementById('total-recognitions').textContent = summary.total_recognitions || 0;
+                    document.getElementById('today-logs').textContent = summary.today_logs || 0;
+                    document.getElementById('total-posts').textContent = summary.total_posts || 0;
+                }
+            })
+            .catch(error => {
+                console.error('加载系统概要失败:', error);
+            });
+        }
+
+        // 加载系统日志
+        function loadSystemLogs() {
+            const logLevel = document.getElementById('log-level').value;
+            const module = document.getElementById('log-module').value;
+            const limit = document.getElementById('log-limit').value;
+            
+            let url = `/api/admin/system/logs?limit=${limit}`;
+            if (logLevel) url += `&log_level=${logLevel}`;
+            if (module) url += `&module=${module}`;
+            
+            document.getElementById('logs-body').innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+            
+            fetch(url, {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const logs = data.logs;
+                    const logsBody = document.getElementById('logs-body');
+                    logsBody.innerHTML = '';
+                    
+                    logs.forEach(log => {
+                        const row = document.createElement('tr');
+                        const date = new Date(log.created_at * 1000).toLocaleString();
+                        row.innerHTML = `
+                            <td>${date}</td>
+                            <td>${log.log_level}</td>
+                            <td>${log.module}</td>
+                            <td>${log.message}</td>
+                            <td>${log.username || '-'}</td>
+                            <td>${log.ip_address || '-'}</td>
+                        `;
+                        logsBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载系统日志失败:', error);
+                document.getElementById('logs-body').innerHTML = '<tr><td colspan="6" class="error">加载失败</td></tr>';
+            });
+        }
+
+        // 加载流量统计
+        function loadTrafficStats() {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            
+            let url = '/api/admin/system/traffic';
+            if (startDate) url += `?start_date=${startDate}`;
+            if (endDate) url += (startDate ? '&' : '?') + `end_date=${endDate}`;
+            
+            // 加载流量统计
+            document.getElementById('traffic-body').innerHTML = '<tr><td colspan="5" class="loading">加载中...</td></tr>';
+            
+            fetch(url, {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const stats = data.stats;
+                    const trafficBody = document.getElementById('traffic-body');
+                    trafficBody.innerHTML = '';
+                    
+                    stats.forEach(stat => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${stat.date}</td>
+                            <td>${stat.total_requests}</td>
+                            <td>${stat.unique_visitors}</td>
+                            <td>${stat.avg_response_time ? stat.avg_response_time.toFixed(2) : 0}</td>
+                            <td>${stat.error_count}</td>
+                        `;
+                        trafficBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载流量统计失败:', error);
+                document.getElementById('traffic-body').innerHTML = '<tr><td colspan="5" class="error">加载失败</td></tr>';
+            });
+            
+            // 加载热门端点
+            document.getElementById('endpoints-body').innerHTML = '<tr><td colspan="5" class="loading">加载中...</td></tr>';
+            
+            fetch('/api/admin/system/traffic/endpoints', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const endpoints = data.stats;
+                    const endpointsBody = document.getElementById('endpoints-body');
+                    endpointsBody.innerHTML = '';
+                    
+                    endpoints.forEach(endpoint => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${endpoint.endpoint}</td>
+                            <td>${endpoint.method}</td>
+                            <td>${endpoint.request_count}</td>
+                            <td>${endpoint.avg_response_time ? endpoint.avg_response_time.toFixed(2) : 0}</td>
+                            <td>${endpoint.error_count}</td>
+                        `;
+                        endpointsBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载热门端点失败:', error);
+                document.getElementById('endpoints-body').innerHTML = '<tr><td colspan="5" class="error">加载失败</td></tr>';
+            });
+        }
+
+        // 加载服务器指标
+        function loadServerMetrics() {
+            fetch('/api/admin/server/metrics', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const metrics = data.metrics;
+                    const metricsMap = {};
+                    
+                    metrics.forEach(metric => {
+                        metricsMap[metric.metric_name] = metric;
+                    });
+                    
+                    document.getElementById('cpu-usage').textContent = metricsMap.cpu_usage ? metricsMap.cpu_usage.metric_value + '%' : '0%';
+                    document.getElementById('memory-usage').textContent = metricsMap.memory_usage ? metricsMap.memory_usage.metric_value + '%' : '0%';
+                    document.getElementById('disk-usage').textContent = metricsMap.disk_usage ? metricsMap.disk_usage.metric_value + '%' : '0%';
+                    document.getElementById('network-traffic').textContent = metricsMap.network_traffic ? metricsMap.network_traffic.metric_value + ' MB' : '0 MB';
+                }
+            })
+            .catch(error => {
+                console.error('加载服务器指标失败:', error);
+            });
+        }
+
+        // 加载服务器状态
+        function loadServerStatus() {
+            document.getElementById('server-status-body').innerHTML = '<tr><td colspan="5" class="loading">加载中...</td></tr>';
+            
+            fetch('/api/admin/server/status?limit=50', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const status = data.status;
+                    const statusBody = document.getElementById('server-status-body');
+                    statusBody.innerHTML = '';
+                    
+                    status.forEach(item => {
+                        const row = document.createElement('tr');
+                        const date = new Date(item.created_at * 1000).toLocaleString();
+                        row.innerHTML = `
+                            <td>${item.metric_name}</td>
+                            <td>${item.metric_value}</td>
+                            <td>${item.unit || '-'}</td>
+                            <td>${item.status}</td>
+                            <td>${date}</td>
+                        `;
+                        statusBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载服务器状态失败:', error);
+                document.getElementById('server-status-body').innerHTML = '<tr><td colspan="5" class="error">加载失败</td></tr>';
+            });
+        }
+
+        // 加载管理员列表
+        function loadAdmins() {
+            document.getElementById('admins-body').innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+            
+            fetch('/api/admin/admins', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const admins = data.admins;
+                    const adminsBody = document.getElementById('admins-body');
+                    adminsBody.innerHTML = '';
+                    
+                    admins.forEach(admin => {
+                        const row = document.createElement('tr');
+                        const date = new Date(admin.created_at * 1000).toLocaleString();
+                        row.innerHTML = `
+                            <td>${admin.id}</td>
+                            <td>${admin.username}</td>
+                            <td>${admin.email}</td>
+                            <td>${admin.role_name}</td>
+                            <td>${date}</td>
+                            <td><button onclick="openRoleDialog(${admin.id}, '${admin.username}', '${admin.role_name}')">修改角色</button></td>
+                        `;
+                        adminsBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载管理员列表失败:', error);
+                document.getElementById('admins-body').innerHTML = '<tr><td colspan="6" class="error">加载失败</td></tr>';
+            });
+        }
+
+        // 打开角色更新对话框
+        function openRoleDialog(userId, username, currentRole) {
+            currentUserId = userId;
+            document.getElementById('user-info').value = `${username} (当前角色: ${currentRole})`;
+            document.getElementById('new-role').value = currentRole;
+            document.getElementById('role-dialog').style.display = 'block';
+        }
+
+        // 关闭角色更新对话框
+        function closeRoleDialog() {
+            currentUserId = null;
+            document.getElementById('role-dialog').style.display = 'none';
+        }
+
+        // 保存角色更新
+        function saveRole() {
+            const roleName = document.getElementById('new-role').value;
+            
+            fetch(`/api/admin/admins/${currentUserId}/role`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                },
+                body: JSON.stringify({ role_name: roleName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('角色更新成功');
+                    closeRoleDialog();
+                    loadAdmins();
+                } else {
+                    alert('角色更新失败: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('更新角色失败:', error);
+                alert('更新角色失败');
+            });
+        }
+
+        // 加载管理员操作记录
+        function loadAdminOperations() {
+            const operationType = document.getElementById('operation-type').value;
+            const limit = document.getElementById('operation-limit').value;
+            
+            let url = `/api/admin/operations?limit=${limit}`;
+            if (operationType) url += `&operation_type=${operationType}`;
+            
+            document.getElementById('operations-body').innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+            
+            fetch(url, {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const operations = data.operations;
+                    const operationsBody = document.getElementById('operations-body');
+                    operationsBody.innerHTML = '';
+                    
+                    operations.forEach(op => {
+                        const row = document.createElement('tr');
+                        const date = new Date(op.created_at * 1000).toLocaleString();
+                        row.innerHTML = `
+                            <td>${date}</td>
+                            <td>${op.admin_username}</td>
+                            <td>${op.operation_type}</td>
+                            <td>${op.target_type || '-'}</td>
+                            <td>${op.description || '-'}</td>
+                            <td>${op.ip_address || '-'}</td>
+                        `;
+                        operationsBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载操作记录失败:', error);
+                document.getElementById('operations-body').innerHTML = '<tr><td colspan="6" class="error">加载失败</td></tr>';
+            });
+        }
+
+        // 退出登录
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = 'index.html';
+        }
+
+        // 模拟服务器指标（实际项目中应该由后端提供）
+        function simulateServerMetrics() {
+            const metrics = [
+                { metric_name: 'cpu_usage', metric_value: Math.random() * 100, unit: '%' },
+                { metric_name: 'memory_usage', metric_value: Math.random() * 100, unit: '%' },
+                { metric_name: 'disk_usage', metric_value: Math.random() * 100, unit: '%' },
+                { metric_name: 'network_traffic', metric_value: Math.random() * 100, unit: 'MB' }
+            ];
+            
+            metrics.forEach(metric => {
+                fetch('/api/admin/server/status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify(metric)
+                });
+            });
+        }
+
+        // 每30秒更新一次服务器指标
+        setInterval(loadServerMetrics, 30000);
+    </script>
+</body>
+</html>

@@ -652,6 +652,364 @@ class SQLDatabaseManager:
         except Exception as e:
             print(f'数据库连接测试失败: {str(e)}')
             return False
+    
+    # ==================== 超级管理员端相关操作 ====================
+    
+    def create_system_log(self, log_level, module, message, user_id=None, username=None, ip_address=None, user_agent=None):
+        """创建系统日志"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            current_time = int(time.time())
+            cursor.execute('''
+            INSERT INTO system_logs (log_level, module, message, user_id, username, ip_address, user_agent, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (log_level, module, message, user_id, username, ip_address, user_agent, current_time))
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            raise Exception(f'创建系统日志失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_system_logs(self, limit=100, offset=0, log_level=None, module=None, start_time=None, end_time=None):
+        """获取系统日志"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            query = 'SELECT * FROM system_logs WHERE 1=1'
+            params = []
+            
+            if log_level:
+                query += ' AND log_level = ?'
+                params.append(log_level)
+            if module:
+                query += ' AND module = ?'
+                params.append(module)
+            if start_time:
+                query += ' AND created_at >= ?'
+                params.append(start_time)
+            if end_time:
+                query += ' AND created_at <= ?'
+                params.append(end_time)
+            
+            query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
+            params.extend([limit, offset])
+            
+            cursor.execute(query, params)
+            logs = cursor.fetchall()
+            return [dict(log) for log in logs]
+        except Exception as e:
+            raise Exception(f'获取系统日志失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def record_traffic(self, endpoint, method, ip_address=None, user_id=None, response_status=200, response_time=0):
+        """记录访问流量"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            current_time = int(time.time())
+            date_str = time.strftime('%Y-%m-%d')
+            hour = int(time.strftime('%H'))
+            
+            cursor.execute('''
+            INSERT INTO traffic_stats (date, hour, endpoint, method, ip_address, user_id, response_status, response_time, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (date_str, hour, endpoint, method, ip_address, user_id, response_status, response_time, current_time))
+            conn.commit()
+            
+            self._update_daily_traffic_summary(date_str)
+            
+            return cursor.lastrowid
+        except Exception as e:
+            raise Exception(f'记录访问流量失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def _update_daily_traffic_summary(self, date_str):
+        """更新每日流量汇总"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+            SELECT 
+                COUNT(*) as total_requests,
+                COUNT(DISTINCT ip_address) as unique_visitors,
+                AVG(response_time) as avg_response_time,
+                SUM(CASE WHEN response_status >= 400 THEN 1 ELSE 0 END) as error_count
+            FROM traffic_stats
+            WHERE date = ?
+            ''', (date_str,))
+            
+            result = cursor.fetchone()
+            current_time = int(time.time())
+            
+            cursor.execute('''
+            INSERT OR REPLACE INTO daily_traffic_summary (date, total_requests, unique_visitors, avg_response_time, error_count, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (date_str, result['total_requests'], result['unique_visitors'], result['avg_response_time'], result['error_count'], current_time, current_time))
+            
+            conn.commit()
+        except Exception as e:
+            print(f'更新每日流量汇总失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_traffic_stats(self, start_date=None, end_date=None, limit=100):
+        """获取流量统计"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            query = 'SELECT * FROM daily_traffic_summary WHERE 1=1'
+            params = []
+            
+            if start_date:
+                query += ' AND date >= ?'
+                params.append(start_date)
+            if end_date:
+                query += ' AND date <= ?'
+                params.append(end_date)
+            
+            query += ' ORDER BY date DESC LIMIT ?'
+            params.append(limit)
+            
+            cursor.execute(query, params)
+            stats = cursor.fetchall()
+            return [dict(stat) for stat in stats]
+        except Exception as e:
+            raise Exception(f'获取流量统计失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_traffic_by_endpoint(self, start_date=None, end_date=None, limit=20):
+        """按端点获取流量统计"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            query = '''
+            SELECT endpoint, method, 
+                   COUNT(*) as request_count,
+                   AVG(response_time) as avg_response_time,
+                   SUM(CASE WHEN response_status >= 400 THEN 1 ELSE 0 END) as error_count
+            FROM traffic_stats
+            WHERE 1=1
+            '''
+            params = []
+            
+            if start_date:
+                query += ' AND date >= ?'
+                params.append(start_date)
+            if end_date:
+                query += ' AND date <= ?'
+                params.append(end_date)
+            
+            query += ' GROUP BY endpoint, method ORDER BY request_count DESC LIMIT ?'
+            params.append(limit)
+            
+            cursor.execute(query, params)
+            stats = cursor.fetchall()
+            return [dict(stat) for stat in stats]
+        except Exception as e:
+            raise Exception(f'获取端点流量统计失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def record_server_status(self, metric_name, metric_value, unit=None, status='normal'):
+        """记录服务器状态"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            current_time = int(time.time())
+            cursor.execute('''
+            INSERT INTO server_status (metric_name, metric_value, unit, status, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ''', (metric_name, metric_value, unit, status, current_time))
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            raise Exception(f'记录服务器状态失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_server_status(self, metric_name=None, limit=100):
+        """获取服务器状态"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            if metric_name:
+                cursor.execute('''
+                SELECT * FROM server_status 
+                WHERE metric_name = ?
+                ORDER BY created_at DESC LIMIT ?
+                ''', (metric_name, limit))
+            else:
+                cursor.execute('''
+                SELECT * FROM server_status 
+                ORDER BY created_at DESC LIMIT ?
+                ''', (limit,))
+            
+            status = cursor.fetchall()
+            return [dict(s) for s in status]
+        except Exception as e:
+            raise Exception(f'获取服务器状态失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_latest_server_metrics(self):
+        """获取最新的服务器指标"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+            SELECT metric_name, metric_value, unit, status, created_at
+            FROM server_status
+            WHERE id IN (
+                SELECT MAX(id) FROM server_status GROUP BY metric_name
+            )
+            ''')
+            metrics = cursor.fetchall()
+            return [dict(metric) for metric in metrics]
+        except Exception as e:
+            raise Exception(f'获取最新服务器指标失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def record_admin_operation(self, admin_id, admin_username, operation_type, target_type=None, target_id=None, description=None, ip_address=None):
+        """记录管理员操作"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            current_time = int(time.time())
+            cursor.execute('''
+            INSERT INTO admin_operations (admin_id, admin_username, operation_type, target_type, target_id, description, ip_address, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (admin_id, admin_username, operation_type, target_type, target_id, description, ip_address, current_time))
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            raise Exception(f'记录管理员操作失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_admin_operations(self, admin_id=None, operation_type=None, limit=100, offset=0):
+        """获取管理员操作记录"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            query = 'SELECT * FROM admin_operations WHERE 1=1'
+            params = []
+            
+            if admin_id:
+                query += ' AND admin_id = ?'
+                params.append(admin_id)
+            if operation_type:
+                query += ' AND operation_type = ?'
+                params.append(operation_type)
+            
+            query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
+            params.extend([limit, offset])
+            
+            cursor.execute(query, params)
+            operations = cursor.fetchall()
+            return [dict(op) for op in operations]
+        except Exception as e:
+            raise Exception(f'获取管理员操作记录失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_all_admins(self):
+        """获取所有管理员"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+            SELECT u.id, u.username, u.email, u.created_at, r.name as role_name, r.description as role_description
+            FROM users u
+            JOIN user_roles ur ON u.id = ur.user_id
+            JOIN roles r ON ur.role_id = r.id
+            WHERE r.name IN ('admin', 'super_admin')
+            ORDER BY u.created_at DESC
+            ''')
+            admins = cursor.fetchall()
+            return [dict(admin) for admin in admins]
+        except Exception as e:
+            raise Exception(f'获取管理员列表失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def update_user_role(self, user_id, role_name):
+        """更新用户角色"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('SELECT id FROM roles WHERE name = ?', (role_name,))
+            role = cursor.fetchone()
+            
+            if not role:
+                raise Exception(f'角色不存在: {role_name}')
+            
+            role_id = role['id']
+            
+            cursor.execute('DELETE FROM user_roles WHERE user_id = ?', (user_id,))
+            cursor.execute('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)', (user_id, role_id))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'更新用户角色失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_system_summary(self):
+        """获取系统概要统计"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            summary = {}
+            
+            cursor.execute('SELECT COUNT(*) as count FROM users')
+            summary['total_users'] = cursor.fetchone()['count']
+            
+            cursor.execute('SELECT COUNT(*) as count FROM posts')
+            summary['total_posts'] = cursor.fetchone()['count']
+            
+            cursor.execute('SELECT COUNT(*) as count FROM recognition_results')
+            summary['total_recognitions'] = cursor.fetchone()['count']
+            
+            cursor.execute('SELECT COUNT(*) as count FROM system_logs WHERE created_at > ?', (int(time.time()) - 86400,))
+            summary['today_logs'] = cursor.fetchone()['count']
+            
+            today = time.strftime('%Y-%m-%d')
+            cursor.execute('SELECT * FROM daily_traffic_summary WHERE date = ?', (today,))
+            traffic = cursor.fetchone()
+            if traffic:
+                summary['today_requests'] = traffic['total_requests']
+                summary['today_visitors'] = traffic['unique_visitors']
+            else:
+                summary['today_requests'] = 0
+                summary['today_visitors'] = 0
+            
+            return summary
+        except Exception as e:
+            raise Exception(f'获取系统概要统计失败: {str(e)}')
+        finally:
+            conn.close()
 
 # 创建全局数据库管理器实例
 db_manager = SQLDatabaseManager()
@@ -738,6 +1096,45 @@ def get_user_followers(user_id):
 
 def test_connection():
     return db_manager.test_connection()
+
+def create_system_log(log_level, module, message, user_id=None, username=None, ip_address=None, user_agent=None):
+    return db_manager.create_system_log(log_level, module, message, user_id, username, ip_address, user_agent)
+
+def get_system_logs(limit=100, offset=0, log_level=None, module=None, start_time=None, end_time=None):
+    return db_manager.get_system_logs(limit, offset, log_level, module, start_time, end_time)
+
+def record_traffic(endpoint, method, ip_address=None, user_id=None, response_status=200, response_time=0):
+    return db_manager.record_traffic(endpoint, method, ip_address, user_id, response_status, response_time)
+
+def get_traffic_stats(start_date=None, end_date=None, limit=100):
+    return db_manager.get_traffic_stats(start_date, end_date, limit)
+
+def get_traffic_by_endpoint(start_date=None, end_date=None, limit=20):
+    return db_manager.get_traffic_by_endpoint(start_date, end_date, limit)
+
+def record_server_status(metric_name, metric_value, unit=None, status='normal'):
+    return db_manager.record_server_status(metric_name, metric_value, unit, status)
+
+def get_server_status(metric_name=None, limit=100):
+    return db_manager.get_server_status(metric_name, limit)
+
+def get_latest_server_metrics():
+    return db_manager.get_latest_server_metrics()
+
+def record_admin_operation(admin_id, admin_username, operation_type, target_type=None, target_id=None, description=None, ip_address=None):
+    return db_manager.record_admin_operation(admin_id, admin_username, operation_type, target_type, target_id, description, ip_address)
+
+def get_admin_operations(admin_id=None, operation_type=None, limit=100, offset=0):
+    return db_manager.get_admin_operations(admin_id, operation_type, limit, offset)
+
+def get_all_admins():
+    return db_manager.get_all_admins()
+
+def update_user_role(user_id, role_name):
+    return db_manager.update_user_role(user_id, role_name)
+
+def get_system_summary():
+    return db_manager.get_system_summary()
 
 if __name__ == '__main__':
     # 测试数据库连接

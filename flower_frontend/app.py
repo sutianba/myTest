@@ -23,7 +23,11 @@ from db import (
     create_comment, get_comments_by_post_id, delete_comment,
     like_post, unlike_post, is_post_liked_by_user,
     follow_user, unfollow_user, is_following, get_user_following, get_user_followers,
-    check_user_permission
+    check_user_permission,
+    # 超级管理员端函数
+    create_system_log, get_system_logs, record_traffic, get_traffic_stats, get_traffic_by_endpoint,
+    record_server_status, get_server_status, get_latest_server_metrics,
+    record_admin_operation, get_admin_operations, get_all_admins, update_user_role, get_system_summary
 )
 
 app = Flask(__name__)
@@ -710,6 +714,180 @@ def get_user_followers_api(user_id):
     except Exception as e:
         print(f"获取粉丝列表时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========================================
+# 超级管理员端API接口
+# ========================================
+
+@app.route('/api/admin/system/summary', methods=['GET'])
+@auth_required
+@permission_required('super_admin')
+def get_system_summary_api():
+    """获取系统概要统计"""
+    try:
+        summary = get_system_summary()
+        return jsonify({'success': True, 'summary': summary})
+    except Exception as e:
+        print(f"获取系统概要统计时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/system/logs', methods=['GET'])
+@auth_required
+@permission_required('view_system_logs')
+def get_system_logs_api():
+    """获取系统日志"""
+    try:
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        log_level = request.args.get('log_level')
+        module = request.args.get('module')
+        start_time = request.args.get('start_time', type=int)
+        end_time = request.args.get('end_time', type=int)
+        
+        logs = get_system_logs(limit, offset, log_level, module, start_time, end_time)
+        return jsonify({'success': True, 'logs': logs})
+    except Exception as e:
+        print(f"获取系统日志时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/system/traffic', methods=['GET'])
+@auth_required
+@permission_required('view_traffic_stats')
+def get_traffic_stats_api():
+    """获取流量统计"""
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        limit = int(request.args.get('limit', 100))
+        
+        stats = get_traffic_stats(start_date, end_date, limit)
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        print(f"获取流量统计时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/system/traffic/endpoints', methods=['GET'])
+@auth_required
+@permission_required('view_traffic_stats')
+def get_traffic_by_endpoint_api():
+    """按端点获取流量统计"""
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        limit = int(request.args.get('limit', 20))
+        
+        stats = get_traffic_by_endpoint(start_date, end_date, limit)
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        print(f"获取端点流量统计时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/server/status', methods=['GET'])
+@auth_required
+@permission_required('monitor_server')
+def get_server_status_api():
+    """获取服务器状态"""
+    try:
+        metric_name = request.args.get('metric_name')
+        limit = int(request.args.get('limit', 100))
+        
+        status = get_server_status(metric_name, limit)
+        return jsonify({'success': True, 'status': status})
+    except Exception as e:
+        print(f"获取服务器状态时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/server/metrics', methods=['GET'])
+@auth_required
+@permission_required('monitor_server')
+def get_latest_server_metrics_api():
+    """获取最新服务器指标"""
+    try:
+        metrics = get_latest_server_metrics()
+        return jsonify({'success': True, 'metrics': metrics})
+    except Exception as e:
+        print(f"获取最新服务器指标时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/admins', methods=['GET'])
+@auth_required
+@permission_required('manage_admins')
+def get_all_admins_api():
+    """获取所有管理员"""
+    try:
+        admins = get_all_admins()
+        return jsonify({'success': True, 'admins': admins})
+    except Exception as e:
+        print(f"获取管理员列表时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/admins/<int:user_id>/role', methods=['PUT'])
+@auth_required
+@permission_required('manage_admins')
+def update_user_role_api(user_id):
+    """更新用户角色"""
+    try:
+        data = request.get_json()
+        role_name = data.get('role_name')
+        
+        if not role_name:
+            return jsonify({'success': False, 'error': '缺少角色名称'}), 400
+        
+        success = update_user_role(user_id, role_name)
+        
+        # 记录管理员操作
+        ip_address = request.remote_addr
+        record_admin_operation(g.user_id, g.username, 'update_role', 'user', user_id, f'更新用户角色为 {role_name}', ip_address)
+        
+        return jsonify({'success': True, 'message': '角色更新成功'})
+    except Exception as e:
+        print(f"更新用户角色时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/operations', methods=['GET'])
+@auth_required
+@permission_required('manage_admins')
+def get_admin_operations_api():
+    """获取管理员操作记录"""
+    try:
+        admin_id = request.args.get('admin_id', type=int)
+        operation_type = request.args.get('operation_type')
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        
+        operations = get_admin_operations(admin_id, operation_type, limit, offset)
+        return jsonify({'success': True, 'operations': operations})
+    except Exception as e:
+        print(f"获取管理员操作记录时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# 访问日志中间件
+@app.before_request
+def before_request():
+    """请求前记录访问日志"""
+    g.start_time = time.time()
+
+@app.after_request
+def after_request(response):
+    """请求后记录访问日志"""
+    try:
+        response_time = int((time.time() - g.start_time) * 1000)
+        endpoint = request.endpoint
+        method = request.method
+        ip_address = request.remote_addr
+        user_id = g.user_id if hasattr(g, 'user_id') else None
+        
+        # 记录访问流量
+        record_traffic(endpoint, method, ip_address, user_id, response.status_code, response_time)
+        
+        # 记录系统日志（如果是错误响应）
+        if response.status_code >= 400:
+            create_system_log('ERROR', 'API', f'{method} {endpoint} 返回 {response.status_code}', 
+                           user_id, g.username if hasattr(g, 'username') else None, ip_address, request.user_agent.string)
+    except Exception as e:
+        print(f"记录访问日志时发生错误: {str(e)}")
+    
+    return response
 
 if __name__ == '__main__':
     # 启动Flask服务器
