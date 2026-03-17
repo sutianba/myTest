@@ -194,6 +194,48 @@
             box-shadow: 0 6px 16px rgba(46, 204, 113, 0.4);
         }
 
+        .upload-options {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .checkbox-label {
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            margin-right: 8px;
+            width: 18px;
+            height: 18px;
+            accent-color: #2ecc71;
+        }
+
+        .rerun-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .rerun-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .rerun-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         /* 结果区域 */
         .results-section {
             display: none;
@@ -590,6 +632,12 @@
                         <p>点击或拖拽图片到此处上传</p>
                         <input type="file" id="fileInput" multiple accept="image/*">
                     </div>
+                    <div class="upload-options">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="saveToAlbum">
+                            <span>识别后保存到相册</span>
+                        </label>
+                    </div>
                     <button class="upload-btn" id="uploadBtn">开始识别</button>
                 </div>
 
@@ -935,6 +983,14 @@
 
             // 上传按钮点击
             uploadBtn.addEventListener('click', function() {
+                const saveToAlbum = document.getElementById('saveToAlbum');
+                if (saveToAlbum && saveToAlbum.checked) {
+                    if (!token) {
+                        alert('保存到相册需要登录，请先登录！');
+                        return;
+                    }
+                }
+                
                 if (fileInput.files.length > 0) {
                     handleMultipleFiles(fileInput.files);
                 } else {
@@ -1007,12 +1063,18 @@
 
         // 调用识别API
         async function callRecognitionAPI(imageData) {
+            const saveToAlbum = document.getElementById('saveToAlbum') ? document.getElementById('saveToAlbum').checked : false;
+            
             const response = await fetch('/api/detect', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + getToken()
                 },
-                body: JSON.stringify({ image: imageData })
+                body: JSON.stringify({ 
+                    image: imageData,
+                    save_to_album: saveToAlbum
+                })
             });
 
             const data = await response.json();
@@ -1071,6 +1133,7 @@
                 exifDiv.appendChild(exifContent);
 
                 const detectionsDiv = document.createElement('div');
+                detectionsDiv.className = 'detection-results';
                 detectionsDiv.style.backgroundColor = '#ffffff';
                 detectionsDiv.style.borderRadius = '10px';
                 detectionsDiv.style.padding = '20px';
@@ -1082,6 +1145,7 @@
                 detectionsTitle.style.marginBottom = '15px';
 
                 const detectionsList = document.createElement('div');
+                detectionsList.className = 'detection-list';
                 item.detections.forEach(detection => {
                     const detectionItem = document.createElement('div');
                     detectionItem.className = 'result-item';
@@ -1095,9 +1159,92 @@
                 detectionsDiv.appendChild(detectionsTitle);
                 detectionsDiv.appendChild(detectionsList);
 
+                const rerunBtn = document.createElement('button');
+                rerunBtn.className = 'rerun-btn';
+                rerunBtn.textContent = '🔄 重新识别';
+                rerunBtn.onclick = async function() {
+                    rerunBtn.disabled = true;
+                    rerunBtn.textContent = '识别中...';
+                    
+                    try {
+                        const newResults = await callRecognitionAPI(item.imageData);
+                        const newItem = {
+                            detections: newResults.detections,
+                            exif_info: newResults.exif_info,
+                            imageData: item.imageData,
+                            saved_to_album: newResults.saved_to_album
+                        };
+                        
+                        const parentContainer = rerunBtn.closest('.single-result');
+                        const detectionsDiv = parentContainer.querySelector('.detection-results');
+                        if (detectionsDiv) {
+                            detectionsDiv.innerHTML = '';
+                            newItem.detections.forEach(detection => {
+                                const detectionItem = document.createElement('div');
+                                detectionItem.className = 'result-item';
+                                detectionItem.innerHTML = `
+                                    <span class="flower-name">${detection.name}</span>
+                                    <span class="confidence ${getConfidenceClass(detection.confidence)}">${(detection.confidence * 100).toFixed(2)}%</span>
+                                `;
+                                detectionsDiv.appendChild(detectionItem);
+                            });
+                        }
+                        
+                        const existingAlbumInfo = parentContainer.querySelector('.album-info');
+                        if (existingAlbumInfo) {
+                            existingAlbumInfo.remove();
+                        }
+                        
+                        if (newItem.saved_to_album) {
+                            const albumInfoDiv = document.createElement('div');
+                            albumInfoDiv.className = 'album-info';
+                            albumInfoDiv.style.backgroundColor = '#d4edda';
+                            albumInfoDiv.style.borderRadius = '10px';
+                            albumInfoDiv.style.padding = '15px';
+                            albumInfoDiv.style.marginTop = '15px';
+                            albumInfoDiv.style.color = '#155724';
+                            albumInfoDiv.innerHTML = `
+                                <p style="margin: 0;"><strong>✓ 已保存到相册</strong></p>
+                                <p style="margin: '5px 0 0 0'; font-size: 14px;">相册: ${newItem.saved_to_album.album_name}</p>
+                            `;
+                            parentContainer.appendChild(albumInfoDiv);
+                        }
+                        
+                        rerunBtn.textContent = '✓ 重新识别完成';
+                        setTimeout(() => {
+                            rerunBtn.disabled = false;
+                            rerunBtn.textContent = '🔄 重新识别';
+                        }, 1500);
+                    } catch (error) {
+                        alert('重新识别失败: ' + error.message);
+                        rerunBtn.disabled = false;
+                        rerunBtn.textContent = '🔄 重新识别';
+                    }
+                };
+                
+                const btnContainer = document.createElement('div');
+                btnContainer.style.marginTop = '15px';
+                btnContainer.appendChild(rerunBtn);
+                
+                detectionsDiv.appendChild(btnContainer);
+                
                 resultContainer.appendChild(imagePreview);
                 resultContainer.appendChild(exifDiv);
                 resultContainer.appendChild(detectionsDiv);
+
+                if (item.saved_to_album) {
+                    const albumInfoDiv = document.createElement('div');
+                    albumInfoDiv.style.backgroundColor = '#d4edda';
+                    albumInfoDiv.style.borderRadius = '10px';
+                    albumInfoDiv.style.padding = '15px';
+                    albumInfoDiv.style.marginTop = '15px';
+                    albumInfoDiv.style.color = '#155724';
+                    albumInfoDiv.innerHTML = `
+                        <p style="margin: 0;"><strong>✓ 已保存到相册</strong></p>
+                        <p style="margin: '5px 0 0 0'; font-size: 14px;">相册: ${item.saved_to_album.album_name}</p>
+                    `;
+                    resultContainer.appendChild(albumInfoDiv);
+                }
 
                 allResultsDiv.appendChild(resultContainer);
             });
