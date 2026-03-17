@@ -154,22 +154,29 @@ def serve_file(filename):
 def detect_flower():
     """花卉识别API接口"""
     try:
-        # 获取请求数据
         data = request.get_json()
         
-        # 支持单图片和多图片请求
+        user_id = None
+        token = request.headers.get('Authorization')
+        if token:
+            if token.startswith('Bearer '):
+                token = token[7:]
+            payload = verify_jwt(token)
+            if payload:
+                user_id = payload.get('user_id')
+        
+        save_to_album = data.get('save_to_album', False)
+        
         if 'image' in data:
-            # 单图片请求
             image_data = data['image']
-            results = process_single_image(image_data)
+            results = process_single_image(image_data, user_id, save_to_album)
             return jsonify({'success': True, 'results': results})
         elif 'images' in data:
-            # 多图片请求
             images_data = data['images']
             all_results = []
             
             for i, image_data in enumerate(images_data):
-                results = process_single_image(image_data)
+                results = process_single_image(image_data, user_id, save_to_album)
                 all_results.append({
                     'image_index': i,
                     'results': results
@@ -278,8 +285,10 @@ def format_address(address):
     return '，'.join(filter(None, address_parts))
 
 
-def process_single_image(image_data):
+def process_single_image(image_data, user_id=None, save_to_album=False):
     """处理单个图片的识别"""
+    saved_album_info = None
+    
     # 移除base64头部
     if image_data.startswith('data:image/'):
         image_data = image_data.split(',')[1]
@@ -406,10 +415,53 @@ def process_single_image(image_data):
         detection_results = []
     
     # 返回包含识别结果和EXIF信息的响应
-    return {
+    return_result = {
         'detections': detection_results,
         'exif_info': image_info
     }
+    
+    if save_to_album and user_id and detection_results:
+        try:
+            flower_name = detection_results[0]['name']
+            confidence = detection_results[0]['confidence']
+            
+            albums = get_user_albums(user_id, flower_name)
+            
+            if albums:
+                album = albums[0]
+            else:
+                album_id = create_album(user_id, f"{flower_name}相册", flower_name)
+                album = get_album_by_id(album_id, user_id)
+            
+            if album:
+                timestamp = int(time.time())
+                image_filename = f"recognition_{user_id}_{timestamp}.jpg"
+                uploads_dir = os.path.join(BASE_DIR, 'static', 'uploads')
+                os.makedirs(uploads_dir, exist_ok=True)
+                image_path = os.path.join(uploads_dir, image_filename)
+                
+                with open(image_path, 'wb') as f:
+                    f.write(image_bytes)
+                
+                relative_path = f"/static/uploads/{image_filename}"
+                
+                result_id = save_recognition_result(user_id, relative_path, flower_name, confidence)
+                
+                add_image_to_album(album['id'], user_id, relative_path, flower_name, confidence, result_id)
+                
+                saved_album_info = {
+                    'album_id': album['id'],
+                    'album_name': album['name'],
+                    'category': album['category'],
+                    'image_path': relative_path
+                }
+                
+                return_result['saved_to_album'] = saved_album_info
+        except Exception as e:
+            print(f"保存到相册失败: {e}")
+            return_result['save_error'] = str(e)
+    
+    return return_result
 
 # 认证相关API
 @app.route('/api/auth/register', methods=['POST'])
