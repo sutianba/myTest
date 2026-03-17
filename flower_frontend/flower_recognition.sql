@@ -111,6 +111,41 @@ CREATE TABLE follows (
     FOREIGN KEY (follower_id) REFERENCES users (id) ON DELETE CASCADE,
     FOREIGN KEY (following_id) REFERENCES users (id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS user_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    feedback_type TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    response TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS albums (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    cover_image TEXT,
+    description TEXT,
+    image_count INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS album_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    album_id INTEGER NOT NULL,
+    recognition_result_id INTEGER,
+    image_path TEXT NOT NULL,
+    flower_name TEXT,
+    confidence REAL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE,
+    FOREIGN KEY (recognition_result_id) REFERENCES recognition_results (id) ON DELETE SET NULL
+);
 INSERT INTO sqlite_sequence VALUES('roles',2);
 INSERT INTO sqlite_sequence VALUES('permissions',9);
 INSERT INTO sqlite_sequence VALUES('users',1);

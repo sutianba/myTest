@@ -1094,6 +1094,402 @@ class SQLDatabaseManager:
             raise Exception(f'获取系统概要统计失败: {str(e)}')
         finally:
             conn.close()
+    
+    def update_user_profile(self, user_id, email=None, password_hash=None):
+        """更新用户个人信息"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            updates = []
+            params = []
+            
+            if email:
+                updates.append("email = %s")
+                params.append(email)
+            if password_hash:
+                updates.append("password_hash = %s")
+                params.append(password_hash)
+            
+            if updates:
+                updates.append("updated_at = %s")
+                params.append(int(time.time()))
+                params.append(user_id)
+                
+                sql = f"UPDATE users SET {', '.join(updates)} WHERE id = %s"
+                cursor.execute(sql, params)
+                conn.commit()
+                return True
+            return False
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'更新用户信息失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_user_recognition_history(self, user_id, limit=20, offset=0):
+        """获取用户历史识别记录"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT * FROM recognition_results WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                (user_id, limit, offset)
+            )
+            results = cursor.fetchall()
+            
+            cursor.execute(
+                "SELECT COUNT(*) as count FROM recognition_results WHERE user_id = %s",
+                (user_id,)
+            )
+            total = cursor.fetchone()['count']
+            
+            return results, total
+        except Exception as e:
+            raise Exception(f'获取历史识别记录失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def delete_recognition_result(self, result_id, user_id):
+        """删除识别记录"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "DELETE FROM recognition_results WHERE id = %s AND user_id = %s",
+                (result_id, user_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'删除识别记录失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def create_album(self, user_id, name, category, cover_image=None, description=None):
+        """创建相册"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            now = int(time.time())
+            cursor.execute(
+                "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, 0, %s, %s)",
+                (user_id, name, category, cover_image, description, now, now)
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'创建相册失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_user_albums(self, user_id, category=None):
+        """获取用户相册列表"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            if category:
+                cursor.execute(
+                    "SELECT * FROM albums WHERE user_id = %s AND category = %s ORDER BY created_at DESC",
+                    (user_id, category)
+                )
+            else:
+                cursor.execute(
+                    "SELECT * FROM albums WHERE user_id = %s ORDER BY created_at DESC",
+                    (user_id,)
+                )
+            return cursor.fetchall()
+        except Exception as e:
+            raise Exception(f'获取相册列表失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_album_by_id(self, album_id, user_id):
+        """获取相册详情"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT * FROM albums WHERE id = %s AND user_id = %s",
+                (album_id, user_id)
+            )
+            return cursor.fetchone()
+        except Exception as e:
+            raise Exception(f'获取相册详情失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def update_album(self, album_id, user_id, name=None, description=None):
+        """更新相册信息"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            updates = []
+            params = []
+            
+            if name:
+                updates.append("name = %s")
+                params.append(name)
+            if description:
+                updates.append("description = %s")
+                params.append(description)
+            
+            if updates:
+                updates.append("updated_at = %s")
+                params.append(int(time.time()))
+                params.append(album_id)
+                params.append(user_id)
+                
+                sql = f"UPDATE albums SET {', '.join(updates)} WHERE id = %s AND user_id = %s"
+                cursor.execute(sql, params)
+                conn.commit()
+                return cursor.rowcount > 0
+            return False
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'更新相册失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def delete_album(self, album_id, user_id):
+        """删除相册"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "DELETE FROM albums WHERE id = %s AND user_id = %s",
+                (album_id, user_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'删除相册失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def add_image_to_album(self, album_id, user_id, image_path, flower_name=None, confidence=None, recognition_result_id=None):
+        """添加图片到相册"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            now = int(time.time())
+            cursor.execute(
+                "INSERT INTO album_images (album_id, recognition_result_id, image_path, flower_name, confidence, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                (album_id, recognition_result_id, image_path, flower_name, confidence, now)
+            )
+            
+            cursor.execute(
+                "UPDATE albums SET image_count = image_count + 1, updated_at = %s WHERE id = %s",
+                (now, album_id)
+            )
+            
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'添加图片到相册失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_album_images(self, album_id, user_id, limit=50, offset=0):
+        """获取相册中的图片"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT * FROM album_images WHERE album_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                (album_id, limit, offset)
+            )
+            images = cursor.fetchall()
+            
+            cursor.execute(
+                "SELECT COUNT(*) as count FROM album_images WHERE album_id = %s",
+                (album_id,)
+            )
+            total = cursor.fetchone()['count']
+            
+            return images, total
+        except Exception as e:
+            raise Exception(f'获取相册图片失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def delete_album_image(self, image_id, album_id, user_id):
+        """删除相册中的图片"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "DELETE FROM album_images WHERE id = %s AND album_id = %s AND album_id IN (SELECT id FROM albums WHERE user_id = %s)",
+                (image_id, album_id, user_id)
+            )
+            
+            if cursor.rowcount > 0:
+                cursor.execute(
+                    "UPDATE albums SET image_count = image_count - 1 WHERE id = %s",
+                    (album_id,)
+                )
+                conn.commit()
+                return True
+            return False
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'删除图片失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_album_categories(self, user_id):
+        """获取用户相册的所有分类"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT DISTINCT category FROM albums WHERE user_id = %s ORDER BY category",
+                (user_id,)
+            )
+            results = cursor.fetchall()
+            return [row['category'] for row in results]
+        except Exception as e:
+            raise Exception(f'获取相册分类失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def create_feedback(self, user_id, title, content, feedback_type):
+        """创建用户反馈"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            now = int(time.time())
+            cursor.execute(
+                "INSERT INTO user_feedback (user_id, title, content, feedback_type, status, created_at, updated_at) VALUES (%s, %s, %s, %s, 'pending', %s, %s)",
+                (user_id, title, content, feedback_type, now, now)
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'创建反馈失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_user_feedback(self, user_id, limit=20, offset=0):
+        """获取用户反馈列表"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT * FROM user_feedback WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                (user_id, limit, offset)
+            )
+            results = cursor.fetchall()
+            
+            cursor.execute(
+                "SELECT COUNT(*) as count FROM user_feedback WHERE user_id = %s",
+                (user_id,)
+            )
+            total = cursor.fetchone()['count']
+            
+            return results, total
+        except Exception as e:
+            raise Exception(f'获取反馈列表失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_feedback_by_id(self, feedback_id, user_id):
+        """获取反馈详情"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT * FROM user_feedback WHERE id = %s AND user_id = %s",
+                (feedback_id, user_id)
+            )
+            return cursor.fetchone()
+        except Exception as e:
+            raise Exception(f'获取反馈详情失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def delete_feedback(self, feedback_id, user_id):
+        """删除反馈"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "DELETE FROM user_feedback WHERE id = %s AND user_id = %s",
+                (feedback_id, user_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'删除反馈失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_all_feedback(self, status=None, limit=50, offset=0):
+        """获取所有反馈（管理员用）"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            if status:
+                cursor.execute(
+                    "SELECT f.*, u.username FROM user_feedback f JOIN users u ON f.user_id = u.id WHERE f.status = %s ORDER BY f.created_at DESC LIMIT %s OFFSET %s",
+                    (status, limit, offset)
+                )
+            else:
+                cursor.execute(
+                    "SELECT f.*, u.username FROM user_feedback f JOIN users u ON f.user_id = u.id ORDER BY f.created_at DESC LIMIT %s OFFSET %s",
+                    (limit, offset)
+                )
+            results = cursor.fetchall()
+            
+            cursor.execute("SELECT COUNT(*) as count FROM user_feedback")
+            total = cursor.fetchone()['count']
+            
+            return results, total
+        except Exception as e:
+            raise Exception(f'获取所有反馈失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def respond_feedback(self, feedback_id, response):
+        """回复反馈（管理员用）"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            now = int(time.time())
+            cursor.execute(
+                "UPDATE user_feedback SET response = %s, status = 'responded', updated_at = %s WHERE id = %s",
+                (response, now, feedback_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'回复反馈失败: {str(e)}')
+        finally:
+            conn.close()
 
 # 创建全局数据库管理器实例
 db_manager = SQLDatabaseManager()
@@ -1219,6 +1615,60 @@ def update_user_role(user_id, role_name):
 
 def get_system_summary():
     return db_manager.get_system_summary()
+
+def update_user_profile(user_id, email=None, password_hash=None):
+    return db_manager.update_user_profile(user_id, email, password_hash)
+
+def get_user_recognition_history(user_id, limit=20, offset=0):
+    return db_manager.get_user_recognition_history(user_id, limit, offset)
+
+def delete_recognition_result(result_id, user_id):
+    return db_manager.delete_recognition_result(result_id, user_id)
+
+def create_album(user_id, name, category, cover_image=None, description=None):
+    return db_manager.create_album(user_id, name, category, cover_image, description)
+
+def get_user_albums(user_id, category=None):
+    return db_manager.get_user_albums(user_id, category)
+
+def get_album_by_id(album_id, user_id):
+    return db_manager.get_album_by_id(album_id, user_id)
+
+def update_album(album_id, user_id, name=None, description=None):
+    return db_manager.update_album(album_id, user_id, name, description)
+
+def delete_album(album_id, user_id):
+    return db_manager.delete_album(album_id, user_id)
+
+def add_image_to_album(album_id, user_id, image_path, flower_name=None, confidence=None, recognition_result_id=None):
+    return db_manager.add_image_to_album(album_id, user_id, image_path, flower_name, confidence, recognition_result_id)
+
+def get_album_images(album_id, user_id, limit=50, offset=0):
+    return db_manager.get_album_images(album_id, user_id, limit, offset)
+
+def delete_album_image(image_id, album_id, user_id):
+    return db_manager.delete_album_image(image_id, album_id, user_id)
+
+def get_album_categories(user_id):
+    return db_manager.get_album_categories(user_id)
+
+def create_feedback(user_id, title, content, feedback_type):
+    return db_manager.create_feedback(user_id, title, content, feedback_type)
+
+def get_user_feedback(user_id, limit=20, offset=0):
+    return db_manager.get_user_feedback(user_id, limit, offset)
+
+def get_feedback_by_id(feedback_id, user_id):
+    return db_manager.get_feedback_by_id(feedback_id, user_id)
+
+def delete_feedback(feedback_id, user_id):
+    return db_manager.delete_feedback(feedback_id, user_id)
+
+def get_all_feedback(status=None, limit=50, offset=0):
+    return db_manager.get_all_feedback(status, limit, offset)
+
+def respond_feedback(feedback_id, response):
+    return db_manager.respond_feedback(feedback_id, response)
 
 if __name__ == '__main__':
     # 测试数据库连接
