@@ -33,7 +33,9 @@ from db import (
     create_album, get_user_albums, get_album_by_id, update_album, delete_album,
     add_image_to_album, get_album_images, delete_album_image, get_album_categories,
     create_feedback, get_user_feedback, get_feedback_by_id, delete_feedback,
-    get_all_feedback, respond_feedback
+    get_all_feedback, respond_feedback,
+    move_to_recycle_bin, get_recycle_bin_items, restore_from_recycle_bin,
+    permanently_delete, empty_recycle_bin
 )
 
 app = Flask(__name__)
@@ -599,18 +601,17 @@ def update_post_api(post_id):
 def delete_post_api(post_id):
     """删除帖子"""
     try:
-        # 获取帖子信息
         post = get_post_by_id(post_id)
         if not post:
             return jsonify({'success': False, 'error': '帖子不存在'}), 404
         
-        # 检查权限（只有帖子作者可以删除）
         if post['user_id'] != g.user_id:
             return jsonify({'success': False, 'error': '无权限删除此帖子'}), 403
         
+        move_to_recycle_bin(g.user_id, 'post', post_id, {'content': post['content'], 'image_url': post.get('image_url')})
         delete_post(post_id)
         
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'message': '帖子已移入回收站'})
     except Exception as e:
         print(f"删除帖子时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -988,10 +989,24 @@ def get_recognition_history():
 def delete_recognition_result_api(result_id):
     """删除识别记录"""
     try:
+        results, _ = get_user_recognition_history(g.user_id)
+        result_info = None
+        for r in results:
+            if r['id'] == result_id:
+                result_info = r
+                break
+        
+        if result_info:
+            move_to_recycle_bin(g.user_id, 'recognition', result_id, {
+                'image_path': result_info.get('image_path'),
+                'result': result_info.get('result'),
+                'confidence': result_info.get('confidence')
+            })
+        
         success = delete_recognition_result(result_id, g.user_id)
         
         if success:
-            return jsonify({'success': True, 'message': '删除成功'})
+            return jsonify({'success': True, 'message': '记录已移入回收站'})
         else:
             return jsonify({'success': False, 'error': '删除失败或记录不存在'})
     except Exception as e:
@@ -1130,10 +1145,24 @@ def add_image_to_album_api(album_id):
 def delete_album_image_api(album_id, image_id):
     """删除相册中的图片"""
     try:
+        images, _ = get_album_images(album_id, g.user_id)
+        image_info = None
+        for img in images:
+            if img['id'] == image_id:
+                image_info = img
+                break
+        
+        if image_info:
+            move_to_recycle_bin(g.user_id, 'image', image_id, {
+                'image_path': image_info.get('image_path'),
+                'flower_name': image_info.get('flower_name'),
+                'confidence': image_info.get('confidence')
+            })
+        
         success = delete_album_image(image_id, album_id, g.user_id)
         
         if success:
-            return jsonify({'success': True, 'message': '图片删除成功'})
+            return jsonify({'success': True, 'message': '图片已移入回收站'})
         else:
             return jsonify({'success': False, 'error': '删除失败'})
     except Exception as e:
@@ -1274,6 +1303,71 @@ def respond_feedback_api(feedback_id):
             return jsonify({'success': False, 'error': '回复失败'})
     except Exception as e:
         print(f"回复反馈时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle-bin', methods=['GET'])
+@auth_required
+def get_recycle_bin():
+    """获取回收站项目列表"""
+    try:
+        item_type = request.args.get('item_type')
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        
+        results, total = get_recycle_bin_items(g.user_id, item_type, limit, offset)
+        
+        return jsonify({
+            'success': True,
+            'items': results,
+            'total': total
+        })
+    except Exception as e:
+        print(f"获取回收站项目时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle-bin/<int:recycle_id>/restore', methods=['POST'])
+@auth_required
+def restore_item(recycle_id):
+    """从回收站恢复项目"""
+    try:
+        success, message = restore_from_recycle_bin(g.user_id, recycle_id)
+        
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': message}), 404
+    except Exception as e:
+        print(f"恢复项目时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle-bin/<int:recycle_id>', methods=['DELETE'])
+@auth_required
+def delete_permanently(recycle_id):
+    """永久删除回收站项目"""
+    try:
+        success, message = permanently_delete(g.user_id, recycle_id)
+        
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': message}), 404
+    except Exception as e:
+        print(f"永久删除项目时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recycle-bin/empty', methods=['POST'])
+@auth_required
+def empty_recycle_bin_api():
+    """清空回收站"""
+    try:
+        success = empty_recycle_bin(g.user_id)
+        
+        if success:
+            return jsonify({'success': True, 'message': '回收站已清空'})
+        else:
+            return jsonify({'success': False, 'error': '清空失败'})
+    except Exception as e:
+        print(f"清空回收站时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # 访问日志中间件

@@ -146,6 +146,15 @@ CREATE TABLE IF NOT EXISTS album_images (
     FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE,
     FOREIGN KEY (recognition_result_id) REFERENCES recognition_results (id) ON DELETE SET NULL
 );
+CREATE TABLE IF NOT EXISTS recycle_bin (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    item_type TEXT NOT NULL,
+    original_id INTEGER NOT NULL,
+    item_data TEXT,
+    deleted_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
 INSERT INTO sqlite_sequence VALUES('roles',2);
 INSERT INTO sqlite_sequence VALUES('permissions',9);
 INSERT INTO sqlite_sequence VALUES('users',1);

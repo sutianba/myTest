@@ -1490,6 +1490,181 @@ class SQLDatabaseManager:
             raise Exception(f'回复反馈失败: {str(e)}')
         finally:
             conn.close()
+    
+    def move_to_recycle_bin(self, user_id, item_type, original_id, item_data=None):
+        """将项目移入回收站"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            now = int(time.time())
+            import json
+            item_data_json = json.dumps(item_data) if item_data else None
+            cursor.execute(
+                "INSERT INTO recycle_bin (user_id, item_type, original_id, item_data, deleted_at) VALUES (%s, %s, %s, %s, %s)",
+                (user_id, item_type, original_id, item_data_json, now)
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'移入回收站失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_recycle_bin_items(self, user_id, item_type=None, limit=50, offset=0):
+        """获取回收站项目列表"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            import json
+            if item_type:
+                cursor.execute(
+                    "SELECT * FROM recycle_bin WHERE user_id = %s AND item_type = %s ORDER BY deleted_at DESC LIMIT %s OFFSET %s",
+                    (user_id, item_type, limit, offset)
+                )
+            else:
+                cursor.execute(
+                    "SELECT * FROM recycle_bin WHERE user_id = %s ORDER BY deleted_at DESC LIMIT %s OFFSET %s",
+                    (user_id, limit, offset)
+                )
+            results = cursor.fetchall()
+            
+            for item in results:
+                if item.get('item_data'):
+                    try:
+                        item['item_data'] = json.loads(item['item_data'])
+                    except:
+                        pass
+            
+            cursor.execute("SELECT COUNT(*) as count FROM recycle_bin WHERE user_id = %s", (user_id,))
+            total = cursor.fetchone()['count']
+            
+            return results, total
+        except Exception as e:
+            raise Exception(f'获取回收站项目失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def restore_from_recycle_bin(self, user_id, recycle_id):
+        """从回收站恢复项目"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT * FROM recycle_bin WHERE id = %s AND user_id = %s",
+                (recycle_id, user_id)
+            )
+            item = cursor.fetchone()
+            
+            if not item:
+                return False, "回收站项目不存在"
+            
+            item_type = item['item_type']
+            original_id = item['original_id']
+            item_data = item.get('item_data')
+            
+            if item_type == 'post':
+                cursor.execute(
+                    "UPDATE posts SET deleted_at = NULL WHERE id = %s",
+                    (original_id,)
+                )
+            elif item_type == 'image':
+                cursor.execute(
+                    "UPDATE album_images SET deleted_at = NULL WHERE id = %s",
+                    (original_id,)
+                )
+            elif item_type == 'recognition':
+                cursor.execute(
+                    "UPDATE recognition_results SET deleted_at = NULL WHERE id = %s",
+                    (original_id,)
+                )
+            
+            cursor.execute(
+                "DELETE FROM recycle_bin WHERE id = %s",
+                (recycle_id,)
+            )
+            
+            conn.commit()
+            return True, f"已恢复{item_type}"
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'恢复项目失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def permanently_delete(self, user_id, recycle_id):
+        """永久删除回收站项目"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT * FROM recycle_bin WHERE id = %s AND user_id = %s",
+                (recycle_id, user_id)
+            )
+            item = cursor.fetchone()
+            
+            if not item:
+                return False, "回收站项目不存在"
+            
+            item_type = item['item_type']
+            original_id = item['original_id']
+            
+            if item_type == 'post':
+                cursor.execute("DELETE FROM posts WHERE id = %s", (original_id,))
+            elif item_type == 'image':
+                cursor.execute("DELETE FROM album_images WHERE id = %s", (original_id,))
+            elif item_type == 'recognition':
+                cursor.execute("DELETE FROM recognition_results WHERE id = %s", (original_id,))
+            
+            cursor.execute(
+                "DELETE FROM recycle_bin WHERE id = %s",
+                (recycle_id,)
+            )
+            
+            conn.commit()
+            return True, f"已永久删除{item_type}"
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'永久删除失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def empty_recycle_bin(self, user_id):
+        """清空回收站"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT * FROM recycle_bin WHERE user_id = %s",
+                (user_id,)
+            )
+            items = cursor.fetchall()
+            
+            for item in items:
+                item_type = item['item_type']
+                original_id = item['original_id']
+                
+                if item_type == 'post':
+                    cursor.execute("DELETE FROM posts WHERE id = %s", (original_id,))
+                elif item_type == 'image':
+                    cursor.execute("DELETE FROM album_images WHERE id = %s", (original_id,))
+                elif item_type == 'recognition':
+                    cursor.execute("DELETE FROM recognition_results WHERE id = %s", (original_id,))
+            
+            cursor.execute("DELETE FROM recycle_bin WHERE user_id = %s", (user_id,))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'清空回收站失败: {str(e)}')
+        finally:
+            conn.close()
 
 # 创建全局数据库管理器实例
 db_manager = SQLDatabaseManager()
@@ -1669,6 +1844,21 @@ def get_all_feedback(status=None, limit=50, offset=0):
 
 def respond_feedback(feedback_id, response):
     return db_manager.respond_feedback(feedback_id, response)
+
+def move_to_recycle_bin(user_id, item_type, original_id, item_data=None):
+    return db_manager.move_to_recycle_bin(user_id, item_type, original_id, item_data)
+
+def get_recycle_bin_items(user_id, item_type=None, limit=50, offset=0):
+    return db_manager.get_recycle_bin_items(user_id, item_type, limit, offset)
+
+def restore_from_recycle_bin(user_id, recycle_id):
+    return db_manager.restore_from_recycle_bin(user_id, recycle_id)
+
+def permanently_delete(user_id, recycle_id):
+    return db_manager.permanently_delete(user_id, recycle_id)
+
+def empty_recycle_bin(user_id):
+    return db_manager.empty_recycle_bin(user_id)
 
 if __name__ == '__main__':
     # 测试数据库连接
