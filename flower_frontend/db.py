@@ -1,24 +1,56 @@
-import sqlite3
+import pymysql
 import time
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# 数据库路径
-DB_PATH = 'flower_recognition.db'
+# MySQL数据库配置
+DB_CONFIG = {
+    'host': 'localhost',
+    'user': 'root',
+    'password': 'your_password',
+    'database': 'flower_recognition',
+    'charset': 'utf8mb4',
+    'cursorclass': pymysql.cursors.DictCursor
+}
 
 # SQL文件路径
 SCHEMA_SQL = 'flower_recognition.sql'
 BACKUP_SQL = 'database_backup.sql'
 
 class SQLDatabaseManager:
-    def __init__(self, db_path=DB_PATH):
-        self.db_path = db_path
+    def __init__(self, db_config=DB_CONFIG):
+        self.db_config = db_config
         self.ensure_database_exists()
     
     def ensure_database_exists(self):
-        """确保数据库文件存在，从SQL文件初始化"""
-        if not os.path.exists(self.db_path):
-            self.initialize_from_sql(SCHEMA_SQL)
+        """确保数据库存在，从SQL文件初始化"""
+        try:
+            # 尝试连接数据库
+            conn = pymysql.connect(**self.db_config)
+            conn.close()
+        except pymysql.MySQLError as e:
+            if "1049" in str(e):  # 数据库不存在
+                self.create_database()
+            else:
+                raise
+        
+        # 初始化表结构
+        self.initialize_from_sql(SCHEMA_SQL)
+    
+    def create_database(self):
+        """创建数据库"""
+        config = self.db_config.copy()
+        db_name = config.pop('database')
+        
+        conn = pymysql.connect(**config)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+            conn.commit()
+            print(f"数据库 {db_name} 已创建")
+        finally:
+            conn.close()
     
     def initialize_from_sql(self, sql_file):
         """从SQL文件初始化数据库"""
@@ -28,23 +60,43 @@ class SQLDatabaseManager:
         with open(sql_file, 'r', encoding='utf-8') as f:
             sql_content = f.read()
         
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         cursor = conn.cursor()
         
-        # 执行SQL语句
-        cursor.executescript(sql_content)
-        conn.commit()
-        conn.close()
-        
-        print(f"数据库已从 {sql_file} 初始化完成")
+        try:
+            # 执行SQL语句（MySQL不支持executescript，需要逐句执行）
+            statements = sql_content.split(';')
+            for statement in statements:
+                statement = statement.strip()
+                if statement:
+                    cursor.execute(statement)
+            conn.commit()
+            print(f"数据库已从 {sql_file} 初始化完成")
+        except Exception as e:
+            conn.rollback()
+            print(f"初始化数据库失败: {str(e)}")
+            raise
+        finally:
+            conn.close()
     
     def delete_database(self):
-        """删除数据库文件"""
-        if os.path.exists(self.db_path):
-            os.remove(self.db_path)
-            print(f"数据库文件已删除: {self.db_path}")
+        """删除数据库"""
+        config = self.db_config.copy()
+        db_name = config.pop('database')
+        
+        conn = pymysql.connect(**config)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(f"DROP DATABASE IF EXISTS {db_name}")
+            conn.commit()
+            print(f"数据库 {db_name} 已删除")
             return True
-        return False
+        except Exception as e:
+            print(f"删除数据库失败: {str(e)}")
+            return False
+        finally:
+            conn.close()
     
     def execute_sql_file(self, sql_file):
         """执行SQL文件"""
@@ -54,11 +106,16 @@ class SQLDatabaseManager:
         with open(sql_file, 'r', encoding='utf-8') as f:
             sql_content = f.read()
         
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            cursor.executescript(sql_content)
+            # 执行SQL语句（MySQL不支持executescript，需要逐句执行）
+            statements = sql_content.split(';')
+            for statement in statements:
+                statement = statement.strip()
+                if statement:
+                    cursor.execute(statement)
             conn.commit()
             print(f"SQL文件 {sql_file} 执行成功")
             return True
@@ -71,11 +128,39 @@ class SQLDatabaseManager:
     
     def export_to_sql(self, output_file):
         """将当前数据库导出为SQL文件"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
+        cursor = conn.cursor()
         
         with open(output_file, 'w', encoding='utf-8') as f:
-            for line in conn.iterdump():
-                f.write('%s\n' % line)
+            # 导出表结构
+            cursor.execute("SHOW TABLES")
+            tables = cursor.fetchall()
+            
+            for table in tables:
+                table_name = list(table.values())[0]
+                # 获取表结构
+                cursor.execute(f"SHOW CREATE TABLE {table_name}")
+                create_table = cursor.fetchone()
+                f.write(create_table['Create Table'] + ';\n\n')
+                
+                # 获取数据
+                cursor.execute(f"SELECT * FROM {table_name}")
+                rows = cursor.fetchall()
+                if rows:
+                    columns = [col for col in rows[0].keys()]
+                    for row in rows:
+                        values = tuple(row.values())
+                        # 处理字符串值，添加引号
+                        formatted_values = []
+                        for val in values:
+                            if isinstance(val, str):
+                                formatted_values.append("'" + val + "'")
+                            elif val is None:
+                                formatted_values.append('NULL')
+                            else:
+                                formatted_values.append(str(val))
+                        f.write("INSERT INTO " + table_name + " (" + ", ".join(columns) + ") VALUES (" + ", ".join(formatted_values) + ");\n")
+                f.write('\n')
         
         conn.close()
         print(f"数据库已导出到 {output_file}")
@@ -83,8 +168,7 @@ class SQLDatabaseManager:
     
     def get_connection(self):
         """获取数据库连接"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = pymysql.connect(**self.db_config)
         return conn
     
     # 用户相关操作
