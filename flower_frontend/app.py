@@ -178,6 +178,7 @@ init_mysql_db()
 def login_required(f):
     """检查用户是否已登录的装饰器（使用JWT认证）"""
     from functools import wraps
+    import inspect
     @wraps(f)
     def decorated_function(*args, **kwargs):
         # 获取Token
@@ -191,9 +192,17 @@ def login_required(f):
         current_user = get_current_user_from_token(token)
         if not current_user:
             return jsonify({'success': False, 'error': 'Token无效或已过期'}), 401
-        
-        # 将用户信息添加到kwargs
-        kwargs['current_user'] = current_user
+
+        # 兼容两种写法：
+        # 1) 路由函数签名包含 current_user 参数（旧/新混用）
+        # 2) 路由函数无参数：通过 flask.g 取当前用户
+        from flask import g
+        g.current_user = current_user
+
+        sig = inspect.signature(f)
+        if 'current_user' in sig.parameters:
+            kwargs['current_user'] = current_user
+            return f(*args, **kwargs)
         return f(*args, **kwargs)
     return decorated_function
 
@@ -657,6 +666,8 @@ def check_auth():
 def upload_image():
     """上传图片（安全版本）"""
     try:
+        from flask import g
+        current_user = getattr(g, 'current_user', None) or {}
         if 'file' not in request.files:
             return jsonify({'success': False, 'error': '没有找到文件'})
         
@@ -674,13 +685,10 @@ def upload_image():
             file.save(filepath)
             
             try:
-                results = flower_model(filepath)
-                predictions = results.pandas().xyxy[0].to_dict(orient='records')
-                
-                if predictions:
-                    result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
-                else:
-                    result_str = '未识别到花卉'
+                classification = classify_image(filepath) or {}
+                plant_name = classification.get('plant_name') or classification.get('name') or ''
+                confidence = float(classification.get('confidence') or classification.get('conf') or 0.0)
+                result_str = plant_name if plant_name else '未识别到花卉'
                 
                 connection = get_db_connection()
                 cursor = connection.cursor()
@@ -689,8 +697,7 @@ def upload_image():
                     INSERT INTO recognition_results (user_id, image_path, result, confidence) 
                     VALUES (%s, %s, %s, %s)
                 """
-                confidence = predictions[0]['conf'] if predictions else 0
-                cursor.execute(insert_query, (session['user_id'], filepath, result_str, confidence))
+                cursor.execute(insert_query, (current_user.get('id'), filepath, result_str, confidence))
                 connection.commit()
                 
                 cursor.close()
@@ -699,7 +706,10 @@ def upload_image():
                 return jsonify({
                     'success': True,
                     'result': result_str,
-                    'predictions': predictions
+                    'classification': {
+                        'plant_name': plant_name,
+                        'confidence': confidence
+                    }
                 })
             except Exception as e:
                 print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
@@ -716,6 +726,8 @@ def upload_image():
 def get_results():
     """获取识别结果列表"""
     try:
+        from flask import g
+        current_user = getattr(g, 'current_user', None) or {}
         connection = get_db_connection()
         cursor = connection.cursor()
         
@@ -726,7 +738,7 @@ def get_results():
             ORDER BY created_at DESC 
             LIMIT 50
         """
-        cursor.execute(query, (session['user_id'],))
+        cursor.execute(query, (current_user.get('id'),))
         results = cursor.fetchall()
         
         cursor.close()
@@ -758,11 +770,13 @@ def get_results():
 def delete_result(result_id):
     """删除识别结果"""
     try:
+        from flask import g
+        current_user = getattr(g, 'current_user', None) or {}
         connection = get_db_connection()
         cursor = connection.cursor()
         
         delete_query = "DELETE FROM recognition_results WHERE id = %s AND user_id = %s"
-        cursor.execute(delete_query, (result_id, session['user_id']))
+        cursor.execute(delete_query, (result_id, current_user.get('id')))
         connection.commit()
         
         affected_rows = cursor.rowcount
@@ -785,19 +799,18 @@ def delete_result(result_id):
 def recognize():
     """识别图片API"""
     try:
+        from flask import g
+        current_user = getattr(g, 'current_user', None) or {}
         data = request.get_json()
         image_path = data.get('image_path')
         
         if not image_path:
             return jsonify({'success': False, 'error': '图片路径不能为空'})
-        
-        results = flower_model(image_path)
-        predictions = results.pandas().xyxy[0].to_dict(orient='records')
-        
-        if predictions:
-            result_str = ', '.join([f"{row['name']} ({row['conf']:.2f})" for row in predictions])
-        else:
-            result_str = '未识别到花卉'
+
+        classification = classify_image(image_path) or {}
+        plant_name = classification.get('plant_name') or classification.get('name') or ''
+        confidence = float(classification.get('confidence') or classification.get('conf') or 0.0)
+        result_str = plant_name if plant_name else '未识别到花卉'
         
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -806,8 +819,7 @@ def recognize():
             INSERT INTO recognition_results (user_id, image_path, result, confidence) 
             VALUES (%s, %s, %s, %s)
         """
-        confidence = predictions[0]['conf'] if predictions else 0
-        cursor.execute(insert_query, (session['user_id'], image_path, result_str, confidence))
+        cursor.execute(insert_query, (current_user.get('id'), image_path, result_str, confidence))
         connection.commit()
         
         cursor.close()
@@ -816,7 +828,10 @@ def recognize():
         return jsonify({
             'success': True,
             'result': result_str,
-            'predictions': predictions
+            'classification': {
+                'plant_name': plant_name,
+                'confidence': confidence
+            }
         })
         
     except Exception as e:
@@ -830,6 +845,8 @@ def recognize():
 def correct_result(result_id):
     """用户手动纠正识别结果"""
     try:
+        from flask import g
+        current_user = getattr(g, 'current_user', None) or {}
         data = request.get_json()
         correct_name = data.get('correct_name')
         
@@ -840,7 +857,7 @@ def correct_result(result_id):
         cursor = connection.cursor()
         
         check_query = "SELECT * FROM recognition_results WHERE id = %s AND user_id = %s"
-        cursor.execute(check_query, (result_id, session['user_id']))
+        cursor.execute(check_query, (result_id, current_user.get('id')))
         result = cursor.fetchone()
         
         if not result:
