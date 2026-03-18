@@ -595,6 +595,38 @@
         .footer p {
             opacity: 0.8;
         }
+
+        .btn-delete, .btn-restore, .btn-permanent {
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-restore {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-permanent {
+            background: #6c757d;
+            color: white;
+        }
+
+        .recycle-actions {
+            margin: 15px 0;
+        }
+
+        .albums-page, .history-page, .recycle-page {
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -605,6 +637,9 @@
             <ul class="navbar-nav">
                 <li class="nav-item"><a href="#" class="nav-link" data-page="home">首页</a></li>
                 <li class="nav-item"><a href="#" class="nav-link" data-page="community">社区</a></li>
+                <li class="nav-item"><a href="#" class="nav-link" data-page="albums">相册</a></li>
+                <li class="nav-item"><a href="#" class="nav-link" data-page="history">历史记录</a></li>
+                <li class="nav-item"><a href="#" class="nav-link" data-page="recycle-bin">回收站</a></li>
                 <li class="nav-item"><a href="#" class="nav-link">关于</a></li>
                 <li class="nav-item"><a href="login.html" class="nav-link" target="_blank">管理员登录</a></li>
             </ul>
@@ -683,6 +718,36 @@
                     <h3>最新帖子</h3>
                     <div id="postsList"></div>
                 </div>
+            </div>
+        </div>
+
+        <!-- 相册页面 -->
+        <div class="page" id="albums">
+            <div class="albums-page">
+                <h2>🖼️ 我的相册</h2>
+                <p>按花卉类别管理您的照片</p>
+                <div id="albumsList"></div>
+            </div>
+        </div>
+
+        <!-- 历史记录页面 -->
+        <div class="page" id="history">
+            <div class="history-page">
+                <h2>📜 历史识别记录</h2>
+                <p>查看您的历史识别数据</p>
+                <div id="historyList"></div>
+            </div>
+        </div>
+
+        <!-- 回收站页面 -->
+        <div class="page" id="recycle-bin">
+            <div class="recycle-page">
+                <h2>🗑️ 回收站</h2>
+                <p>已删除的项目可以在此恢复</p>
+                <div class="recycle-actions">
+                    <button class="btn btn-danger" id="emptyRecycleBtn">清空回收站</button>
+                </div>
+                <div id="recycleList"></div>
             </div>
         </div>
 
@@ -767,9 +832,14 @@
             });
             document.getElementById(pageId).classList.add('active');
 
-            // 如果切换到社区页面，加载帖子
             if (pageId === 'community') {
                 loadPosts();
+            } else if (pageId === 'albums') {
+                loadAlbums();
+            } else if (pageId === 'history') {
+                loadHistory();
+            } else if (pageId === 'recycle-bin') {
+                loadRecycleBin();
             }
         }
 
@@ -1256,6 +1326,289 @@
             if (confidence >= 0.6) return 'medium';
             return 'low';
         }
+
+        // 加载相册
+        async function loadAlbums() {
+            const albumsList = document.getElementById('albumsList');
+            if (!albumsList) return;
+
+            if (!token) {
+                albumsList.innerHTML = '<p>请先登录查看相册</p>';
+                return;
+            }
+
+            albumsList.innerHTML = '<p>加载中...</p>';
+
+            try {
+                const response = await fetch('/api/albums', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    displayAlbums(data.albums);
+                } else {
+                    albumsList.innerHTML = '<p>加载失败，请稍后重试</p>';
+                }
+            } catch (error) {
+                console.error('加载相册错误:', error);
+                albumsList.innerHTML = '<p>加载失败，请稍后重试</p>';
+            }
+        }
+
+        // 显示相册
+        function displayAlbums(albums) {
+            const albumsList = document.getElementById('albumsList');
+            albumsList.innerHTML = '';
+
+            if (albums.length === 0) {
+                albumsList.innerHTML = '<p>暂无相册，识别花卉并保存到相册后将自动创建</p>';
+                return;
+            }
+
+            albums.forEach(album => {
+                const albumCard = document.createElement('div');
+                albumCard.className = 'album-card';
+                albumCard.style.cssText = 'border:1px solid #ddd;border-radius:10px;padding:15px;margin:10px 0;cursor:pointer;';
+                albumCard.innerHTML = `
+                    <h3>${album.name}</h3>
+                    <p>分类: ${album.category}</p>
+                    <p>图片数量: ${album.image_count}</p>
+                `;
+                albumCard.onclick = function() {
+                    viewAlbumDetail(album.id);
+                };
+                albumsList.appendChild(albumCard);
+            });
+        }
+
+        // 查看相册详情
+        async function viewAlbumDetail(albumId) {
+            try {
+                const response = await fetch(`/api/albums/${albumId}`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`相册: ${data.album.name}\n分类: ${data.album.category}\n图片数: ${data.total}`);
+                }
+            } catch (error) {
+                alert('加载失败');
+            }
+        }
+
+        // 加载历史记录
+        async function loadHistory() {
+            const historyList = document.getElementById('historyList');
+            if (!historyList) return;
+
+            if (!token) {
+                historyList.innerHTML = '<p>请先登录查看历史记录</p>';
+                return;
+            }
+
+            historyList.innerHTML = '<p>加载中...</p>';
+
+            try {
+                const response = await fetch('/api/recognition/history', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    displayHistory(data.results);
+                } else {
+                    historyList.innerHTML = '<p>加载失败，请稍后重试</p>';
+                }
+            } catch (error) {
+                console.error('加载历史记录错误:', error);
+                historyList.innerHTML = '<p>加载失败，请稍后重试</p>';
+            }
+        }
+
+        // 显示历史记录
+        function displayHistory(results) {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '';
+
+            if (results.length === 0) {
+                historyList.innerHTML = '<p>暂无历史记录</p>';
+                return;
+            }
+
+            results.forEach(item => {
+                const card = document.createElement('div');
+                card.style.cssText = 'border:1px solid #ddd;border-radius:10px;padding:15px;margin:10px 0;';
+                card.innerHTML = `
+                    <p><strong>识别结果:</strong> ${item.result}</p>
+                    <p><strong>置信度:</strong> ${(item.confidence * 100).toFixed(2)}%</p>
+                    <p><strong>时间:</strong> ${new Date(item.created_at * 1000).toLocaleString()}</p>
+                    <button class="btn-delete" data-id="${item.id}">删除</button>
+                `;
+                
+                const deleteBtn = card.querySelector('.btn-delete');
+                deleteBtn.onclick = async function() {
+                    if (confirm('确定要删除这条记录吗？')) {
+                        await deleteHistoryItem(item.id);
+                    }
+                };
+                
+                historyList.appendChild(card);
+            });
+        }
+
+        // 删除历史记录
+        async function deleteHistoryItem(id) {
+            try {
+                const response = await fetch(`/api/recognition/results/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(data.message);
+                    loadHistory();
+                } else {
+                    alert('删除失败');
+                }
+            } catch (error) {
+                alert('删除失败');
+            }
+        }
+
+        // 加载回收站
+        async function loadRecycleBin() {
+            const recycleList = document.getElementById('recycleList');
+            if (!recycleList) return;
+
+            if (!token) {
+                recycleList.innerHTML = '<p>请先登录查看回收站</p>';
+                return;
+            }
+
+            recycleList.innerHTML = '<p>加载中...</p>';
+
+            try {
+                const response = await fetch('/api/recycle-bin', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    displayRecycleItems(data.items);
+                } else {
+                    recycleList.innerHTML = '<p>加载失败，请稍后重试</p>';
+                }
+            } catch (error) {
+                console.error('加载回收站错误:', error);
+                recycleList.innerHTML = '<p>加载失败，请稍后重试</p>';
+            }
+        }
+
+        // 显示回收站项目
+        function displayRecycleItems(items) {
+            const recycleList = document.getElementById('recycleList');
+            recycleList.innerHTML = '';
+
+            if (items.length === 0) {
+                recycleList.innerHTML = '<p>回收站是空的</p>';
+                return;
+            }
+
+            const itemTypeNames = {
+                'post': '帖子',
+                'image': '图片',
+                'recognition': '识别记录'
+            };
+
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.style.cssText = 'border:1px solid #ddd;border-radius:10px;padding:15px;margin:10px 0;';
+                card.innerHTML = `
+                    <p><strong>类型:</strong> ${itemTypeNames[item.item_type] || item.item_type}</p>
+                    <p><strong>删除时间:</strong> ${new Date(item.deleted_at * 1000).toLocaleString()}</p>
+                    <button class="btn-restore" data-id="${item.id}">恢复</button>
+                    <button class="btn-permanent" data-id="${item.id}">永久删除</button>
+                `;
+                
+                const restoreBtn = card.querySelector('.btn-restore');
+                restoreBtn.onclick = async function() {
+                    await restoreRecycleItem(item.id);
+                };
+                
+                const permanentBtn = card.querySelector('.btn-permanent');
+                permanentBtn.onclick = async function() {
+                    if (confirm('确定要永久删除吗？此操作不可恢复！')) {
+                        await permanentDeleteItem(item.id);
+                    }
+                };
+                
+                recycleList.appendChild(card);
+            });
+        }
+
+        // 恢复回收站项目
+        async function restoreRecycleItem(id) {
+            try {
+                const response = await fetch(`/api/recycle-bin/${id}/restore`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(data.message);
+                    loadRecycleBin();
+                } else {
+                    alert('恢复失败');
+                }
+            } catch (error) {
+                alert('恢复失败');
+            }
+        }
+
+        // 永久删除
+        async function permanentDeleteItem(id) {
+            try {
+                const response = await fetch(`/api/recycle-bin/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(data.message);
+                    loadRecycleBin();
+                } else {
+                    alert('删除失败');
+                }
+            } catch (error) {
+                alert('删除失败');
+            }
+        }
+
+        // 清空回收站
+        document.getElementById('emptyRecycleBtn')?.addEventListener('click', async function() {
+            if (!token) {
+                alert('请先登录');
+                return;
+            }
+            if (confirm('确定要清空回收站吗？此操作不可恢复！')) {
+                try {
+                    const response = await fetch('/api/recycle-bin/empty', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        alert(data.message);
+                        loadRecycleBin();
+                    } else {
+                        alert('清空失败');
+                    }
+                } catch (error) {
+                    alert('清空失败');
+                }
+            }
+        });
 
         // 设置社区功能
         function setupCommunity() {

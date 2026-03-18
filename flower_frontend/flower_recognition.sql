@@ -68,6 +68,7 @@ CREATE TABLE recognition_results (
     result TEXT,
     confidence REAL,
     created_at INTEGER NOT NULL,
+    deleted_at INTEGER,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 );
 CREATE TABLE posts (
@@ -79,6 +80,7 @@ CREATE TABLE posts (
     comments_count INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
+    deleted_at INTEGER,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 INSERT INTO posts VALUES(1,1,'测试帖子内容，这是我的第一篇社区帖子！','https://example.com/flower.jpg',1,1,1769563050,1769563050);
@@ -143,6 +145,7 @@ CREATE TABLE IF NOT EXISTS album_images (
     flower_name TEXT,
     confidence REAL,
     created_at INTEGER NOT NULL,
+    deleted_at INTEGER,
     FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE,
     FOREIGN KEY (recognition_result_id) REFERENCES recognition_results (id) ON DELETE SET NULL
 );

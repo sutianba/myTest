@@ -359,7 +359,7 @@ class SQLDatabaseManager:
             conn.close()
     
     def get_posts(self, limit=20, offset=0):
-        """获取帖子列表"""
+        """获取帖子列表（排除已删除的）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
@@ -367,8 +367,9 @@ class SQLDatabaseManager:
             cursor.execute('''
             SELECT p.*, u.username FROM posts p
             JOIN users u ON p.user_id = u.id
+            WHERE p.deleted_at IS NULL
             ORDER BY p.created_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
             ''', (limit, offset))
             posts = cursor.fetchall()
             return [dict(post) for post in posts]
@@ -418,12 +419,13 @@ class SQLDatabaseManager:
             conn.close()
     
     def delete_post(self, post_id):
-        """删除帖子"""
+        """删除帖子（软删除）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            cursor.execute('DELETE FROM posts WHERE id = ?', (post_id,))
+            now = int(time.time())
+            cursor.execute('UPDATE posts SET deleted_at = %s WHERE id = %s', (now, post_id))
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
@@ -1128,19 +1130,19 @@ class SQLDatabaseManager:
             conn.close()
     
     def get_user_recognition_history(self, user_id, limit=20, offset=0):
-        """获取用户历史识别记录"""
+        """获取用户历史识别记录（排除已删除的）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
             cursor.execute(
-                "SELECT * FROM recognition_results WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                "SELECT * FROM recognition_results WHERE user_id = %s AND deleted_at IS NULL ORDER BY created_at DESC LIMIT %s OFFSET %s",
                 (user_id, limit, offset)
             )
             results = cursor.fetchall()
             
             cursor.execute(
-                "SELECT COUNT(*) as count FROM recognition_results WHERE user_id = %s",
+                "SELECT COUNT(*) as count FROM recognition_results WHERE user_id = %s AND deleted_at IS NULL",
                 (user_id,)
             )
             total = cursor.fetchone()['count']
@@ -1152,14 +1154,15 @@ class SQLDatabaseManager:
             conn.close()
     
     def delete_recognition_result(self, result_id, user_id):
-        """删除识别记录"""
+        """删除识别记录（软删除）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
+            now = int(time.time())
             cursor.execute(
-                "DELETE FROM recognition_results WHERE id = %s AND user_id = %s",
-                (result_id, user_id)
+                "UPDATE recognition_results SET deleted_at = %s WHERE id = %s AND user_id = %s",
+                (now, result_id, user_id)
             )
             conn.commit()
             return cursor.rowcount > 0
@@ -1303,19 +1306,19 @@ class SQLDatabaseManager:
             conn.close()
     
     def get_album_images(self, album_id, user_id, limit=50, offset=0):
-        """获取相册中的图片"""
+        """获取相册中的图片（排除已删除的）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
             cursor.execute(
-                "SELECT * FROM album_images WHERE album_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                "SELECT * FROM album_images WHERE album_id = %s AND deleted_at IS NULL ORDER BY created_at DESC LIMIT %s OFFSET %s",
                 (album_id, limit, offset)
             )
             images = cursor.fetchall()
             
             cursor.execute(
-                "SELECT COUNT(*) as count FROM album_images WHERE album_id = %s",
+                "SELECT COUNT(*) as count FROM album_images WHERE album_id = %s AND deleted_at IS NULL",
                 (album_id,)
             )
             total = cursor.fetchone()['count']
@@ -1327,14 +1330,15 @@ class SQLDatabaseManager:
             conn.close()
     
     def delete_album_image(self, image_id, album_id, user_id):
-        """删除相册中的图片"""
+        """删除相册中的图片（软删除）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
+            now = int(time.time())
             cursor.execute(
-                "DELETE FROM album_images WHERE id = %s AND album_id = %s AND album_id IN (SELECT id FROM albums WHERE user_id = %s)",
-                (image_id, album_id, user_id)
+                "UPDATE album_images SET deleted_at = %s WHERE id = %s AND album_id = %s AND album_id IN (SELECT id FROM albums WHERE user_id = %s)",
+                (now, image_id, album_id, user_id)
             )
             
             if cursor.rowcount > 0:
