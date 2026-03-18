@@ -63,7 +63,7 @@ const Login: React.FC = () => {
           localStorage.setItem('refresh_token', data.refresh_token);
         }
         
-        login(userData);
+        login(userData, data.token || 'guest-token');
         toast.success('登录成功！');
         navigate('/');
       } else {
@@ -182,7 +182,7 @@ const Login: React.FC = () => {
                  email: 'guest@example.com',
                  role: 'user'
                };
-               login(guestUser);
+               login(guestUser, 'guest-token');
                toast.success('已以访客身份进入系统');
                navigate('/');
              }}

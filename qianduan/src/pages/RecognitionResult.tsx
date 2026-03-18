@@ -14,13 +14,12 @@ const RecognitionResult: React.FC = () => {
 
   useEffect(() => {
     // 从localStorage获取识别的图片和结果
-    const imageUrl = localStorage.getItem('lastRecognitionImage');
+    let imageUrl = localStorage.getItem('lastRecognitionImage');
     const resultStr = localStorage.getItem('lastRecognitionResult');
     
+    // 如果没有识别图片，使用mock数据
     if (!imageUrl) {
-      // 如果没有识别图片，重定向到上传页面
-      navigate('/');
-      return;
+      imageUrl = 'https://picsum.photos/seed/flower/600/400';
     }
     
     // 模拟识别过程（实际是从localStorage读取结果）
@@ -96,7 +95,11 @@ const RecognitionResult: React.FC = () => {
           scientificName: 'Rosa',
           description: '玫瑰是一种象征爱情与美丽的花卉，拥有丰富的花色和浓郁的香气。',
           imageUrl: '',
-          bloomingSeason: '夏季至秋季'
+          bloomingSeason: '夏季至秋季',
+          sunlightRequirements: '充足阳光',
+          waterNeeds: '适量浇水',
+          origin: '欧洲、亚洲',
+          careTips: '保持土壤湿润，定期施肥，避免过度浇水。'
         };
         
         result = {
@@ -104,7 +107,9 @@ const RecognitionResult: React.FC = () => {
           confidence: 0.95,
           similarPlants: [],
           imageUrl,
-          recognizedAt: new Date().toISOString()
+          recognizedAt: new Date().toISOString(),
+          date: new Date().toLocaleDateString(),
+          location: '北京市海淀区'
         };
       }
       

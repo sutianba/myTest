@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, ReactNode, useContext } from "react";
+import React, { createContext, useState, useEffect, ReactNode, useContext } from "react";
 
 interface User {
   id: string;
@@ -15,7 +15,7 @@ interface AuthContextType {
   logout: () => void;
 }
 
-export const AuthContext = createContext<AuthContextType>({
+const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   currentUser: {
     id: '',
@@ -25,10 +25,10 @@ export const AuthContext = createContext<AuthContextType>({
   },
   token: null,
   login: () => {},
-  logout: () => {},
+  logout: () => {}
 });
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User>({
     id: '',
@@ -38,7 +38,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   });
   const [token, setToken] = useState<string | null>(null);
 
-  // 从本地存储加载认证状态
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
@@ -61,8 +60,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsAuthenticated(true);
     setCurrentUser(userData);
     setToken(token);
-    
-    // 保存到本地存储
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
   };
@@ -76,20 +73,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       role: 'user'
     });
     setToken(null);
-    
-    // 从本地存储移除
     localStorage.removeItem('token');
     localStorage.removeItem('user');
   };
 
+  const value = {
+    isAuthenticated,
+    currentUser,
+    token,
+    login,
+    logout
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, currentUser, token, login, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// 添加 useAuth 钩子
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -97,3 +99,5 @@ export const useAuth = () => {
   }
   return context;
 };
+
+export { AuthContext };
