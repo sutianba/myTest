@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTheme } from '../hooks/useTheme';
 
 interface Comment {
   id: number;
@@ -29,7 +28,6 @@ interface PostDetail {
 }
 
 const PostDetail: React.FC = () => {
-  const { theme } = useTheme();
   const { postId } = useParams<{ postId: string }>();
   const navigate = useNavigate();
   const [post, setPost] = useState<PostDetail | null>(null);

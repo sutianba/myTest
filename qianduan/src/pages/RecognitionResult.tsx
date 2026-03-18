@@ -66,11 +66,7 @@ const RecognitionResult: React.FC = () => {
           scientificName: detection ? detection.name : 'Unknown',
           description: '',
           imageUrl: '',
-          characteristics: [],
-          habitat: '',
-          bloomingSeason: '',
-          uses: [],
-          funFacts: []
+          bloomingSeason: ''
         };
         
         result = {
@@ -100,11 +96,7 @@ const RecognitionResult: React.FC = () => {
           scientificName: 'Rosa',
           description: '玫瑰是一种象征爱情与美丽的花卉，拥有丰富的花色和浓郁的香气。',
           imageUrl: '',
-          characteristics: [],
-          habitat: '',
-          bloomingSeason: '夏季至秋季',
-          uses: [],
-          funFacts: []
+          bloomingSeason: '夏季至秋季'
         };
         
         result = {

@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/authContext';
 import ImageUpload from '../components/ImageUpload';
-import PlantCard from '../components/PlantCard';
-import SearchBar from '../components/SearchBar';
-import CategoryFilter from '../components/CategoryFilter';
 
 interface Album {
   id: number;
@@ -31,8 +27,7 @@ interface Photo {
 }
 
 const AlbumManagement: React.FC = () => {
-  const navigate = useNavigate();
-  const { currentUser, token } = useAuth();
+  const { token } = useAuth();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [isCreating, setIsCreating] = useState(false);
