@@ -218,7 +218,6 @@ def register():
     
     try:
         data = request.get_json()
-        print("前端传入:", data)
         username = data.get('username')
         password = data.get('password')
         email = data.get('email')
@@ -234,21 +233,14 @@ def register():
         # 检查用户名是否已存在
         from db_config import get_db_cursor
         
-        print(f"检查用户名和邮箱是否存在: username={username}, email={email}")
-        
         with get_db_cursor() as cursor:
             if email:
                 check_query = "SELECT * FROM users WHERE username = %s OR email = %s"
-                print(f"执行检查SQL: {check_query}")
-                print(f"检查参数: ({username}, {email})")
                 cursor.execute(check_query, (username, email))
             else:
                 check_query = "SELECT * FROM users WHERE username = %s"
-                print(f"执行检查SQL: {check_query}")
-                print(f"检查参数: ({username},)")
                 cursor.execute(check_query, (username,))
             existing_user = cursor.fetchone()
-            print(f"检查结果: {existing_user}")
             
             if existing_user:
                 logger.log_register(0, username, email, False, ip_address, '用户名或邮箱已存在')
@@ -265,12 +257,8 @@ def register():
                 INSERT INTO users (username, email, password, is_verified) 
                 VALUES (%s, %s, %s, 0)
             """
-            print("执行SQL:", insert_query)
-            print("参数:", (username, email, password_hash))
             cursor.execute(insert_query, (username, email, password_hash))
             user_id = cursor.lastrowid
-            print("SQL执行成功")
-            print("数据库写入完成，用户ID:", user_id)
         
         if email:
             # 生成验证token
