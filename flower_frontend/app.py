@@ -132,8 +132,20 @@ def permission_required(permission):
     """权限验证装饰器"""
     def decorator(f):
         def decorated_function(*args, **kwargs):
-            if not hasattr(g, 'user_id'):
-                return jsonify({'success': False, 'error': '需要认证'}), 401
+            token = request.headers.get('Authorization')
+            if not token:
+                return jsonify({'success': False, 'error': '未提供认证令牌'}), 401
+            
+            if token.startswith('Bearer '):
+                token = token[7:]
+            
+            payload = verify_jwt(token)
+            if not payload:
+                return jsonify({'success': False, 'error': '无效或过期的认证令牌'}), 401
+            
+            g.user_id = payload['user_id']
+            g.username = payload['username']
+            g.role = payload.get('role', 'user')
             
             if not check_user_permission(g.user_id, permission):
                 return jsonify({'success': False, 'error': '权限不足'}), 403
@@ -142,6 +154,32 @@ def permission_required(permission):
         decorated_function.__name__ = f.__name__
         return decorated_function
     return decorator
+
+def admin_required(f):
+    """管理员权限装饰器"""
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({'success': False, 'error': '未提供认证令牌'}), 401
+        
+        if token.startswith('Bearer '):
+            token = token[7:]
+        
+        payload = verify_jwt(token)
+        if not payload:
+            return jsonify({'success': False, 'error': '无效或过期的认证令牌'}), 401
+        
+        g.user_id = payload['user_id']
+        g.username = payload['username']
+        g.role = payload.get('role', 'user')
+        
+        user_role = g.role
+        if user_role not in ['super_admin', 'admin']:
+            return jsonify({'success': False, 'error': '需要管理员权限'}), 403
+        
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
 
 @app.route('/')
 def index():
