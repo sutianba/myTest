@@ -6,9 +6,11 @@ import { useNavigate } from 'react-router-dom';
 
 interface ImageUploadProps {
   onImageUpload?: (file: File) => void;
+  onUpload?: (files: File[]) => void;
+  isUploading?: boolean;
 }
 
-const ImageUpload: React.FC<ImageUploadProps> = ({ onImageUpload }) => {
+const ImageUpload: React.FC<ImageUploadProps> = ({ onImageUpload, onUpload, isUploading = false }) => {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);

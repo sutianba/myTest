@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
-import { Plant, RecognitionResult as RecognitionResultType } from '../types/plant';
+import { Plant, RecognitionResult as RecognitionResultType, PlantCategory } from '../types/plant';
 import { toast } from 'sonner';
 
 const RecognitionResult: React.FC = () => {
@@ -62,7 +62,7 @@ const RecognitionResult: React.FC = () => {
         const plant: Plant = {
           id: detection ? detection.name.toLowerCase().replace(/\s+/g, '-') : 'unknown',
           name: detection ? detection.name : '未知植物',
-          category: 'flower',
+          category: PlantCategory.FLOWER,
           scientificName: detection ? detection.name : 'Unknown',
           description: '',
           imageUrl: '',
@@ -96,7 +96,7 @@ const RecognitionResult: React.FC = () => {
         const recognizedPlant: Plant = {
           id: 'rose',
           name: '玫瑰',
-          category: 'flower',
+          category: PlantCategory.FLOWER,
           scientificName: 'Rosa',
           description: '玫瑰是一种象征爱情与美丽的花卉，拥有丰富的花色和浓郁的香气。',
           imageUrl: '',
@@ -116,7 +116,7 @@ const RecognitionResult: React.FC = () => {
         };
       }
       
-      if (result) {
+      if (result && result.plant) {
         setRecognitionResult(result);
         setCandidates(topCandidates);
         

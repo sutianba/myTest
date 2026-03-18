@@ -247,7 +247,7 @@ const Register: React.FC = () => {
                  email: 'guest@example.com',
                  role: 'user'
                };
-               login(guestUser);
+               login(guestUser, 'guest-token');
                toast.success('已以访客身份进入系统');
                navigate('/');
              }}

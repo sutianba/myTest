@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast } from 'sonner';
 import { useAuth } from '../contexts/authContext';
 import ImageUpload from '../components/ImageUpload';
 import PlantCard from '../components/PlantCard';
@@ -32,14 +32,12 @@ interface Photo {
 
 const AlbumManagement: React.FC = () => {
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { currentUser, token } = useAuth();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newAlbum, setNewAlbum] = useState({ name: '', description: '' });
   const [isUploading, setIsUploading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState('all');
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [feedback, setFeedback] = useState({
@@ -393,138 +391,140 @@ const AlbumManagement: React.FC = () => {
 
       {/* 相册详情 */}
       {selectedAlbum && (
-        <div className="mt-8 bg-white rounded-lg shadow-md p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-semibold">{selectedAlbum.name}</h2>
-            <button
-              onClick={() => setSelectedAlbum(null)}
-              className="text-gray-600 hover:text-gray-800"
-            >
-              返回
-            </button>
-          </div>
+        <>
+          <div className="mt-8 bg-white rounded-lg shadow-md p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-semibold">{selectedAlbum.name}</h2>
+              <button
+                onClick={() => setSelectedAlbum(null)}
+                className="text-gray-600 hover:text-gray-800"
+              >
+                返回
+              </button>
+            </div>
 
-          <p className="text-gray-600 mb-6">{selectedAlbum.description}</p>
+            <p className="text-gray-600 mb-6">{selectedAlbum.description}</p>
 
-          {/* 图片上传 */}
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-4">上传图片</h3>
-            <ImageUpload onUpload={handleUpload} isUploading={isUploading} />
-          </div>
+            {/* 图片上传 */}
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-4">上传图片</h3>
+              <ImageUpload onUpload={handleUpload} isUploading={isUploading} />
+            </div>
 
-          {/* 批量操作 */}
-          <div className="mb-6">
-            <button
-              onClick={handleClassifyPhotos}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition mr-2"
-            >
-              批量分类
-            </button>
-          </div>
+            {/* 批量操作 */}
+            <div className="mb-6">
+              <button
+                onClick={handleClassifyPhotos}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition mr-2"
+              >
+                批量分类
+              </button>
+            </div>
 
-          {/* 图片列表 */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {selectedAlbum.photos?.map(photo => (
-              <div key={photo.id} className="relative">
-                <div className="h-48 bg-gray-200 rounded-lg overflow-hidden">
-                  <img
-                    src={`http://localhost:5000/${photo.image_path}`}
-                    alt={photo.filename}
-                    className="w-full h-full object-cover"
-                  />
+            {/* 图片列表 */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {selectedAlbum.photos?.map(photo => (
+                <div key={photo.id} className="relative">
+                  <div className="h-48 bg-gray-200 rounded-lg overflow-hidden">
+                    <img
+                      src={`http://localhost:5000/${photo.image_path}`}
+                      alt={photo.filename}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="mt-2">
+                    <p className="text-sm font-medium">{photo.filename}</p>
+                    {photo.plant_name && (
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-green-600">
+                          {photo.plant_name} ({(photo.confidence * 100).toFixed(1)}%)
+                        </p>
+                        <button
+                          onClick={() => handleFeedback(photo)}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          反馈
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleDeletePhoto(photo.id)}
+                    className="absolute top-2 right-2 bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-red-700"
+                  >
+                    ×
+                  </button>
                 </div>
-                <div className="mt-2">
-                  <p className="text-sm font-medium">{photo.filename}</p>
-                  {photo.plant_name && (
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-green-600">
-                        {photo.plant_name} ({(photo.confidence * 100).toFixed(1)}%)
-                      </p>
-                      <button
-                        onClick={() => handleFeedback(photo)}
-                        className="text-blue-600 hover:text-blue-800 text-xs"
-                      >
-                        反馈
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => handleDeletePhoto(photo.id)}
-                  className="absolute top-2 right-2 bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-red-700"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 反馈模态框 */}
-        {showFeedbackModal && selectedPhoto && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-4">反馈识别结果</h3>
-              <div className="mb-4">
-                <img
-                  src={`http://localhost:5000/${selectedPhoto.image_path}`}
-                  alt={selectedPhoto.filename}
-                  className="w-full h-48 object-cover rounded-lg mb-4"
-                />
-                <p className="text-sm font-medium">{selectedPhoto.filename}</p>
-                <p className="text-sm text-green-600">
-                  当前识别: {selectedPhoto.plant_name} ({(selectedPhoto.confidence * 100).toFixed(1)}%)
-                </p>
-              </div>
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2">
-                  <input
-                    type="checkbox"
-                    checked={feedback.isCorrect}
-                    onChange={(e) => setFeedback({ ...feedback, isCorrect: e.target.checked })}
-                    className="mr-2"
-                  />
-                  识别结果正确
-                </label>
-              </div>
-              {!feedback.isCorrect && (
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-2">正确的植物名称</label>
-                  <input
-                    type="text"
-                    value={feedback.correctedPlantName}
-                    onChange={(e) => setFeedback({ ...feedback, correctedPlantName: e.target.value })}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                </div>
-              )}
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2">其他反馈</label>
-                <textarea
-                  value={feedback.feedback}
-                  onChange={(e) => setFeedback({ ...feedback, feedback: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                  rows={3}
-                ></textarea>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setShowFeedbackModal(false)}
-                  className="px-4 py-2 border rounded-lg hover:bg-gray-100 transition"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleSubmitFeedback}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                >
-                  提交反馈
-                </button>
-              </div>
+              ))}
             </div>
           </div>
-        )}
-      </div>
+
+          {/* 反馈模态框 */}
+          {showFeedbackModal && selectedPhoto && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-4">反馈识别结果</h3>
+                <div className="mb-4">
+                  <img
+                    src={`http://localhost:5000/${selectedPhoto.image_path}`}
+                    alt={selectedPhoto.filename}
+                    className="w-full h-48 object-cover rounded-lg mb-4"
+                  />
+                  <p className="text-sm font-medium">{selectedPhoto.filename}</p>
+                  <p className="text-sm text-green-600">
+                    当前识别: {selectedPhoto.plant_name} ({(selectedPhoto.confidence * 100).toFixed(1)}%)
+                  </p>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-gray-700 mb-2">
+                    <input
+                      type="checkbox"
+                      checked={feedback.isCorrect}
+                      onChange={(e) => setFeedback({ ...feedback, isCorrect: e.target.checked })}
+                      className="mr-2"
+                    />
+                    识别结果正确
+                  </label>
+                </div>
+                {!feedback.isCorrect && (
+                  <div className="mb-4">
+                    <label className="block text-gray-700 mb-2">正确的植物名称</label>
+                    <input
+                      type="text"
+                      value={feedback.correctedPlantName}
+                      onChange={(e) => setFeedback({ ...feedback, correctedPlantName: e.target.value })}
+                      className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                )}
+                <div className="mb-4">
+                  <label className="block text-gray-700 mb-2">其他反馈</label>
+                  <textarea
+                    value={feedback.feedback}
+                    onChange={(e) => setFeedback({ ...feedback, feedback: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    rows={3}
+                  ></textarea>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setShowFeedbackModal(false)}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-100 transition"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleSubmitFeedback}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                  >
+                    提交反馈
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };
