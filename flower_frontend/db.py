@@ -7,14 +7,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'root',
-    'password': 'your_password',
+    'password': '20031221',
     'database': 'flower_recognition',
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor
 }
 
 # SQL文件路径
-SCHEMA_SQL = 'flower_recognition.sql'
+SCHEMA_SQL = 'database.sql'
 BACKUP_SQL = 'database_backup.sql'
 
 class SQLDatabaseManager:
@@ -69,6 +69,9 @@ class SQLDatabaseManager:
             for statement in statements:
                 statement = statement.strip()
                 if statement:
+                    # 跳过SQLite特有语句
+                    if statement.startswith('PRAGMA ') or statement.startswith('BEGIN TRANSACTION'):
+                        continue
                     cursor.execute(statement)
             conn.commit()
             print(f"数据库已从 {sql_file} 初始化完成")
@@ -198,7 +201,7 @@ class SQLDatabaseManager:
             
             conn.commit()
             return user_id
-        except sqlite3.IntegrityError:
+        except pymysql.IntegrityError:
             conn.rollback()
             raise ValueError('用户名或邮箱已存在')
         except Exception as e:
@@ -583,7 +586,7 @@ class SQLDatabaseManager:
             
             conn.commit()
             return True
-        except sqlite3.IntegrityError:
+        except pymysql.IntegrityError:
             conn.rollback()
             return False  # 唯一约束冲突，说明已经点赞过
         except Exception as e:
@@ -654,7 +657,7 @@ class SQLDatabaseManager:
             
             conn.commit()
             return True
-        except sqlite3.IntegrityError:
+        except pymysql.IntegrityError:
             conn.rollback()
             return False  # 唯一约束冲突，说明已经关注过
         except Exception as e:
@@ -836,8 +839,14 @@ class SQLDatabaseManager:
             current_time = int(time.time())
             
             cursor.execute('''
-            INSERT OR REPLACE INTO daily_traffic_summary (date, total_requests, unique_visitors, avg_response_time, error_count, created_at, updated_at)
+            INSERT INTO daily_traffic_summary (date, total_requests, unique_visitors, avg_response_time, error_count, created_at, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                total_requests = VALUES(total_requests),
+                unique_visitors = VALUES(unique_visitors),
+                avg_response_time = VALUES(avg_response_time),
+                error_count = VALUES(error_count),
+                updated_at = VALUES(updated_at)
             ''', (date_str, result['total_requests'], result['unique_visitors'], result['avg_response_time'], result['error_count'], current_time, current_time))
             
             conn.commit()
