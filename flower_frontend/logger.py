@@ -153,6 +153,7 @@ class UnifiedLogger:
         self.error_counts = {
             AlertLevel.ERROR: [],
             AlertLevel.CRITICAL: [],
+            AlertLevel.WARNING: [],
         }
         
     def log(self, log_type: LogType, message: str, extra: Optional[Dict[str, Any]] = None):
