@@ -47,6 +47,12 @@ const Register: React.FC = () => {
 
     // 真实注册请求
     try {
+      console.log('发送注册请求:', {
+        username: formData.username,
+        email: formData.email || null,
+        password: formData.password
+      });
+      
       const response = await fetch('http://localhost:5000/api/register', {
         method: 'POST',
         headers: {
@@ -59,9 +65,11 @@ const Register: React.FC = () => {
         })
       });
       
+      console.log('注册请求响应状态:', response.status);
       const data = await response.json();
+      console.log('注册请求响应数据:', data);
       
-      if (data.code === 200) {
+      if (data.code === 200 || data.success) {
         // 注册成功后跳转到登录页面
         toast.success(data.message || '注册成功，请登录！');
         navigate('/login');
