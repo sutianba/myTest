@@ -56,7 +56,7 @@ from api_response import (
     success_response, error_response, ErrorCode,
     validate_params, handle_exception, get_pagination_params, format_pagination_response
 )
-# from database import get_db_connection, close_db_connection
+from database import get_db_connection, close_db_connection
 from security import (
     record_login_failure, 
     record_login_success, 
@@ -165,14 +165,14 @@ thread_pool = ThreadPoolExecutor(max_workers=4)  # 根据系统CPU核心数调�
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)  # 项目根目录
 
-# 使用SQLite数据库
+# 使用MySQL数据库
 import sys
 sys.path.append(BASE_DIR)
-from db_config_sqlite import get_db_connection, init_sqlite_db
+from db_config import get_db_connection, init_mysql_db
 
 # 初始化数据库
-# 启用SQLite数据库初始化功能
-init_sqlite_db()
+# 启用MySQL数据库初始化功能
+init_mysql_db()
 
 # 路由保护装饰器
 def login_required(f):
@@ -217,28 +217,17 @@ def register():
     user_agent = request.headers.get('User-Agent', '')
     
     try:
-        print("收到注册请求")
         data = request.get_json()
-        print("收到数据:", data)
-        
-        if not data:
-            print("请求数据为空")
-            logger.log_register(0, '', '', False, ip_address, '请求数据为空')
-            return error_response(ErrorCode.PARAMETER_ERROR, '请求数据为空')
-            
+        print("前端传入:", data)
         username = data.get('username')
         password = data.get('password')
         email = data.get('email')
 
-        print(f"用户名: {username}, 邮箱: {email}")
-        
         if not username or not password:
-            print("缺少必填字段")
             logger.log_register(0, username or '', email or '', False, ip_address, '缺少必填字段')
             return error_response(ErrorCode.PARAMETER_ERROR, '用户名和密码不能为空')
         
         if len(password) < 6:
-            print("密码长度不足")
             logger.log_register(0, username, email, False, ip_address, '密码长度不足')
             return error_response(ErrorCode.PARAMETER_ERROR, '密码长度不能少于6位')
 
@@ -246,71 +235,62 @@ def register():
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        print("检查用户名是否已存在")
         if email:
-            check_query = "SELECT * FROM users WHERE username = ? OR email = ?"
+            check_query = "SELECT * FROM users WHERE username = %s OR email = %s"
             cursor.execute(check_query, (username, email))
         else:
-            check_query = "SELECT * FROM users WHERE username = ?"
+            check_query = "SELECT * FROM users WHERE username = %s"
             cursor.execute(check_query, (username,))
         existing_user = cursor.fetchone()
         
         if existing_user:
-            print("用户名或邮箱已存在")
             cursor.close()
             connection.close()
             logger.log_register(0, username, email, False, ip_address, '用户名或邮箱已存在')
             return error_response(ErrorCode.USER_ALREADY_EXISTS, '用户名或邮箱已存在')
         
         # 密码哈希处理
-        print("进行密码哈希处理")
         password_hash = hash_password(password)
         if not password_hash:
-            print("密码加密失败")
             cursor.close()
             connection.close()
             logger.log_register(0, username, email, False, ip_address, '密码加密失败')
             return error_response(ErrorCode.INTERNAL_SERVER_ERROR, '密码加密失败')
         
         # 创建待验证用户记录
-        print("插入用户数据")
         insert_query = """
             INSERT INTO users (username, email, password, is_verified) 
-            VALUES (?, ?, ?, 0)
+            VALUES (%s, %s, %s, 0)
         """
+        print("执行SQL:", insert_query)
+        print("参数:", (username, email, password_hash))
         cursor.execute(insert_query, (username, email, password_hash))
         user_id = cursor.lastrowid
-        print(f"插入成功，用户ID: {user_id}")
         connection.commit()
-        print("数据库提交成功")
+        print("SQL执行成功")
+        print("数据库写入完成，用户ID:", user_id)
         
         cursor.close()
         connection.close()
-        print("数据库连接已关闭")
         
         if email:
             # 生成验证token
-            print("生成验证token")
             token = generate_verification_token(user_id, email)
             
             # 发送验证邮件
-            print("发送验证邮件")
             result = send_verification_email(email, username, token)
             
             if result['success']:
-                print("邮件发送成功")
                 logger.log_register(user_id, username, email, True, ip_address)
                 return success_response({
                     'email': email,
                     'user_id': user_id
                 }, '注册成功！请前往邮箱完成验证')
             else:
-                print("邮件发送失败")
                 logger.log_register(user_id, username, email, False, ip_address, '邮件发送失败')
                 return error_response(ErrorCode.EXTERNAL_SERVICE_ERROR, result.get('error', '注册成功但邮件发送失败，请重试'))
         else:
             # 没有提供邮箱，直接注册成功
-            print("注册成功（无邮箱）")
             logger.log_register(user_id, username, email, True, ip_address)
             return success_response({
                 'email': email,
@@ -318,10 +298,10 @@ def register():
             }, '注册成功！')
             
     except Exception as e:
+        logger.log_error(e, {'endpoint': '/api/register', 'ip': ip_address})
         print(f"注册过程中发生错误: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
-        logger.log_error(e, {'endpoint': '/api/register', 'ip': ip_address})
         return handle_exception(e)
 
 @app.route('/api/verify-email', methods=['GET'])
@@ -433,31 +413,31 @@ def login():
         
         if not username or not password:
             logger.log_login(0, username or '', False, ip_address, user_agent, '缺少用户名或密码')
-            return jsonify({'success': False, 'error': '用户名和密码不能为空'})
+            return error_response(ErrorCode.PARAMETER_ERROR, '用户名和密码不能为空')
 
         # 验证图形验证码
         if captcha_id and captcha_text:
             success, message = verify_captcha(captcha_id, captcha_text)
             if not success:
                 logger.log_login(0, username, False, ip_address, user_agent, '验证码错误')
-                return jsonify({'success': False, 'error': message})
+                return error_response(ErrorCode.PARAMETER_ERROR, message)
         
         # 检查登录失败限制
         allowed, error_msg = check_login_failure_limit(username, ip_address)
         if not allowed:
             logger.log_login(0, username, False, ip_address, user_agent, '登录失败次数过多')
-            return jsonify({'success': False, 'error': error_msg})
+            return error_response(ErrorCode.ACCOUNT_LOCKED, error_msg)
         
         # 检查登录冷却时间
         allowed, error_msg = check_login_cooldown(username, ip_address)
         if not allowed:
             logger.log_login(0, username, False, ip_address, user_agent, '登录冷却中')
-            return jsonify({'success': False, 'error': error_msg})
+            return error_response(ErrorCode.ACCOUNT_LOCKED, error_msg)
 
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        check_query = "SELECT * FROM users WHERE username = ?"
+        check_query = "SELECT * FROM users WHERE username = %s"
         cursor.execute(check_query, (username,))
         user = cursor.fetchone()
         
@@ -466,7 +446,7 @@ def login():
             connection.close()
             record_login_failure(username, ip_address, '用户名不存在')
             logger.log_login(0, username, False, ip_address, user_agent, '用户名不存在')
-            return jsonify({'success': False, 'error': '用户名或密码错误'})
+            return error_response(ErrorCode.USER_NOT_FOUND, '用户名或密码错误')
         
         # 检查用户状态
         if user['status'] != 'active':
@@ -474,7 +454,7 @@ def login():
             connection.close()
             record_login_failure(username, ip_address, '账号未激活')
             logger.log_login(user['id'], username, False, ip_address, user_agent, '账号未激活')
-            return jsonify({'success': False, 'error': '账号未激活，请先验证邮箱'})
+            return error_response(ErrorCode.ACCOUNT_NOT_VERIFIED, '账号未激活，请先验证邮箱')
         
         # 验证密码
         if not verify_password(password, user['password']):
@@ -482,7 +462,7 @@ def login():
             connection.close()
             record_login_failure(username, ip_address, '密码错误')
             logger.log_login(user['id'], username, False, ip_address, user_agent, '密码错误')
-            return jsonify({'success': False, 'error': '用户名或密码错误'})
+            return error_response(ErrorCode.PASSWORD_ERROR, '用户名或密码错误')
         
         # 登录成功
         record_login_success(username, ip_address)
@@ -495,9 +475,7 @@ def login():
         cursor.close()
         connection.close()
         
-        return jsonify({
-            'success': True,
-            'message': '登录成功',
+        return success_response({
             'access_token': access_token,
             'refresh_token': refresh_token,
             'token_type': 'Bearer',
@@ -508,14 +486,14 @@ def login():
                 'email': user['email'],
                 'role': user['role']
             }
-        })
+        }, '登录成功')
         
     except Exception as e:
         logger.log_error(e, {'endpoint': '/api/login', 'ip': ip_address})
         print(f"登录过程中发生错误: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': '登录失败，请稍后重试'})
+        return handle_exception(e)
 
 @app.route('/api/captcha', methods=['GET'])
 def get_captcha():
@@ -715,44 +693,39 @@ def upload_image():
                 confidence = float(classification.get('confidence') or classification.get('conf') or 0.0)
                 result_str = plant_name if plant_name else '未识别到花卉'
                 
-                print("开始数据库操作")
                 connection = get_db_connection()
                 cursor = connection.cursor()
                 
                 insert_query = """
                     INSERT INTO recognition_results (user_id, image_path, result, confidence) 
-                    VALUES (?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s)
                 """
-                print(f"执行插入操作: {insert_query}")
-                print(f"参数: {current_user.get('id')}, {filepath}, {result_str}, {confidence}")
+                print("执行SQL:", insert_query)
+                print("参数:", (current_user.get('id'), filepath, result_str, confidence))
                 cursor.execute(insert_query, (current_user.get('id'), filepath, result_str, confidence))
-                print("执行成功，准备提交")
                 connection.commit()
-                print("数据库提交成功")
+                print("SQL执行成功")
+                print("数据库写入完成")
                 
                 cursor.close()
                 connection.close()
-                print("数据库连接已关闭")
                 
-                return jsonify({
-                    'success': True,
+                return success_response({
                     'result': result_str,
                     'classification': {
                         'plant_name': plant_name,
                         'confidence': confidence
                     }
-                })
+                }, '上传成功')
             except Exception as e:
                 print(f"识别过程中发生错误: {type(e).__name__}: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                return jsonify({'success': False, 'error': f'识别失败: {str(e)}'})
+                return error_response(ErrorCode.INTERNAL_SERVER_ERROR, f'识别失败: {str(e)}')
         
     except Exception as e:
         print(f"上传过程中发生错误: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': '上传失败，请稍后重试'})
+        return handle_exception(e)
 
 @app.route('/api/results', methods=['GET'])
 @login_required
@@ -767,7 +740,7 @@ def get_results():
         query = """
             SELECT id, image_path, result, confidence, created_at 
             FROM recognition_results 
-            WHERE user_id = ? 
+            WHERE user_id = %s 
             ORDER BY created_at DESC 
             LIMIT 50
         """
@@ -852,8 +825,12 @@ def recognize():
             INSERT INTO recognition_results (user_id, image_path, result, confidence) 
             VALUES (%s, %s, %s, %s)
         """
+        print("执行SQL:", insert_query)
+        print("参数:", (current_user.get('id'), image_path, result_str, confidence))
         cursor.execute(insert_query, (current_user.get('id'), image_path, result_str, confidence))
         connection.commit()
+        print("SQL执行成功")
+        print("数据库写入完成")
         
         cursor.close()
         connection.close()
