@@ -183,17 +183,17 @@ class SQLDatabaseManager:
         try:
             cursor.execute('''
             INSERT INTO users (username, email, password_hash, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             ''', (username, email, password_hash, current_time, current_time))
             
             user_id = cursor.lastrowid
             
-            cursor.execute('SELECT id FROM roles WHERE name = ?', ('user',))
+            cursor.execute('SELECT id FROM roles WHERE name = %s', ('user',))
             role_id = cursor.fetchone()['id']
             
             cursor.execute('''
             INSERT INTO user_roles (user_id, role_id)
-            VALUES (?, ?)
+            VALUES (%s, %s)
             ''', (user_id, role_id))
             
             conn.commit()
@@ -213,7 +213,7 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+            cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
             user = cursor.fetchone()
             return dict(user) if user else None
         except Exception as e:
@@ -227,7 +227,7 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+            cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))
             user = cursor.fetchone()
             return dict(user) if user else None
         except Exception as e:
@@ -249,7 +249,7 @@ class SQLDatabaseManager:
             cursor.execute('''
             SELECT r.* FROM roles r
             JOIN user_roles ur ON r.id = ur.role_id
-            WHERE ur.user_id = ?
+            WHERE ur.user_id = %s
             ''', (user_id,))
             roles = cursor.fetchall()
             return [dict(role) for role in roles]
@@ -268,7 +268,7 @@ class SQLDatabaseManager:
             SELECT DISTINCT p.* FROM permissions p
             JOIN role_permissions rp ON p.id = rp.permission_id
             JOIN user_roles ur ON rp.role_id = ur.role_id
-            WHERE ur.user_id = ?
+            WHERE ur.user_id = %s
             ''', (user_id,))
             permissions = cursor.fetchall()
             return [dict(perm) for perm in permissions]
@@ -287,7 +287,7 @@ class SQLDatabaseManager:
             SELECT COUNT(*) FROM permissions p
             JOIN role_permissions rp ON p.id = rp.permission_id
             JOIN user_roles ur ON rp.role_id = ur.role_id
-            WHERE ur.user_id = ? AND p.name = ?
+            WHERE ur.user_id = %s AND p.name = %s
             ''', (user_id, permission_name))
             count = cursor.fetchone()[0]
             return count > 0
@@ -307,7 +307,7 @@ class SQLDatabaseManager:
         try:
             cursor.execute('''
             INSERT INTO recognition_results (user_id, image_path, result, confidence, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             ''', (user_id, image_path, result, confidence, current_time))
             conn.commit()
             return cursor.lastrowid
@@ -325,7 +325,7 @@ class SQLDatabaseManager:
         try:
             cursor.execute('''
             SELECT * FROM recognition_results
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY created_at DESC
             ''', (user_id,))
             results = cursor.fetchall()
@@ -346,7 +346,7 @@ class SQLDatabaseManager:
         try:
             cursor.execute('''
             INSERT INTO posts (user_id, content, image_url, likes_count, comments_count, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ''', (user_id, content, image_url, 0, 0, current_time, current_time))
             
             post_id = cursor.lastrowid
@@ -387,7 +387,7 @@ class SQLDatabaseManager:
             cursor.execute('''
             SELECT p.*, u.username FROM posts p
             JOIN users u ON p.user_id = u.id
-            WHERE p.id = ?
+            WHERE p.id = %s
             ''', (post_id,))
             post = cursor.fetchone()
             return dict(post) if post else None
@@ -406,8 +406,8 @@ class SQLDatabaseManager:
         try:
             cursor.execute('''
             UPDATE posts
-            SET content = ?, image_url = ?, updated_at = ?
-            WHERE id = ?
+            SET content = %s, image_url = %s, updated_at = %s
+            WHERE id = %s
             ''', (content, image_url, current_time, post_id))
             
             conn.commit()
@@ -443,7 +443,7 @@ class SQLDatabaseManager:
             cursor.execute('''
             UPDATE posts
             SET comments_count = comments_count + 1
-            WHERE id = ?
+            WHERE id = %s
             ''', (post_id,))
             conn.commit()
             return True
@@ -462,7 +462,7 @@ class SQLDatabaseManager:
             cursor.execute('''
             UPDATE posts
             SET comments_count = MAX(0, comments_count - 1)
-            WHERE id = ?
+            WHERE id = %s
             ''', (post_id,))
             conn.commit()
             return True
@@ -484,14 +484,14 @@ class SQLDatabaseManager:
             # 创建评论
             cursor.execute('''
             INSERT INTO comments (post_id, user_id, content, created_at)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
             ''', (post_id, user_id, content, current_time))
             
             # 增加帖子评论数
             cursor.execute('''
             UPDATE posts
             SET comments_count = comments_count + 1
-            WHERE id = ?
+            WHERE id = %s
             ''', (post_id,))
             
             comment_id = cursor.lastrowid
@@ -512,7 +512,7 @@ class SQLDatabaseManager:
             cursor.execute('''
             SELECT c.*, u.username FROM comments c
             JOIN users u ON c.user_id = u.id
-            WHERE c.post_id = ?
+            WHERE c.post_id = %s
             ORDER BY c.created_at ASC
             ''', (post_id,))
             comments = cursor.fetchall()
@@ -529,7 +529,7 @@ class SQLDatabaseManager:
         
         try:
             # 先获取评论信息以更新帖子评论数
-            cursor.execute('SELECT post_id FROM comments WHERE id = ?', (comment_id,))
+            cursor.execute('SELECT post_id FROM comments WHERE id = %s', (comment_id,))
             comment = cursor.fetchone()
             if not comment:
                 return False
@@ -537,13 +537,13 @@ class SQLDatabaseManager:
             post_id = comment['post_id']
             
             # 删除评论
-            cursor.execute('DELETE FROM comments WHERE id = ?', (comment_id,))
+            cursor.execute('DELETE FROM comments WHERE id = %s', (comment_id,))
             
             # 减少帖子评论数
             cursor.execute('''
             UPDATE posts
             SET comments_count = MAX(0, comments_count - 1)
-            WHERE id = ?
+            WHERE id = %s
             ''', (post_id,))
             
             conn.commit()
@@ -564,21 +564,21 @@ class SQLDatabaseManager:
         
         try:
             # 检查是否已经点赞
-            cursor.execute('SELECT id FROM likes WHERE post_id = ? AND user_id = ?', (post_id, user_id))
+            cursor.execute('SELECT id FROM likes WHERE post_id = %s AND user_id = %s', (post_id, user_id))
             if cursor.fetchone():
                 return False  # 已经点赞过
             
             # 创建点赞记录
             cursor.execute('''
             INSERT INTO likes (post_id, user_id, created_at)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
             ''', (post_id, user_id, current_time))
             
             # 增加帖子点赞数
             cursor.execute('''
             UPDATE posts
             SET likes_count = likes_count + 1
-            WHERE id = ?
+            WHERE id = %s
             ''', (post_id,))
             
             conn.commit()
@@ -599,14 +599,14 @@ class SQLDatabaseManager:
         
         try:
             # 删除点赞记录
-            cursor.execute('DELETE FROM likes WHERE post_id = ? AND user_id = ?', (post_id, user_id))
+            cursor.execute('DELETE FROM likes WHERE post_id = %s AND user_id = %s', (post_id, user_id))
             
             if cursor.rowcount > 0:
                 # 减少帖子点赞数
                 cursor.execute('''
                 UPDATE posts
                 SET likes_count = MAX(0, likes_count - 1)
-                WHERE id = ?
+                WHERE id = %s
                 ''', (post_id,))
                 conn.commit()
                 return True
@@ -625,7 +625,7 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            cursor.execute('SELECT id FROM likes WHERE post_id = ? AND user_id = ?', (post_id, user_id))
+            cursor.execute('SELECT id FROM likes WHERE post_id = %s AND user_id = %s', (post_id, user_id))
             return cursor.fetchone() is not None
         except Exception as e:
             raise Exception(f'检查点赞状态失败: {str(e)}')
@@ -642,14 +642,14 @@ class SQLDatabaseManager:
         
         try:
             # 检查是否已经关注
-            cursor.execute('SELECT id FROM follows WHERE follower_id = ? AND following_id = ?', (follower_id, following_id))
+            cursor.execute('SELECT id FROM follows WHERE follower_id = %s AND following_id = %s', (follower_id, following_id))
             if cursor.fetchone():
                 return False  # 已经关注过
             
             # 创建关注记录
             cursor.execute('''
             INSERT INTO follows (follower_id, following_id, created_at)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
             ''', (follower_id, following_id, current_time))
             
             conn.commit()
@@ -669,7 +669,7 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            cursor.execute('DELETE FROM follows WHERE follower_id = ? AND following_id = ?', (follower_id, following_id))
+            cursor.execute('DELETE FROM follows WHERE follower_id = %s AND following_id = %s', (follower_id, following_id))
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
@@ -684,7 +684,7 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            cursor.execute('SELECT id FROM follows WHERE follower_id = ? AND following_id = ?', (follower_id, following_id))
+            cursor.execute('SELECT id FROM follows WHERE follower_id = %s AND following_id = %s', (follower_id, following_id))
             return cursor.fetchone() is not None
         except Exception as e:
             raise Exception(f'检查关注状态失败: {str(e)}')
@@ -700,7 +700,7 @@ class SQLDatabaseManager:
             cursor.execute('''
             SELECT u.id, u.username FROM users u
             JOIN follows f ON u.id = f.following_id
-            WHERE f.follower_id = ?
+            WHERE f.follower_id = %s
             ''', (user_id,))
             users = cursor.fetchall()
             return [dict(user) for user in users]
@@ -718,7 +718,7 @@ class SQLDatabaseManager:
             cursor.execute('''
             SELECT u.id, u.username FROM users u
             JOIN follows f ON u.id = f.follower_id
-            WHERE f.following_id = ?
+            WHERE f.following_id = %s
             ''', (user_id,))
             users = cursor.fetchall()
             return [dict(user) for user in users]
@@ -750,7 +750,7 @@ class SQLDatabaseManager:
             current_time = int(time.time())
             cursor.execute('''
             INSERT INTO system_logs (log_level, module, message, user_id, username, ip_address, user_agent, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ''', (log_level, module, message, user_id, username, ip_address, user_agent, current_time))
             conn.commit()
             return cursor.lastrowid
@@ -769,19 +769,19 @@ class SQLDatabaseManager:
             params = []
             
             if log_level:
-                query += ' AND log_level = ?'
+                query += ' AND log_level = %s'
                 params.append(log_level)
             if module:
-                query += ' AND module = ?'
+                query += ' AND module = %s'
                 params.append(module)
             if start_time:
-                query += ' AND created_at >= ?'
+                query += ' AND created_at >= %s'
                 params.append(start_time)
             if end_time:
-                query += ' AND created_at <= ?'
+                query += ' AND created_at <= %s'
                 params.append(end_time)
             
-            query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
+            query += ' ORDER BY created_at DESC LIMIT %s OFFSET %s'
             params.extend([limit, offset])
             
             cursor.execute(query, params)
@@ -804,7 +804,7 @@ class SQLDatabaseManager:
             
             cursor.execute('''
             INSERT INTO traffic_stats (date, hour, endpoint, method, ip_address, user_id, response_status, response_time, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (date_str, hour, endpoint, method, ip_address, user_id, response_status, response_time, current_time))
             conn.commit()
             
@@ -829,7 +829,7 @@ class SQLDatabaseManager:
                 AVG(response_time) as avg_response_time,
                 SUM(CASE WHEN response_status >= 400 THEN 1 ELSE 0 END) as error_count
             FROM traffic_stats
-            WHERE date = ?
+            WHERE date = %s
             ''', (date_str,))
             
             result = cursor.fetchone()
@@ -837,7 +837,7 @@ class SQLDatabaseManager:
             
             cursor.execute('''
             INSERT OR REPLACE INTO daily_traffic_summary (date, total_requests, unique_visitors, avg_response_time, error_count, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ''', (date_str, result['total_requests'], result['unique_visitors'], result['avg_response_time'], result['error_count'], current_time, current_time))
             
             conn.commit()
@@ -856,13 +856,13 @@ class SQLDatabaseManager:
             params = []
             
             if start_date:
-                query += ' AND date >= ?'
+                query += ' AND date >= %s'
                 params.append(start_date)
             if end_date:
-                query += ' AND date <= ?'
+                query += ' AND date <= %s'
                 params.append(end_date)
             
-            query += ' ORDER BY date DESC LIMIT ?'
+            query += ' ORDER BY date DESC LIMIT %s'
             params.append(limit)
             
             cursor.execute(query, params)
@@ -890,13 +890,13 @@ class SQLDatabaseManager:
             params = []
             
             if start_date:
-                query += ' AND date >= ?'
+                query += ' AND date >= %s'
                 params.append(start_date)
             if end_date:
-                query += ' AND date <= ?'
+                query += ' AND date <= %s'
                 params.append(end_date)
             
-            query += ' GROUP BY endpoint, method ORDER BY request_count DESC LIMIT ?'
+            query += ' GROUP BY endpoint, method ORDER BY request_count DESC LIMIT %s'
             params.append(limit)
             
             cursor.execute(query, params)
@@ -916,7 +916,7 @@ class SQLDatabaseManager:
             current_time = int(time.time())
             cursor.execute('''
             INSERT INTO server_status (metric_name, metric_value, unit, status, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             ''', (metric_name, metric_value, unit, status, current_time))
             conn.commit()
             return cursor.lastrowid
@@ -934,13 +934,13 @@ class SQLDatabaseManager:
             if metric_name:
                 cursor.execute('''
                 SELECT * FROM server_status 
-                WHERE metric_name = ?
-                ORDER BY created_at DESC LIMIT ?
+                WHERE metric_name = %s
+                ORDER BY created_at DESC LIMIT %s
                 ''', (metric_name, limit))
             else:
                 cursor.execute('''
                 SELECT * FROM server_status 
-                ORDER BY created_at DESC LIMIT ?
+                ORDER BY created_at DESC LIMIT %s
                 ''', (limit,))
             
             status = cursor.fetchall()
@@ -979,7 +979,7 @@ class SQLDatabaseManager:
             current_time = int(time.time())
             cursor.execute('''
             INSERT INTO admin_operations (admin_id, admin_username, operation_type, target_type, target_id, description, ip_address, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ''', (admin_id, admin_username, operation_type, target_type, target_id, description, ip_address, current_time))
             conn.commit()
             return cursor.lastrowid
@@ -998,13 +998,13 @@ class SQLDatabaseManager:
             params = []
             
             if admin_id:
-                query += ' AND admin_id = ?'
+                query += ' AND admin_id = %s'
                 params.append(admin_id)
             if operation_type:
-                query += ' AND operation_type = ?'
+                query += ' AND operation_type = %s'
                 params.append(operation_type)
             
-            query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
+            query += ' ORDER BY created_at DESC LIMIT %s OFFSET %s'
             params.extend([limit, offset])
             
             cursor.execute(query, params)
@@ -1042,7 +1042,7 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            cursor.execute('SELECT id FROM roles WHERE name = ?', (role_name,))
+            cursor.execute('SELECT id FROM roles WHERE name = %s', (role_name,))
             role = cursor.fetchone()
             
             if not role:
@@ -1050,8 +1050,8 @@ class SQLDatabaseManager:
             
             role_id = role['id']
             
-            cursor.execute('DELETE FROM user_roles WHERE user_id = ?', (user_id,))
-            cursor.execute('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)', (user_id, role_id))
+            cursor.execute('DELETE FROM user_roles WHERE user_id = %s', (user_id,))
+            cursor.execute('INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)', (user_id, role_id))
             
             conn.commit()
             return True
@@ -1078,11 +1078,11 @@ class SQLDatabaseManager:
             cursor.execute('SELECT COUNT(*) as count FROM recognition_results')
             summary['total_recognitions'] = cursor.fetchone()['count']
             
-            cursor.execute('SELECT COUNT(*) as count FROM system_logs WHERE created_at > ?', (int(time.time()) - 86400,))
+            cursor.execute('SELECT COUNT(*) as count FROM system_logs WHERE created_at > %s', (int(time.time()) - 86400,))
             summary['today_logs'] = cursor.fetchone()['count']
             
             today = time.strftime('%Y-%m-%d')
-            cursor.execute('SELECT * FROM daily_traffic_summary WHERE date = ?', (today,))
+            cursor.execute('SELECT * FROM daily_traffic_summary WHERE date = %s', (today,))
             traffic = cursor.fetchone()
             if traffic:
                 summary['today_requests'] = traffic['total_requests']
