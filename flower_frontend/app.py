@@ -59,7 +59,10 @@ import torch
 # 使用正确路径加载模型
 flower_model = None
 try:
-    flower_model = torch.hub.load('..', 'custom', path='../testflowers.pt', source='local', force_reload=True)
+    # 使用BASE_DIR构建绝对路径
+    yolo_path = os.path.join(BASE_DIR, '..')
+    model_path = os.path.join(BASE_DIR, '..', 'testflowers.pt')
+    flower_model = torch.hub.load(yolo_path, 'custom', path=model_path, source='local', force_reload=True)
     flower_model.conf = 0.5  # 提高置信度阈值，只保留高置信度结果
     flower_model.iou = 0.5   # 提高NMS IOU阈值，更严格地过滤重叠边界框
     print("成功加载YOLOv5花卉识别模型")
