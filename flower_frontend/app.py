@@ -34,6 +34,7 @@ from db import (
     add_image_to_album, get_album_images, delete_album_image, get_album_categories,
     create_feedback, get_user_feedback, get_feedback_by_id, delete_feedback,
     get_all_feedback, respond_feedback,
+    create_announcement, get_announcements, update_announcement, delete_announcement,
     move_to_recycle_bin, get_recycle_bin_items, restore_from_recycle_bin,
     permanently_delete, empty_recycle_bin
 )
@@ -605,11 +606,17 @@ def delete_post_api(post_id):
         if not post:
             return jsonify({'success': False, 'error': '帖子不存在'}), 404
         
-        if post['user_id'] != g.user_id:
+        is_admin = g.role in ['super_admin', 'admin']
+        if post['user_id'] != g.user_id and not is_admin:
             return jsonify({'success': False, 'error': '无权限删除此帖子'}), 403
         
-        move_to_recycle_bin(g.user_id, 'post', post_id, {'content': post['content'], 'image_url': post.get('image_url')})
+        reason = '管理员删除' if is_admin and post['user_id'] != g.user_id else '用户删除'
+        move_to_recycle_bin(g.user_id if not is_admin else post['user_id'], 'post', post_id, {'content': post['content'], 'image_url': post.get('image_url'), 'delete_reason': reason})
         delete_post(post_id)
+        
+        if is_admin and post['user_id'] != g.user_id:
+            ip_address = request.remote_addr
+            record_admin_operation(g.user_id, g.username, 'delete_post', 'post', post_id, f'删除用户帖子: {post["content"][:30]}...', ip_address)
         
         return jsonify({'success': True, 'message': '帖子已移入回收站'})
     except Exception as e:
@@ -1303,6 +1310,111 @@ def respond_feedback_api(feedback_id):
             return jsonify({'success': False, 'error': '回复失败'})
     except Exception as e:
         print(f"回复反馈时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/announcements', methods=['POST'])
+@admin_required
+def create_announcement_api():
+    """创建公告（管理员）"""
+    try:
+        data = request.get_json()
+        title = data.get('title')
+        content = data.get('content')
+        announcement_type = data.get('announcement_type', 'general')
+        
+        if not title or not content:
+            return jsonify({'success': False, 'error': '标题和内容不能为空'}), 400
+        
+        announcement_id = create_announcement(title, content, announcement_type, g.user_id, g.username)
+        
+        ip_address = request.remote_addr
+        record_admin_operation(g.user_id, g.username, 'create_announcement', 'announcement', announcement_id, f'创建公告: {title[:50]}', ip_address)
+        
+        return jsonify({'success': True, 'message': '公告创建成功', 'announcement_id': announcement_id})
+    except Exception as e:
+        print(f"创建公告时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/announcements', methods=['GET'])
+@admin_required
+def get_announcements_api():
+    """获取公告列表（管理员）"""
+    try:
+        is_active = request.args.get('is_active')
+        if is_active is not None:
+            is_active = int(is_active)
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        
+        results, total = get_announcements(is_active, limit, offset)
+        
+        return jsonify({
+            'success': True,
+            'announcements': results,
+            'total': total
+        })
+    except Exception as e:
+        print(f"获取公告列表时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/announcements/<int:announcement_id>', methods=['PUT'])
+@admin_required
+def update_announcement_api(announcement_id):
+    """更新公告（管理员）"""
+    try:
+        data = request.get_json()
+        title = data.get('title')
+        content = data.get('content')
+        announcement_type = data.get('announcement_type', 'general')
+        
+        if not title or not content:
+            return jsonify({'success': False, 'error': '标题和内容不能为空'}), 400
+        
+        success = update_announcement(announcement_id, title, content, announcement_type, g.user_id)
+        
+        if success:
+            ip_address = request.remote_addr
+            record_admin_operation(g.user_id, g.username, 'update_announcement', 'announcement', announcement_id, f'更新公告: {title[:50]}', ip_address)
+            return jsonify({'success': True, 'message': '公告更新成功'})
+        else:
+            return jsonify({'success': False, 'error': '公告不存在或无权限'}), 404
+    except Exception as e:
+        print(f"更新公告时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/announcements/<int:announcement_id>', methods=['DELETE'])
+@admin_required
+def delete_announcement_api(announcement_id):
+    """删除公告（管理员）"""
+    try:
+        success = delete_announcement(announcement_id, g.user_id)
+        
+        if success:
+            ip_address = request.remote_addr
+            record_admin_operation(g.user_id, g.username, 'delete_announcement', 'announcement', announcement_id, '删除公告', ip_address)
+            return jsonify({'success': True, 'message': '公告删除成功'})
+        else:
+            return jsonify({'success': False, 'error': '公告不存在或无权限'}), 404
+    except Exception as e:
+        print(f"删除公告时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/announcements', methods=['GET'])
+def get_public_announcements():
+    """获取公开公告列表（所有用户可见）"""
+    try:
+        limit = int(request.args.get('limit', 10))
+        offset = int(request.args.get('offset', 0))
+        
+        results, total = get_announcements(is_active=1, limit=limit, offset=offset)
+        
+        return jsonify({
+            'success': True,
+            'announcements': results,
+            'total': total
+        })
+    except Exception as e:
+        print(f"获取公告列表时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/recycle-bin', methods=['GET'])

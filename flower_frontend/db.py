@@ -1495,6 +1495,89 @@ class SQLDatabaseManager:
         finally:
             conn.close()
     
+    def create_announcement(self, title, content, announcement_type, admin_id, admin_username):
+        """创建公告"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            now = int(time.time())
+            cursor.execute(
+                "INSERT INTO announcements (title, content, announcement_type, is_active, admin_id, admin_username, created_at, updated_at) VALUES (%s, %s, %s, 1, %s, %s, %s, %s)",
+                (title, content, announcement_type, admin_id, admin_username, now, now)
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'创建公告失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_announcements(self, is_active=None, limit=20, offset=0):
+        """获取公告列表"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            if is_active is not None:
+                cursor.execute(
+                    "SELECT * FROM announcements WHERE is_active = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                    (is_active, limit, offset)
+                )
+            else:
+                cursor.execute(
+                    "SELECT * FROM announcements ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                    (limit, offset)
+                )
+            results = cursor.fetchall()
+            
+            cursor.execute("SELECT COUNT(*) as count FROM announcements")
+            total = cursor.fetchone()['count']
+            
+            return results, total
+        except Exception as e:
+            raise Exception(f'获取公告列表失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def update_announcement(self, announcement_id, title, content, announcement_type, admin_id):
+        """更新公告"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            now = int(time.time())
+            cursor.execute(
+                "UPDATE announcements SET title = %s, content = %s, announcement_type = %s, updated_at = %s WHERE id = %s AND admin_id = %s",
+                (title, content, announcement_type, now, announcement_id, admin_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'更新公告失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def delete_announcement(self, announcement_id, admin_id):
+        """删除公告"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "UPDATE announcements SET is_active = 0 WHERE id = %s AND admin_id = %s",
+                (announcement_id, admin_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'删除公告失败: {str(e)}')
+        finally:
+            conn.close()
+    
     def move_to_recycle_bin(self, user_id, item_type, original_id, item_data=None):
         """将项目移入回收站"""
         conn = self.get_connection()
@@ -1848,6 +1931,18 @@ def get_all_feedback(status=None, limit=50, offset=0):
 
 def respond_feedback(feedback_id, response):
     return db_manager.respond_feedback(feedback_id, response)
+
+def create_announcement(title, content, announcement_type, admin_id, admin_username):
+    return db_manager.create_announcement(title, content, announcement_type, admin_id, admin_username)
+
+def get_announcements(is_active=None, limit=20, offset=0):
+    return db_manager.get_announcements(is_active, limit, offset)
+
+def update_announcement(announcement_id, title, content, announcement_type, admin_id):
+    return db_manager.update_announcement(announcement_id, title, content, announcement_type, admin_id)
+
+def delete_announcement(announcement_id, admin_id):
+    return db_manager.delete_announcement(announcement_id, admin_id)
 
 def move_to_recycle_bin(user_id, item_type, original_id, item_data=None):
     return db_manager.move_to_recycle_bin(user_id, item_type, original_id, item_data)

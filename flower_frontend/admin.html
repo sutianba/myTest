@@ -268,6 +268,9 @@
                 <li><a href="#traffic-stats" data-section="traffic-stats">流量统计</a></li>
                 <li><a href="#server-status" data-section="server-status">服务器状态</a></li>
                 <li><a href="#admin-management" data-section="admin-management">管理员管理</a></li>
+                <li><a href="#announcement-management" data-section="announcement-management">公告管理</a></li>
+                <li><a href="#feedback-management" data-section="feedback-management">反馈管理</a></li>
+                <li><a href="#post-management" data-section="post-management">帖子管理</a></li>
                 <li><a href="#operations" data-section="operations">操作记录</a></li>
             </ul>
         </div>
@@ -504,6 +507,90 @@
                     </div>
                 </div>
 
+                <!-- 公告管理 -->
+                <div id="announcement-management" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>系统公告管理</h2>
+                        <button class="btn btn-primary" id="create-announcement-btn">发布新公告</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="announcements-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>标题</th>
+                                    <th>类型</th>
+                                    <th>状态</th>
+                                    <th>发布者</th>
+                                    <th>发布时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="announcements-body">
+                                <tr><td colspan="7" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 反馈管理 -->
+                <div id="feedback-management" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>用户反馈管理</h2>
+                        <select id="feedback-filter">
+                            <option value="">全部</option>
+                            <option value="pending">待处理</option>
+                            <option value="responded">已回复</option>
+                        </select>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="feedback-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户</th>
+                                    <th>标题</th>
+                                    <th>类型</th>
+                                    <th>状态</th>
+                                    <th>提交时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="feedback-body">
+                                <tr><td colspan="7" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 帖子管理 -->
+                <div id="post-management" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>社区帖子管理</h2>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="posts-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户</th>
+                                    <th>内容</th>
+                                    <th>点赞数</th>
+                                    <th>评论数</th>
+                                    <th>发布时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="posts-body">
+                                <tr><td colspan="7" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- 操作记录 -->
                 <div id="operations" class="section" style="display: none;">
                     <div class="content-header">
@@ -622,6 +709,12 @@
                         loadServerStatus();
                     } else if (sectionId === 'admin-management') {
                         loadAdmins();
+                    } else if (sectionId === 'announcement-management') {
+                        loadAnnouncements();
+                    } else if (sectionId === 'feedback-management') {
+                        loadFeedback();
+                    } else if (sectionId === 'post-management') {
+                        loadPosts();
                     } else if (sectionId === 'operations') {
                         loadAdminOperations();
                     }
@@ -916,6 +1009,276 @@
                 alert('更新角色失败');
             });
         }
+
+        // 加载公告列表
+        function loadAnnouncements() {
+            const token = localStorage.getItem('token');
+            document.getElementById('announcements-body').innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+            
+            fetch('/api/admin/announcements', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const announcements = data.announcements;
+                    const tbody = document.getElementById('announcements-body');
+                    tbody.innerHTML = '';
+                    
+                    if (announcements.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7">暂无公告</td></tr>';
+                        return;
+                    }
+                    
+                    announcements.forEach(item => {
+                        const date = new Date(item.created_at * 1000).toLocaleString();
+                        const statusText = item.is_active ? '正常' : '已删除';
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.id}</td>
+                            <td>${item.title}</td>
+                            <td>${item.announcement_type}</td>
+                            <td>${statusText}</td>
+                            <td>${item.admin_username}</td>
+                            <td>${date}</td>
+                            <td>
+                                <button class="btn btn-sm" onclick="editAnnouncement(${item.id}, '${item.title}', '${item.content}', '${item.announcement_type}')">编辑</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteAnnouncement(${item.id})">删除</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载公告失败:', error);
+                document.getElementById('announcements-body').innerHTML = '<tr><td colspan="7">加载失败</td></tr>';
+            });
+        }
+
+        // 创建公告
+        document.getElementById('create-announcement-btn')?.addEventListener('click', function() {
+            const title = prompt('请输入公告标题:');
+            if (!title) return;
+            const content = prompt('请输入公告内容:');
+            if (!content) return;
+            const announcement_type = prompt('请输入公告类型 (general/maintenance/update):', 'general');
+            
+            const token = localStorage.getItem('token');
+            fetch('/api/admin/announcements', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ title, content, announcement_type })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('公告创建成功');
+                    loadAnnouncements();
+                } else {
+                    alert('创建失败: ' + data.error);
+                }
+            });
+        });
+
+        // 编辑公告
+        function editAnnouncement(id, title, content, type) {
+            const newTitle = prompt('编辑公告标题:', title);
+            if (!newTitle) return;
+            const newContent = prompt('编辑公告内容:', content);
+            if (!newContent) return;
+            const newType = prompt('编辑公告类型:', type);
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/admin/announcements/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ title: newTitle, content: newContent, announcement_type: newType })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('公告更新成功');
+                    loadAnnouncements();
+                } else {
+                    alert('更新失败: ' + data.error);
+                }
+            });
+        }
+
+        // 删除公告
+        function deleteAnnouncement(id) {
+            if (!confirm('确定要删除此公告吗?')) return;
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/admin/announcements/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('公告已删除');
+                    loadAnnouncements();
+                } else {
+                    alert('删除失败: ' + data.error);
+                }
+            });
+        }
+
+        // 加载反馈列表
+        function loadFeedback() {
+            const token = localStorage.getItem('token');
+            document.getElementById('feedback-body').innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+            
+            const status = document.getElementById('feedback-filter')?.value || '';
+            let url = '/api/admin/feedback';
+            if (status) url += `?status=${status}`;
+            
+            fetch(url, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const feedback = data.feedback;
+                    const tbody = document.getElementById('feedback-body');
+                    tbody.innerHTML = '';
+                    
+                    if (feedback.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7">暂无反馈</td></tr>';
+                        return;
+                    }
+                    
+                    feedback.forEach(item => {
+                        const date = new Date(item.created_at * 1000).toLocaleString();
+                        const statusText = item.status === 'pending' ? '待处理' : '已回复';
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.id}</td>
+                            <td>${item.username}</td>
+                            <td>${item.title}</td>
+                            <td>${item.feedback_type}</td>
+                            <td>${statusText}</td>
+                            <td>${date}</td>
+                            <td>
+                                <button class="btn btn-sm" onclick="viewFeedback(${item.id}, '${item.title}', '${item.content}', '${item.response || ''}')">查看</button>
+                                <button class="btn btn-sm" onclick="respondFeedback(${item.id})">回复</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载反馈失败:', error);
+                document.getElementById('feedback-body').innerHTML = '<tr><td colspan="7">加载失败</td></tr>';
+            });
+        }
+
+        // 查看反馈详情
+        function viewFeedback(id, title, content, response) {
+            alert(`标题: ${title}\n\n内容: ${content}\n\n回复: ${response || '暂无回复'}`);
+        }
+
+        // 回复反馈
+        function respondFeedback(id) {
+            const response = prompt('请输入回复内容:');
+            if (!response) return;
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/admin/feedback/${id}/respond`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ response })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('回复成功');
+                    loadFeedback();
+                } else {
+                    alert('回复失败: ' + data.error);
+                }
+            });
+        }
+
+        // 加载帖子列表
+        function loadPosts() {
+            const token = localStorage.getItem('token');
+            document.getElementById('posts-body').innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+            
+            fetch('/api/posts', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const posts = data.posts;
+                    const tbody = document.getElementById('posts-body');
+                    tbody.innerHTML = '';
+                    
+                    if (posts.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7">暂无帖子</td></tr>';
+                        return;
+                    }
+                    
+                    posts.forEach(item => {
+                        const date = new Date(item.created_at * 1000).toLocaleString();
+                        const content = item.content.length > 50 ? item.content.substring(0, 50) + '...' : item.content;
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.id}</td>
+                            <td>${item.username}</td>
+                            <td>${content}</td>
+                            <td>${item.likes_count}</td>
+                            <td>${item.comments_count}</td>
+                            <td>${date}</td>
+                            <td>
+                                <button class="btn btn-sm btn-danger" onclick="deletePost(${item.id})">删除</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载帖子失败:', error);
+                document.getElementById('posts-body').innerHTML = '<tr><td colspan="7">加载失败</td></tr>';
+            });
+        }
+
+        // 删除帖子
+        function deletePost(id) {
+            if (!confirm('确定要删除此帖子吗?')) return;
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/posts/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('帖子已删除');
+                    loadPosts();
+                } else {
+                    alert('删除失败: ' + data.error);
+                }
+            });
+        }
+
+        // 反馈筛选事件
+        document.getElementById('feedback-filter')?.addEventListener('change', loadFeedback);
 
         // 加载管理员操作记录
         function loadAdminOperations() {

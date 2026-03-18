@@ -125,6 +125,19 @@ CREATE TABLE IF NOT EXISTS user_feedback (
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS announcements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    announcement_type TEXT DEFAULT 'general',
+    is_active INTEGER DEFAULT 1,
+    admin_id INTEGER NOT NULL,
+    admin_username TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS albums (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
