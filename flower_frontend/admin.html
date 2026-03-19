@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理员后台</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>超级管理员控制台</title>
     <style>
         * {
             margin: 0;
@@ -13,293 +12,195 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f0f2f5;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: #f5f7fa;
             min-height: 100vh;
         }
 
-        /* 顶部导航栏 */
-        .top-nav {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 250px;
+            background: #2c3e50;
             color: white;
+            padding: 20px 0;
+        }
+
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #34495e;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+        }
+
+        .sidebar-menu li {
+            margin: 5px 0;
+        }
+
+        .sidebar-menu a {
+            display: block;
+            padding: 12px 20px;
+            color: #ecf0f1;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-menu a:hover {
+            background: #34495e;
+            padding-left: 25px;
+        }
+
+        .sidebar-menu a.active {
+            background: #3498db;
+            border-left: 4px solid #2980b9;
+        }
+
+        /* 主内容区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部导航 */
+        .top-nav {
+            background: white;
             padding: 15px 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
         .top-nav h1 {
-            font-size: 24px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            font-size: 1.5em;
+            color: #34495e;
         }
 
         .user-info {
             display: flex;
             align-items: center;
-            gap: 15px;
         }
 
         .user-info span {
-            font-size: 14px;
+            margin-right: 15px;
+            color: #34495e;
         }
 
-        .logout-btn {
-            background: rgba(255,255,255,0.2);
+        .user-info button {
+            padding: 6px 12px;
+            background: #e74c3c;
             color: white;
             border: none;
-            padding: 8px 20px;
-            border-radius: 20px;
+            border-radius: 4px;
             cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
-        .logout-btn:hover {
-            background: rgba(255,255,255,0.3);
-        }
-
-        /* 主布局 */
-        .main-layout {
-            display: flex;
-            min-height: calc(100vh - 70px);
-        }
-
-        /* 侧边栏 */
-        .sidebar {
-            width: 250px;
-            background: white;
-            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
-            padding: 20px 0;
-            position: fixed;
-            height: 100%;
+        /* 内容区域 */
+        .content {
+            flex: 1;
+            padding: 30px;
             overflow-y: auto;
         }
 
-        .menu-item {
-            padding: 12px 30px;
-            margin: 5px 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: #333;
-            font-size: 15px;
-        }
-
-        .menu-item:hover {
-            background: #f8f9fa;
-            color: #667eea;
-        }
-
-        .menu-item.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .menu-item i {
-            width: 24px;
-            text-align: center;
-        }
-
-        /* 主内容区 */
-        .main-content {
-            flex: 1;
-            margin-left: 250px;
-            padding: 30px;
-        }
-
-        /* 页面标题 */
-        .page-title {
-            font-size: 28px;
-            color: #333;
+        .content-header {
             margin-bottom: 30px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #667eea;
-            display: flex;
-            align-items: center;
-            gap: 10px;
         }
 
-        /* 卡片 */
+        .content-header h2 {
+            color: #34495e;
+            margin-bottom: 10px;
+        }
+
+        .content-header p {
+            color: #7f8c8d;
+        }
+
+        /* 卡片样式 */
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
         .card {
             background: white;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            margin-bottom: 25px;
-        }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .card-title {
-            font-size: 20px;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        /* 搜索和筛选 */
-        .search-bar {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .search-bar input,
-        .search-bar select {
-            padding: 10px 15px;
-            border: 2px solid #e0e0e0;
+            padding: 20px;
             border-radius: 8px;
-            font-size: 14px;
-            min-width: 200px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        .search-bar select {
-            cursor: pointer;
+        .card h3 {
+            color: #34495e;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        .search-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 10px 25px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s;
+        .card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3498db;
         }
 
-        .search-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        /* 表格 */
+        /* 表格样式 */
         .table-container {
-            overflow-x: auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 15px;
         }
 
         th, td {
             padding: 12px 15px;
             text-align: left;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #ecf0f1;
         }
 
         th {
             background: #f8f9fa;
             font-weight: 600;
-            color: #333;
+            color: #34495e;
         }
 
         tr:hover {
             background: #f8f9fa;
         }
 
-        /* 状态标签 */
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-
-        .status-active { background: #d4edda; color: #155724; }
-        .status-disabled { background: #f8d7da; color: #721c24; }
-        .status-unverified { background: #fff3cd; color: #856404; }
-        .status-pending { background: #fff3cd; color: #856404; }
-        .status-reviewing { background: #cce5ff; color: #004085; }
-        .status-resolved { background: #d4edda; color: #155724; }
-        .status-rejected { background: #f8d7da; color: #721c24; }
-        .status-approved { background: #d4edda; color: #155724; }
-        .status-rejected-content { background: #f8d7da; color: #721c24; }
-
-        /* 操作按钮 */
-        .action-btn {
-            padding: 6px 12px;
-            margin: 0 5px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.3s;
-        }
-
-        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .btn-success { background: #28a745; color: white; }
-        .btn-danger { background: #dc3545; color: white; }
-        .btn-warning { background: #ffc107; color: #333; }
-        .btn-info { background: #17a2b8; color: white; }
-
-        .action-btn:hover { transform: translateY(-2px); box-shadow: 0 3px 10px rgba(0,0,0,0.2); }
-        .action-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-        /* 分页 */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 25px;
-            gap: 10px;
-        }
-
-        .pagination button {
-            padding: 8px 16px;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            cursor: pointer;
+        /* 表单样式 */
+        .form-container {
             background: white;
-            color: #333;
-            transition: all 0.3s;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        .pagination button:hover:not(:disabled) {
-            background: #f8f9fa;
-            border-color: #667eea;
-        }
-
-        .pagination button.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-color: #667eea;
-        }
-
-        .pagination span {
-            color: #666;
-            font-size: 14px;
-        }
-
-        /* 表单 */
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .form-group label {
             display: block;
-            margin-bottom: 8px;
-            color: #333;
+            margin-bottom: 5px;
+            color: #34495e;
             font-weight: 500;
         }
 
@@ -307,1253 +208,1150 @@
         .form-group select,
         .form-group textarea {
             width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .form-group textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-
-        /* 提示消息 */
-        .message {
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-
-        .message-success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
-        .message-error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
-        .message-warning { background: #fff3cd; border: 1px solid #ffeeba; color: #856404; }
-
-        /* 统计卡片 */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-
-        .stat-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-        }
-
-        .stat-icon.users { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .stat-icon.posts { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; }
-        .stat-icon.reports { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%); color: white; }
-        .stat-icon.logs { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
-
-        .stat-info h3 {
-            font-size: 24px;
-            color: #333;
-            margin-bottom: 5px;
-        }
-
-        .stat-info p {
-            color: #666;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
             font-size: 14px;
         }
 
-        /* 模态框 */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.active { display: flex; }
-
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .modal-title {
-            font-size: 20px;
-            color: #333;
-        }
-
-        .close-btn {
-            background: none;
+        .form-group button {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
             border: none;
-            font-size: 24px;
+            border-radius: 4px;
             cursor: pointer;
-            color: #999;
         }
 
-        .close-btn:hover { color: #333; }
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
 
-        /* 响应式 */
+        /* 错误提示 */
+        .error {
+            background: #ffeaa7;
+            color: #d63031;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        /* 响应式设计 */
         @media (max-width: 768px) {
-            .sidebar { display: none; }
-            .main-content { margin-left: 0; }
-            .top-nav { flex-direction: column; gap: 15px; }
+            .sidebar {
+                width: 200px;
+            }
+
+            .cards {
+                grid-template-columns: 1fr;
+            }
+
+            .content {
+                padding: 20px;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- 顶部导航栏 -->
-    <div class="top-nav">
-        <h1><i class="fas fa-cog"></i> 管理员后台</h1>
-        <div class="user-info">
-            <span><i class="fas fa-user"></i> <span id="adminName">管理员</span></span>
-            <button class="logout-btn" onclick="logout()">
-                <i class="fas fa-sign-out-alt"></i> 退出登录
-            </button>
-        </div>
-    </div>
-
-    <div class="main-layout">
+    <div class="container">
         <!-- 侧边栏 -->
         <div class="sidebar">
-            <div class="menu-item active" onclick="showSection('dashboard')">
-                <i class="fas fa-chart-pie"></i> 仪表盘
+            <div class="sidebar-header">
+                <h2>超级管理员</h2>
             </div>
-            <div class="menu-item" onclick="showSection('users')">
-                <i class="fas fa-users"></i> 用户管理
-            </div>
-            <div class="menu-item" onclick="showSection('posts')">
-                <i class="fas fa-file-alt"></i> 帖子审核
-            </div>
-            <div class="menu-item" onclick="showSection('comments')">
-                <i class="fas fa-comment"></i> 评论审核
-            </div>
-            <div class="menu-item" onclick="showSection('reports')">
-                <i class="fas fa-flag"></i> 举报处理
-            </div>
-            <div class="menu-item" onclick="showSection('logs')">
-                <i class="fas fa-history"></i> 操作日志
-            </div>
-            <div class="menu-item" onclick="showSection('permissions')">
-                <i class="fas fa-key"></i> 权限分配
-            </div>
+            <ul class="sidebar-menu">
+                <li><a href="#dashboard" class="active" data-section="dashboard">仪表盘</a></li>
+                <li><a href="#system-logs" data-section="system-logs">系统日志</a></li>
+                <li><a href="#traffic-stats" data-section="traffic-stats">流量统计</a></li>
+                <li><a href="#server-status" data-section="server-status">服务器状态</a></li>
+                <li><a href="#admin-management" data-section="admin-management">管理员管理</a></li>
+                <li><a href="#announcement-management" data-section="announcement-management">公告管理</a></li>
+                <li><a href="#feedback-management" data-section="feedback-management">反馈管理</a></li>
+                <li><a href="#post-management" data-section="post-management">帖子管理</a></li>
+                <li><a href="#operations" data-section="operations">操作记录</a></li>
+            </ul>
         </div>
 
         <!-- 主内容区 -->
         <div class="main-content">
-            <!-- 仪表盘 -->
-            <div id="dashboard-section" class="section">
-                <h2 class="page-title"><i class="fas fa-chart-pie"></i> 仪表盘</h2>
-                
-                <!-- 统计卡片 -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon users">
-                            <i class="fas fa-users"></i>
-                        </div>
-                        <div class="stat-info">
-                            <h3 id="totalUsers">0</h3>
-                            <p>总用户数</p>
-                        </div>
+            <!-- 顶部导航 -->
+            <div class="top-nav">
+                <h1>花卉识别系统管理控制台</h1>
+                <div class="user-info">
+                    <span id="username">管理员</span>
+                    <button onclick="logout()">退出登录</button>
+                </div>
+            </div>
+
+            <!-- 内容区域 -->
+            <div class="content">
+                <!-- 仪表盘 -->
+                <div id="dashboard" class="section">
+                    <div class="content-header">
+                        <h2>系统概览</h2>
+                        <p>实时监控系统运行状态</p>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon users">
-                            <i class="fas fa-chart-line"></i>
+                    
+                    <div class="cards" id="summary-cards">
+                        <div class="card">
+                            <h3>总用户数</h3>
+                            <div class="value" id="total-users">0</div>
                         </div>
-                        <div class="stat-info">
-                            <h3 id="totalRecognition">0</h3>
-                            <p>系统统计</p>
+                        <div class="card">
+                            <h3>今日请求数</h3>
+                            <div class="value" id="today-requests">0</div>
                         </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon reports">
-                            <i class="fas fa-flag"></i>
+                        <div class="card">
+                            <h3>今日访客数</h3>
+                            <div class="value" id="today-visitors">0</div>
                         </div>
-                        <div class="stat-info">
-                            <h3 id="pendingReports">0</h3>
-                            <p>待处理举报</p>
+                        <div class="card">
+                            <h3>识别总数</h3>
+                            <div class="value" id="total-recognitions">0</div>
                         </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon logs">
-                            <i class="fas fa-history"></i>
+                        <div class="card">
+                            <h3>今日日志数</h3>
+                            <div class="value" id="today-logs">0</div>
                         </div>
-                        <div class="stat-info">
-                            <h3 id="totalLogs">0</h3>
-                            <p>操作日志数</p>
+                        <div class="card">
+                            <h3>总帖子数</h3>
+                            <div class="value" id="total-posts">0</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 最近活动 -->
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-clock"></i> 最近活动
+                <!-- 系统日志 -->
+                <div id="system-logs" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>系统日志</h2>
+                        <p>查看系统运行日志</p>
+                    </div>
+                    
+                    <div class="form-container" style="margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                            <div class="form-group">
+                                <label>日志级别</label>
+                                <select id="log-level">
+                                    <option value="">全部</option>
+                                    <option value="INFO">INFO</option>
+                                    <option value="ERROR">ERROR</option>
+                                    <option value="WARNING">WARNING</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>模块</label>
+                                <input type="text" id="log-module" placeholder="模块名称">
+                            </div>
+                            <div class="form-group">
+                                <label>记录数</label>
+                                <select id="log-limit">
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                    <option value="200">200</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="align-self: flex-end;">
+                                <button onclick="loadSystemLogs()">查询</button>
+                            </div>
                         </div>
                     </div>
+                    
                     <div class="table-container">
-                        <table id="recentActivityTable">
+                        <table id="logs-table">
+                            <thead>
+                                <tr>
+                                    <th>时间</th>
+                                    <th>级别</th>
+                                    <th>模块</th>
+                                    <th>消息</th>
+                                    <th>用户</th>
+                                    <th>IP地址</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-body">
+                                <tr><td colspan="6" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 流量统计 -->
+                <div id="traffic-stats" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>流量统计</h2>
+                        <p>分析系统访问流量</p>
+                    </div>
+                    
+                    <div class="form-container" style="margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                            <div class="form-group">
+                                <label>开始日期</label>
+                                <input type="date" id="start-date">
+                            </div>
+                            <div class="form-group">
+                                <label>结束日期</label>
+                                <input type="date" id="end-date">
+                            </div>
+                            <div class="form-group" style="align-self: flex-end;">
+                                <button onclick="loadTrafficStats()">查询</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container" style="margin-bottom: 30px;">
+                        <table id="traffic-table">
+                            <thead>
+                                <tr>
+                                    <th>日期</th>
+                                    <th>请求数</th>
+                                    <th>独立访客</th>
+                                    <th>平均响应时间(ms)</th>
+                                    <th>错误数</th>
+                                </tr>
+                            </thead>
+                            <tbody id="traffic-body">
+                                <tr><td colspan="5" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <h3>热门端点</h3>
+                    <div class="table-container">
+                        <table id="endpoints-table">
+                            <thead>
+                                <tr>
+                                    <th>端点</th>
+                                    <th>方法</th>
+                                    <th>请求数</th>
+                                    <th>平均响应时间(ms)</th>
+                                    <th>错误数</th>
+                                </tr>
+                            </thead>
+                            <tbody id="endpoints-body">
+                                <tr><td colspan="5" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 服务器状态 -->
+                <div id="server-status" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>服务器状态</h2>
+                        <p>监控服务器运行指标</p>
+                    </div>
+                    
+                    <div class="cards" id="server-metrics">
+                        <div class="card">
+                            <h3>CPU使用率</h3>
+                            <div class="value" id="cpu-usage">0%</div>
+                        </div>
+                        <div class="card">
+                            <h3>内存使用率</h3>
+                            <div class="value" id="memory-usage">0%</div>
+                        </div>
+                        <div class="card">
+                            <h3>磁盘使用率</h3>
+                            <div class="value" id="disk-usage">0%</div>
+                        </div>
+                        <div class="card">
+                            <h3>网络流量</h3>
+                            <div class="value" id="network-traffic">0 MB</div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container" style="margin-top: 30px;">
+                        <table id="server-status-table">
+                            <thead>
+                                <tr>
+                                    <th>指标名称</th>
+                                    <th>值</th>
+                                    <th>单位</th>
+                                    <th>状态</th>
+                                    <th>时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="server-status-body">
+                                <tr><td colspan="5" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 管理员管理 -->
+                <div id="admin-management" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>管理员管理</h2>
+                        <p>管理系统管理员账户</p>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="admins-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户名</th>
+                                    <th>邮箱</th>
+                                    <th>角色</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admins-body">
+                                <tr><td colspan="6" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 公告管理 -->
+                <div id="announcement-management" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>系统公告管理</h2>
+                        <button class="btn btn-primary" id="create-announcement-btn">发布新公告</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="announcements-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>标题</th>
+                                    <th>类型</th>
+                                    <th>状态</th>
+                                    <th>发布者</th>
+                                    <th>发布时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="announcements-body">
+                                <tr><td colspan="7" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 反馈管理 -->
+                <div id="feedback-management" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>用户反馈管理</h2>
+                        <select id="feedback-filter">
+                            <option value="">全部</option>
+                            <option value="pending">待处理</option>
+                            <option value="responded">已回复</option>
+                        </select>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="feedback-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户</th>
+                                    <th>标题</th>
+                                    <th>类型</th>
+                                    <th>状态</th>
+                                    <th>提交时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="feedback-body">
+                                <tr><td colspan="7" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 帖子管理 -->
+                <div id="post-management" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>社区帖子管理</h2>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="posts-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户</th>
+                                    <th>内容</th>
+                                    <th>点赞数</th>
+                                    <th>评论数</th>
+                                    <th>发布时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="posts-body">
+                                <tr><td colspan="7" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 操作记录 -->
+                <div id="operations" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>操作记录</h2>
+                        <p>查看管理员操作历史</p>
+                    </div>
+                    
+                    <div class="form-container" style="margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                            <div class="form-group">
+                                <label>操作类型</label>
+                                <select id="operation-type">
+                                    <option value="">全部</option>
+                                    <option value="update_role">更新角色</option>
+                                    <option value="delete_user">删除用户</option>
+                                    <option value="system_settings">系统设置</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>记录数</label>
+                                <select id="operation-limit">
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                    <option value="200">200</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="align-self: flex-end;">
+                                <button onclick="loadAdminOperations()">查询</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="operations-table">
                             <thead>
                                 <tr>
                                     <th>时间</th>
                                     <th>管理员</th>
-                                    <th>操作</th>
-                                    <th>详情</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- 最近活动将通过JavaScript动态添加 -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 用户管理 -->
-            <div id="users-section" class="section" style="display: none;">
-                <h2 class="page-title"><i class="fas fa-users"></i> 用户管理</h2>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-list"></i> 用户列表
-                        </div>
-                        <div class="search-bar">
-                            <input type="text" id="userSearch" placeholder="搜索用户名或邮箱...">
-                            <select id="userStatus">
-                                <option value="">全部状态</option>
-                                <option value="active">正常</option>
-                                <option value="disabled">已禁用</option>
-                                <option value="unverified">未验证</option>
-                            </select>
-                            <select id="userRole">
-                                <option value="">全部角色</option>
-                                <option value="admin">管理员</option>
-                                <option value="moderator">社区管理员</option>
-                                <option value="user">普通用户</option>
-                            </select>
-                            <button class="search-btn" onclick="searchUsers()">
-                                <i class="fas fa-search"></i> 搜索
-                            </button>
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table id="usersTable">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>用户名</th>
-                                    <th>邮箱</th>
-                                    <th>昵称</th>
-                                    <th>角色</th>
-                                    <th>状态</th>
-                                    <th>创建时间</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- 用户列表将通过JavaScript动态添加 -->
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="pagination" id="usersPagination"></div>
-                </div>
-            </div>
-
-            <!-- 帖子审核 -->
-            <div id="posts-section" class="section" style="display: none;">
-                <h2 class="page-title"><i class="fas fa-file-alt"></i> 帖子审核</h2>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-list"></i> 待审核帖子
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table id="postsTable">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>用户</th>
-                                    <th>内容</th>
-                                    <th>创建时间</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- 帖子列表将通过JavaScript动态添加 -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 评论审核 -->
-            <div id="comments-section" class="section" style="display: none;">
-                <h2 class="page-title"><i class="fas fa-comment"></i> 评论审核</h2>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-list"></i> 待审核评论
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table id="commentsTable">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>用户</th>
-                                    <th>内容</th>
-                                    <th>创建时间</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- 评论列表将通过JavaScript动态添加 -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 举报处理 -->
-            <div id="reports-section" class="section" style="display: none;">
-                <h2 class="page-title"><i class="fas fa-flag"></i> 举报处理</h2>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-list"></i> 举报列表
-                        </div>
-                        <div class="search-bar">
-                            <select id="reportStatus">
-                                <option value="">全部状态</option>
-                                <option value="pending">待处理</option>
-                                <option value="reviewing">处理中</option>
-                                <option value="resolved">已解决</option>
-                                <option value="rejected">已拒绝</option>
-                            </select>
-                            <select id="reportType">
-                                <option value="">全部类型</option>
-                                <option value="post">帖子</option>
-                                <option value="comment">评论</option>
-                                <option value="user">用户</option>
-                            </select>
-                            <button class="search-btn" onclick="searchReports()">
-                                <i class="fas fa-search"></i> 搜索
-                            </button>
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table id="reportsTable">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>举报人</th>
-                                    <th>被举报对象</th>
-                                    <th>原因</th>
-                                    <th>状态</th>
-                                    <th>创建时间</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- 举报列表将通过JavaScript动态添加 -->
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="pagination" id="reportsPagination"></div>
-                </div>
-            </div>
-
-            <!-- 操作日志 -->
-            <div id="logs-section" class="section" style="display: none;">
-                <h2 class="page-title"><i class="fas fa-history"></i> 操作日志</h2>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-list"></i> 操作日志列表
-                        </div>
-                        <div class="search-bar">
-                            <input type="text" id="logSearch" placeholder="搜索管理员或操作...">
-                            <select id="logActionType">
-                                <option value="">全部操作</option>
-                                <option value="ban_user">封禁用户</option>
-                                <option value="unban_user">解封用户</option>
-                                <option value="delete_user">删除用户</option>
-                                <option value="review_content">审核内容</option>
-                                <option value="handle_report">处理举报</option>
-                            </select>
-                            <button class="search-btn" onclick="searchLogs()">
-                                <i class="fas fa-search"></i> 搜索
-                            </button>
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table id="logsTable">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>管理员</th>
                                     <th>操作类型</th>
                                     <th>目标类型</th>
-                                    <th>目标ID</th>
-                                    <th>详情</th>
+                                    <th>描述</th>
                                     <th>IP地址</th>
-                                    <th>操作时间</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <!-- 操作日志将通过JavaScript动态添加 -->
+                            <tbody id="operations-body">
+                                <tr><td colspan="6" class="loading">加载中...</td></tr>
                             </tbody>
                         </table>
-                    </div>
-                    <div class="pagination" id="logsPagination"></div>
-                </div>
-            </div>
-
-            <!-- 权限分配 -->
-            <div id="permissions-section" class="section" style="display: none;">
-                <h2 class="page-title"><i class="fas fa-key"></i> 权限分配</h2>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-users"></i> 用户角色分配
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table id="usersRolesTable">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>用户名</th>
-                                    <th>邮箱</th>
-                                    <th>当前角色</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- 用户角色列表将通过JavaScript动态添加 -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-key"></i> 角色权限分配
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>选择角色</label>
-                        <select id="roleSelect" onchange="loadRolePermissions(this.value)">
-                            <option value="">请选择角色</option>
-                        </select>
-                    </div>
-                    <div id="rolePermissionsContainer">
-                        <!-- 角色权限将通过JavaScript动态添加 -->
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 模态框 -->
-    <div id="modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title" id="modalTitle">提示</h3>
-                <button class="close-btn" onclick="closeModal()">&times;</button>
+    <!-- 角色更新对话框 -->
+    <div id="role-dialog" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; width: 400px;">
+            <h3>更新用户角色</h3>
+            <div class="form-group">
+                <label>用户</label>
+                <input type="text" id="user-info" readonly>
             </div>
-            <div id="modalBody"></div>
+            <div class="form-group">
+                <label>新角色</label>
+                <select id="new-role">
+                    <option value="user">普通用户</option>
+                    <option value="admin">管理员</option>
+                    <option value="super_admin">超级管理员</option>
+                </select>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button onclick="closeRoleDialog()">取消</button>
+                <button onclick="saveRole()" style="background: #3498db; color: white;">保存</button>
+            </div>
         </div>
     </div>
 
     <script>
-        // 全局变量
-        let currentToken = null;
-        let currentUser = null;
+        // 当前选中的用户ID
+        let currentUserId = null;
 
-        // 页面加载
+        // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
-            checkAuth();
-            loadDashboard();
-        });
-
-        // 检查认证
-        function checkAuth() {
-            const token = localStorage.getItem('access_token');
-            if (token) {
-                currentToken = token;
-                $.ajax({
-                    url: '/api/check_auth',
-                    method: 'GET',
-                    headers: {
-                        'Authorization': 'Bearer ' + token
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            currentUser = response.user;
-                            $('#adminName').text(currentUser.username);
-                        } else {
-                            localStorage.removeItem('access_token');
-                            window.location.href = '/index.html';
-                        }
-                    },
-                    error: function() {
-                        localStorage.removeItem('access_token');
-                        window.location.href = '/index.html';
+            // 加载系统概要
+            loadSystemSummary();
+            
+            // 加载服务器指标
+            loadServerMetrics();
+            
+            // 侧边栏导航
+            document.querySelectorAll('.sidebar-menu a').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // 移除所有active类
+                    document.querySelectorAll('.sidebar-menu a').forEach(a => a.classList.remove('active'));
+                    
+                    // 添加active类到当前链接
+                    this.classList.add('active');
+                    
+                    // 隐藏所有section
+                    document.querySelectorAll('.section').forEach(section => {
+                        section.style.display = 'none';
+                    });
+                    
+                    // 显示选中的section
+                    const sectionId = this.getAttribute('data-section');
+                    document.getElementById(sectionId).style.display = 'block';
+                    
+                    // 加载对应的数据
+                    if (sectionId === 'system-logs') {
+                        loadSystemLogs();
+                    } else if (sectionId === 'traffic-stats') {
+                        loadTrafficStats();
+                    } else if (sectionId === 'server-status') {
+                        loadServerStatus();
+                    } else if (sectionId === 'admin-management') {
+                        loadAdmins();
+                    } else if (sectionId === 'announcement-management') {
+                        loadAnnouncements();
+                    } else if (sectionId === 'feedback-management') {
+                        loadFeedback();
+                    } else if (sectionId === 'post-management') {
+                        loadPosts();
+                    } else if (sectionId === 'operations') {
+                        loadAdminOperations();
                     }
                 });
-            } else {
-                window.location.href = '/index.html';
-            }
+            });
+        });
+
+        // 加载系统概要
+        function loadSystemSummary() {
+            fetch('/api/admin/system/summary', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const summary = data.summary;
+                    document.getElementById('total-users').textContent = summary.total_users || 0;
+                    document.getElementById('today-requests').textContent = summary.today_requests || 0;
+                    document.getElementById('today-visitors').textContent = summary.today_visitors || 0;
+                    document.getElementById('total-recognitions').textContent = summary.total_recognitions || 0;
+                    document.getElementById('today-logs').textContent = summary.today_logs || 0;
+                    document.getElementById('total-posts').textContent = summary.total_posts || 0;
+                }
+            })
+            .catch(error => {
+                console.error('加载系统概要失败:', error);
+            });
+        }
+
+        // 加载系统日志
+        function loadSystemLogs() {
+            const logLevel = document.getElementById('log-level').value;
+            const module = document.getElementById('log-module').value;
+            const limit = document.getElementById('log-limit').value;
+            
+            let url = `/api/admin/system/logs?limit=${limit}`;
+            if (logLevel) url += `&log_level=${logLevel}`;
+            if (module) url += `&module=${module}`;
+            
+            document.getElementById('logs-body').innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+            
+            fetch(url, {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const logs = data.logs;
+                    const logsBody = document.getElementById('logs-body');
+                    logsBody.innerHTML = '';
+                    
+                    logs.forEach(log => {
+                        const row = document.createElement('tr');
+                        const date = new Date(log.created_at * 1000).toLocaleString();
+                        row.innerHTML = `
+                            <td>${date}</td>
+                            <td>${log.log_level}</td>
+                            <td>${log.module}</td>
+                            <td>${log.message}</td>
+                            <td>${log.username || '-'}</td>
+                            <td>${log.ip_address || '-'}</td>
+                        `;
+                        logsBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载系统日志失败:', error);
+                document.getElementById('logs-body').innerHTML = '<tr><td colspan="6" class="error">加载失败</td></tr>';
+            });
+        }
+
+        // 加载流量统计
+        function loadTrafficStats() {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            
+            let url = '/api/admin/system/traffic';
+            if (startDate) url += `?start_date=${startDate}`;
+            if (endDate) url += (startDate ? '&' : '?') + `end_date=${endDate}`;
+            
+            // 加载流量统计
+            document.getElementById('traffic-body').innerHTML = '<tr><td colspan="5" class="loading">加载中...</td></tr>';
+            
+            fetch(url, {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const stats = data.stats;
+                    const trafficBody = document.getElementById('traffic-body');
+                    trafficBody.innerHTML = '';
+                    
+                    stats.forEach(stat => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${stat.date}</td>
+                            <td>${stat.total_requests}</td>
+                            <td>${stat.unique_visitors}</td>
+                            <td>${stat.avg_response_time ? stat.avg_response_time.toFixed(2) : 0}</td>
+                            <td>${stat.error_count}</td>
+                        `;
+                        trafficBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载流量统计失败:', error);
+                document.getElementById('traffic-body').innerHTML = '<tr><td colspan="5" class="error">加载失败</td></tr>';
+            });
+            
+            // 加载热门端点
+            document.getElementById('endpoints-body').innerHTML = '<tr><td colspan="5" class="loading">加载中...</td></tr>';
+            
+            fetch('/api/admin/system/traffic/endpoints', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const endpoints = data.stats;
+                    const endpointsBody = document.getElementById('endpoints-body');
+                    endpointsBody.innerHTML = '';
+                    
+                    endpoints.forEach(endpoint => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${endpoint.endpoint}</td>
+                            <td>${endpoint.method}</td>
+                            <td>${endpoint.request_count}</td>
+                            <td>${endpoint.avg_response_time ? endpoint.avg_response_time.toFixed(2) : 0}</td>
+                            <td>${endpoint.error_count}</td>
+                        `;
+                        endpointsBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载热门端点失败:', error);
+                document.getElementById('endpoints-body').innerHTML = '<tr><td colspan="5" class="error">加载失败</td></tr>';
+            });
+        }
+
+        // 加载服务器指标
+        function loadServerMetrics() {
+            fetch('/api/admin/server/metrics', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const metrics = data.metrics;
+                    const metricsMap = {};
+                    
+                    metrics.forEach(metric => {
+                        metricsMap[metric.metric_name] = metric;
+                    });
+                    
+                    document.getElementById('cpu-usage').textContent = metricsMap.cpu_usage ? metricsMap.cpu_usage.metric_value + '%' : '0%';
+                    document.getElementById('memory-usage').textContent = metricsMap.memory_usage ? metricsMap.memory_usage.metric_value + '%' : '0%';
+                    document.getElementById('disk-usage').textContent = metricsMap.disk_usage ? metricsMap.disk_usage.metric_value + '%' : '0%';
+                    document.getElementById('network-traffic').textContent = metricsMap.network_traffic ? metricsMap.network_traffic.metric_value + ' MB' : '0 MB';
+                }
+            })
+            .catch(error => {
+                console.error('加载服务器指标失败:', error);
+            });
+        }
+
+        // 加载服务器状态
+        function loadServerStatus() {
+            document.getElementById('server-status-body').innerHTML = '<tr><td colspan="5" class="loading">加载中...</td></tr>';
+            
+            fetch('/api/admin/server/status?limit=50', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const status = data.status;
+                    const statusBody = document.getElementById('server-status-body');
+                    statusBody.innerHTML = '';
+                    
+                    status.forEach(item => {
+                        const row = document.createElement('tr');
+                        const date = new Date(item.created_at * 1000).toLocaleString();
+                        row.innerHTML = `
+                            <td>${item.metric_name}</td>
+                            <td>${item.metric_value}</td>
+                            <td>${item.unit || '-'}</td>
+                            <td>${item.status}</td>
+                            <td>${date}</td>
+                        `;
+                        statusBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载服务器状态失败:', error);
+                document.getElementById('server-status-body').innerHTML = '<tr><td colspan="5" class="error">加载失败</td></tr>';
+            });
+        }
+
+        // 加载管理员列表
+        function loadAdmins() {
+            document.getElementById('admins-body').innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+            
+            fetch('/api/admin/admins', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const admins = data.admins;
+                    const adminsBody = document.getElementById('admins-body');
+                    adminsBody.innerHTML = '';
+                    
+                    admins.forEach(admin => {
+                        const row = document.createElement('tr');
+                        const date = new Date(admin.created_at * 1000).toLocaleString();
+                        row.innerHTML = `
+                            <td>${admin.id}</td>
+                            <td>${admin.username}</td>
+                            <td>${admin.email}</td>
+                            <td>${admin.role_name}</td>
+                            <td>${date}</td>
+                            <td><button onclick="openRoleDialog(${admin.id}, '${admin.username}', '${admin.role_name}')">修改角色</button></td>
+                        `;
+                        adminsBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载管理员列表失败:', error);
+                document.getElementById('admins-body').innerHTML = '<tr><td colspan="6" class="error">加载失败</td></tr>';
+            });
+        }
+
+        // 打开角色更新对话框
+        function openRoleDialog(userId, username, currentRole) {
+            currentUserId = userId;
+            document.getElementById('user-info').value = `${username} (当前角色: ${currentRole})`;
+            document.getElementById('new-role').value = currentRole;
+            document.getElementById('role-dialog').style.display = 'block';
+        }
+
+        // 关闭角色更新对话框
+        function closeRoleDialog() {
+            currentUserId = null;
+            document.getElementById('role-dialog').style.display = 'none';
+        }
+
+        // 保存角色更新
+        function saveRole() {
+            const roleName = document.getElementById('new-role').value;
+            
+            fetch(`/api/admin/admins/${currentUserId}/role`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                },
+                body: JSON.stringify({ role_name: roleName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('角色更新成功');
+                    closeRoleDialog();
+                    loadAdmins();
+                } else {
+                    alert('角色更新失败: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('更新角色失败:', error);
+                alert('更新角色失败');
+            });
+        }
+
+        // 加载公告列表
+        function loadAnnouncements() {
+            const token = localStorage.getItem('token');
+            document.getElementById('announcements-body').innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+            
+            fetch('/api/admin/announcements', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const announcements = data.announcements;
+                    const tbody = document.getElementById('announcements-body');
+                    tbody.innerHTML = '';
+                    
+                    if (announcements.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7">暂无公告</td></tr>';
+                        return;
+                    }
+                    
+                    announcements.forEach(item => {
+                        const date = new Date(item.created_at * 1000).toLocaleString();
+                        const statusText = item.is_active ? '正常' : '已删除';
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.id}</td>
+                            <td>${item.title}</td>
+                            <td>${item.announcement_type}</td>
+                            <td>${statusText}</td>
+                            <td>${item.admin_username}</td>
+                            <td>${date}</td>
+                            <td>
+                                <button class="btn btn-sm" onclick="editAnnouncement(${item.id}, '${item.title}', '${item.content}', '${item.announcement_type}')">编辑</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteAnnouncement(${item.id})">删除</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载公告失败:', error);
+                document.getElementById('announcements-body').innerHTML = '<tr><td colspan="7">加载失败</td></tr>';
+            });
+        }
+
+        // 创建公告
+        document.getElementById('create-announcement-btn')?.addEventListener('click', function() {
+            const title = prompt('请输入公告标题:');
+            if (!title) return;
+            const content = prompt('请输入公告内容:');
+            if (!content) return;
+            const announcement_type = prompt('请输入公告类型 (general/maintenance/update):', 'general');
+            
+            const token = localStorage.getItem('token');
+            fetch('/api/admin/announcements', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ title, content, announcement_type })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('公告创建成功');
+                    loadAnnouncements();
+                } else {
+                    alert('创建失败: ' + data.error);
+                }
+            });
+        });
+
+        // 编辑公告
+        function editAnnouncement(id, title, content, type) {
+            const newTitle = prompt('编辑公告标题:', title);
+            if (!newTitle) return;
+            const newContent = prompt('编辑公告内容:', content);
+            if (!newContent) return;
+            const newType = prompt('编辑公告类型:', type);
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/admin/announcements/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ title: newTitle, content: newContent, announcement_type: newType })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('公告更新成功');
+                    loadAnnouncements();
+                } else {
+                    alert('更新失败: ' + data.error);
+                }
+            });
+        }
+
+        // 删除公告
+        function deleteAnnouncement(id) {
+            if (!confirm('确定要删除此公告吗?')) return;
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/admin/announcements/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('公告已删除');
+                    loadAnnouncements();
+                } else {
+                    alert('删除失败: ' + data.error);
+                }
+            });
+        }
+
+        // 加载反馈列表
+        function loadFeedback() {
+            const token = localStorage.getItem('token');
+            document.getElementById('feedback-body').innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+            
+            const status = document.getElementById('feedback-filter')?.value || '';
+            let url = '/api/admin/feedback';
+            if (status) url += `?status=${status}`;
+            
+            fetch(url, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const feedback = data.feedback;
+                    const tbody = document.getElementById('feedback-body');
+                    tbody.innerHTML = '';
+                    
+                    if (feedback.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7">暂无反馈</td></tr>';
+                        return;
+                    }
+                    
+                    feedback.forEach(item => {
+                        const date = new Date(item.created_at * 1000).toLocaleString();
+                        const statusText = item.status === 'pending' ? '待处理' : '已回复';
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.id}</td>
+                            <td>${item.username}</td>
+                            <td>${item.title}</td>
+                            <td>${item.feedback_type}</td>
+                            <td>${statusText}</td>
+                            <td>${date}</td>
+                            <td>
+                                <button class="btn btn-sm" onclick="viewFeedback(${item.id}, '${item.title}', '${item.content}', '${item.response || ''}')">查看</button>
+                                <button class="btn btn-sm" onclick="respondFeedback(${item.id})">回复</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载反馈失败:', error);
+                document.getElementById('feedback-body').innerHTML = '<tr><td colspan="7">加载失败</td></tr>';
+            });
+        }
+
+        // 查看反馈详情
+        function viewFeedback(id, title, content, response) {
+            alert(`标题: ${title}\n\n内容: ${content}\n\n回复: ${response || '暂无回复'}`);
+        }
+
+        // 回复反馈
+        function respondFeedback(id) {
+            const response = prompt('请输入回复内容:');
+            if (!response) return;
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/admin/feedback/${id}/respond`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ response })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('回复成功');
+                    loadFeedback();
+                } else {
+                    alert('回复失败: ' + data.error);
+                }
+            });
+        }
+
+        // 加载帖子列表
+        function loadPosts() {
+            const token = localStorage.getItem('token');
+            document.getElementById('posts-body').innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+            
+            fetch('/api/posts', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const posts = data.posts;
+                    const tbody = document.getElementById('posts-body');
+                    tbody.innerHTML = '';
+                    
+                    if (posts.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7">暂无帖子</td></tr>';
+                        return;
+                    }
+                    
+                    posts.forEach(item => {
+                        const date = new Date(item.created_at * 1000).toLocaleString();
+                        const content = item.content.length > 50 ? item.content.substring(0, 50) + '...' : item.content;
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.id}</td>
+                            <td>${item.username}</td>
+                            <td>${content}</td>
+                            <td>${item.likes_count}</td>
+                            <td>${item.comments_count}</td>
+                            <td>${date}</td>
+                            <td>
+                                <button class="btn btn-sm btn-danger" onclick="deletePost(${item.id})">删除</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载帖子失败:', error);
+                document.getElementById('posts-body').innerHTML = '<tr><td colspan="7">加载失败</td></tr>';
+            });
+        }
+
+        // 删除帖子
+        function deletePost(id) {
+            if (!confirm('确定要删除此帖子吗?')) return;
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/posts/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('帖子已删除');
+                    loadPosts();
+                } else {
+                    alert('删除失败: ' + data.error);
+                }
+            });
+        }
+
+        // 反馈筛选事件
+        document.getElementById('feedback-filter')?.addEventListener('change', loadFeedback);
+
+        // 加载管理员操作记录
+        function loadAdminOperations() {
+            const operationType = document.getElementById('operation-type').value;
+            const limit = document.getElementById('operation-limit').value;
+            
+            let url = `/api/admin/operations?limit=${limit}`;
+            if (operationType) url += `&operation_type=${operationType}`;
+            
+            document.getElementById('operations-body').innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+            
+            fetch(url, {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const operations = data.operations;
+                    const operationsBody = document.getElementById('operations-body');
+                    operationsBody.innerHTML = '';
+                    
+                    operations.forEach(op => {
+                        const row = document.createElement('tr');
+                        const date = new Date(op.created_at * 1000).toLocaleString();
+                        row.innerHTML = `
+                            <td>${date}</td>
+                            <td>${op.admin_username}</td>
+                            <td>${op.operation_type}</td>
+                            <td>${op.target_type || '-'}</td>
+                            <td>${op.description || '-'}</td>
+                            <td>${op.ip_address || '-'}</td>
+                        `;
+                        operationsBody.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('加载操作记录失败:', error);
+                document.getElementById('operations-body').innerHTML = '<tr><td colspan="6" class="error">加载失败</td></tr>';
+            });
         }
 
         // 退出登录
         function logout() {
-            $.ajax({
-                url: '/api/logout',
-                method: 'POST',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        localStorage.removeItem('access_token');
-                        window.location.href = '/index.html';
-                    }
-                }
+            localStorage.removeItem('token');
+            window.location.href = 'index.html';
+        }
+
+        // 模拟服务器指标（实际项目中应该由后端提供）
+        function simulateServerMetrics() {
+            const metrics = [
+                { metric_name: 'cpu_usage', metric_value: Math.random() * 100, unit: '%' },
+                { metric_name: 'memory_usage', metric_value: Math.random() * 100, unit: '%' },
+                { metric_name: 'disk_usage', metric_value: Math.random() * 100, unit: '%' },
+                { metric_name: 'network_traffic', metric_value: Math.random() * 100, unit: 'MB' }
+            ];
+            
+            metrics.forEach(metric => {
+                fetch('/api/admin/server/status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify(metric)
+                });
             });
         }
 
-        // 显示 section
-        function showSection(sectionId) {
-            // 隐藏所有 section
-            $('.section').hide();
-            
-            // 显示选中的 section
-            $('#' + sectionId + '-section').show();
-            
-            // 更新菜单项
-            $('.menu-item').removeClass('active');
-            $('.menu-item').each(function() {
-                if ($(this).attr('onclick').includes(sectionId)) {
-                    $(this).addClass('active');
-                }
-            });
-            
-            // 加载对应数据
-            if (sectionId === 'dashboard') loadDashboard();
-            if (sectionId === 'users') loadUsers();
-            if (sectionId === 'reports') loadReports();
-            if (sectionId === 'logs') loadLogs();
-            if (sectionId === 'permissions') loadPermissions();
-        }
-
-        // 加载仪表盘
-        function loadDashboard() {
-            $.ajax({
-                url: '/api/admin/users?page=1&page_size=1',
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        $('#totalUsers').text(response.data.total);
-                    }
-                }
-            });
-
-            $.ajax({
-                url: '/api/admin/reports?status=pending&page=1&page_size=1',
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        $('#pendingReports').text(response.data.total);
-                    }
-                }
-            });
-
-            $.ajax({
-                url: '/api/admin/logs?page=1&page_size=1',
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        $('#totalLogs').text(response.data.total);
-                    }
-                }
-            });
-
-            // 加载最近活动
-            $.ajax({
-                url: '/api/admin/logs?page=1&page_size=10',
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        const tbody = $('#recentActivityTable tbody');
-                        tbody.empty();
-                        response.data.logs.forEach(log => {
-                            tbody.append(`
-                                <tr>
-                                    <td>${log.created_at}</td>
-                                    <td>${log.admin_username}</td>
-                                    <td>${log.action_type}</td>
-                                    <td>${log.details || '-'}</td>
-                                </tr>
-                            `);
-                        });
-                    }
-                }
-            });
-        }
-
-        // 加载用户列表
-        function loadUsers(page = 1) {
-            let search = $('#userSearch').val();
-            let status = $('#userStatus').val();
-            let role = $('#userRole').val();
-            
-            let url = `/api/admin/users?page=${page}&page_size=20`;
-            if (search) url += `&search=${search}`;
-            if (status) url += `&status=${status}`;
-            if (role) url += `&role=${role}`;
-            
-            $.ajax({
-                url: url,
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        renderUsersTable(response.data);
-                    }
-                }
-            });
-        }
-
-        function renderUsersTable(data) {
-            const tbody = $('#usersTable tbody');
-            tbody.empty();
-            
-            data.users.forEach(user => {
-                let statusClass = '';
-                if (user.status === 'active') statusClass = 'status-active';
-                else if (user.status === 'disabled') statusClass = 'status-disabled';
-                else if (user.status === 'unverified') statusClass = 'status-unverified';
-                
-                let role = user.role || 'user';
-                
-                tbody.append(`
-                    <tr>
-                        <td>${user.id}</td>
-                        <td>${user.username}</td>
-                        <td>${user.email}</td>
-                        <td>${user.nickname || '-'}</td>
-                        <td>${role}</td>
-                        <td><span class="status-badge ${statusClass}">${user.status === 'active' ? '正常' : user.status === 'disabled' ? '已禁用' : '未验证'}</span></td>
-                        <td>${user.created_at}</td>
-                        <td>
-                            <button class="action-btn btn-primary" onclick="editUser(${user.id})">编辑</button>
-                            ${user.status === 'active' ? `<button class="action-btn btn-danger" onclick="banUser(${user.id})">封禁</button>` : ''}
-                            ${user.status === 'disabled' ? `<button class="action-btn btn-success" onclick="unbanUser(${user.id})">解封</button>` : ''}
-                            <button class="action-btn btn-info" onclick="viewUserLogs(${user.id})">日志</button>
-                        </td>
-                    </tr>
-                `);
-            });
-            
-            renderPagination('usersPagination', data);
-        }
-
-        function renderPagination(paginationId, data) {
-            const pagination = $('#' + paginationId);
-            pagination.empty();
-            
-            for (let i = 1; i <= data.total_pages; i++) {
-                const isActive = i === data.page ? 'active' : '';
-                pagination.append(`
-                    <button class="${isActive}" onclick="${paginationId === 'usersPagination' ? 'loadUsers' : paginationId === 'reportsPagination' ? 'loadReports' : 'loadLogs'}(${i})">
-                        ${i}
-                    </button>
-                `);
-            }
-            
-            pagination.append(`<span> 共 ${data.total} 条</span>`);
-        }
-
-        // 搜索用户
-        function searchUsers() {
-            loadUsers(1);
-        }
-
-        // 编辑用户
-        function editUser(userId) {
-            showModal('编辑用户', `
-                <div class="form-group">
-                    <label>状态</label>
-                    <select id="editStatus">
-                        <option value="active">正常</option>
-                        <option value="disabled">已禁用</option>
-                        <option value="unverified">未验证</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>角色</label>
-                    <select id="editRole">
-                        <option value="user">普通用户</option>
-                        <option value="moderator">社区管理员</option>
-                        <option value="admin">管理员</option>
-                    </select>
-                </div>
-                <button class="btn btn-primary" onclick="saveUser(${userId})">保存</button>
-            `);
-        }
-
-        function saveUser(userId) {
-            const data = {
-                status: $('#editStatus').val(),
-                role: $('#editRole').val()
-            };
-            
-            $.ajax({
-                url: `/api/admin/users/${userId}`,
-                method: 'PUT',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                contentType: 'application/json',
-                data: JSON.stringify(data),
-                success: function(response) {
-                    if (response.success) {
-                        closeModal();
-                        loadUsers();
-                        showSuccessMessage('更新用户信息成功');
-                    } else {
-                        showErrorMessage(response.error);
-                    }
-                }
-            });
-        }
-
-        // 封禁用户
-        function banUser(userId) {
-            showModal('封禁用户', `
-                <div class="form-group">
-                    <label>封禁原因</label>
-                    <textarea id="banReason" placeholder="请输入封禁原因..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label>封禁时长（分钟，0或留空表示永久）</label>
-                    <input type="number" id="banDuration" placeholder="例如：1440（1天）">
-                </div>
-                <button class="btn btn-danger" onclick="confirmBan(${userId})">确认封禁</button>
-            `);
-        }
-
-        function confirmBan(userId) {
-            const data = {
-                user_id: userId,
-                reason: $('#banReason').val(),
-                duration: $('#banDuration').val() || null
-            };
-            
-            $.ajax({
-                url: '/api/admin/ban',
-                method: 'POST',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                contentType: 'application/json',
-                data: JSON.stringify(data),
-                success: function(response) {
-                    if (response.success) {
-                        closeModal();
-                        loadUsers();
-                        showSuccessMessage('封禁用户成功');
-                    } else {
-                        showErrorMessage(response.error);
-                    }
-                }
-            });
-        }
-
-        // 解封用户
-        function unbanUser(userId) {
-            showModal('解封用户', `
-                <div class="form-group">
-                    <label>解封原因</label>
-                    <textarea id="unbanReason" placeholder="请输入解封原因..."></textarea>
-                </div>
-                <button class="btn btn-success" onclick="confirmUnban(${userId})">确认解封</button>
-            `);
-        }
-
-        function confirmUnban(userId) {
-            const data = {
-                user_id: userId,
-                reason: $('#unbanReason').val()
-            };
-            
-            $.ajax({
-                url: '/api/admin/unban',
-                method: 'POST',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                contentType: 'application/json',
-                data: JSON.stringify(data),
-                success: function(response) {
-                    if (response.success) {
-                        closeModal();
-                        loadUsers();
-                        showSuccessMessage('解封用户成功');
-                    } else {
-                        showErrorMessage(response.error);
-                    }
-                }
-            });
-        }
-
-        // 查看用户日志
-        function viewUserLogs(userId) {
-            $.ajax({
-                url: `/api/admin/logs?admin_id=${userId}&page=1&page_size=20`,
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        let content = '<div class="table-container"><table><thead><tr><th>操作</th><th>详情</th><th>时间</th></tr></thead><tbody>';
-                        response.data.logs.forEach(log => {
-                            content += `
-                                <tr>
-                                    <td>${log.action_type}</td>
-                                    <td>${log.details || '-'}</td>
-                                    <td>${log.created_at}</td>
-                                </tr>
-                            `;
-                        });
-                        content += '</tbody></table></div>';
-                        showModal('用户操作日志', content);
-                    }
-                }
-            });
-        }
-
-        // 加载举报列表
-        function loadReports(page = 1) {
-            let status = $('#reportStatus').val();
-            let type = $('#reportType').val();
-            
-            let url = `/api/admin/reports?page=${page}&page_size=20`;
-            if (status) url += `&status=${status}`;
-            if (type) url += `&reported_type=${type}`;
-            
-            $.ajax({
-                url: url,
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        renderReportsTable(response.data);
-                    }
-                }
-            });
-        }
-
-        function renderReportsTable(data) {
-            const tbody = $('#reportsTable tbody');
-            tbody.empty();
-            
-            data.reports.forEach(report => {
-                let statusClass = '';
-                if (report.status === 'pending') statusClass = 'status-pending';
-                else if (report.status === 'reviewing') statusClass = 'status-reviewing';
-                else if (report.status === 'resolved') statusClass = 'status-resolved';
-                else if (report.status === 'rejected') statusClass = 'status-rejected';
-                
-                let reportedTypeText = '';
-                if (report.reported_type === 'post') reportedTypeText = '帖子';
-                else if (report.reported_type === 'comment') reportedTypeText = '评论';
-                else if (report.reported_type === 'user') reportedTypeText = '用户';
-                
-                tbody.append(`
-                    <tr>
-                        <td>${report.id}</td>
-                        <td>${report.reporter_username}</td>
-                        <td>${reportedTypeText}: ${report.reported_id}</td>
-                        <td>${report.reason}</td>
-                        <td><span class="status-badge ${statusClass}">${report.status === 'pending' ? '待处理' : report.status === 'reviewing' ? '处理中' : report.status === 'resolved' ? '已解决' : '已拒绝'}</span></td>
-                        <td>${report.created_at}</td>
-                        <td>
-                            ${report.status === 'pending' || report.status === 'reviewing' ? 
-                                `<button class="action-btn btn-primary" onclick="handleReport(${report.id})">处理</button>` : ''}
-                            ${report.admin_action ? `<button class="action-btn btn-info" onclick="viewReportDetails(${report.id})">详情</button>` : ''}
-                        </td>
-                    </tr>
-                `);
-            });
-            
-            renderPagination('reportsPagination', data);
-        }
-
-        function searchReports() {
-            loadReports(1);
-        }
-
-        function handleReport(reportId) {
-            showModal('处理举报', `
-                <div class="form-group">
-                    <label>处理结果</label>
-                    <select id="reportStatus">
-                        <option value="resolved">已解决</option>
-                        <option value="rejected">已拒绝</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>处理说明</label>
-                    <textarea id="reportAction" placeholder="请输入处理说明..."></textarea>
-                </div>
-                <button class="btn btn-primary" onclick="confirmReportAction(${reportId})">提交处理</button>
-            `);
-        }
-
-        function confirmReportAction(reportId) {
-            const data = {
-                status: $('#reportStatus').val(),
-                admin_action: $('#reportAction').val()
-            };
-            
-            $.ajax({
-                url: `/api/admin/reports/${reportId}`,
-                method: 'POST',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                contentType: 'application/json',
-                data: JSON.stringify(data),
-                success: function(response) {
-                    if (response.success) {
-                        closeModal();
-                        loadReports();
-                        showSuccessMessage('举报处理成功');
-                    } else {
-                        showErrorMessage(response.error);
-                    }
-                }
-            });
-        }
-
-        function viewReportDetails(reportId) {
-            $.ajax({
-                url: `/api/admin/reports/${reportId}`,
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        const report = response.data.report;
-                        let content = `
-                            <div class="form-group">
-                                <label>举报人</label>
-                                <input type="text" value="${report.reporter_username}" disabled>
-                            </div>
-                            <div class="form-group">
-                                <label>被举报对象</label>
-                                <input type="text" value="${report.reported_content}" disabled>
-                            </div>
-                            <div class="form-group">
-                                <label>举报原因</label>
-                                <textarea disabled>${report.reason}</textarea>
-                            </div>
-                            <div class="form-group">
-                                <label>处理结果</label>
-                                <input type="text" value="${report.status === 'resolved' ? '已解决' : '已拒绝'}" disabled>
-                            </div>
-                            <div class="form-group">
-                                <label>处理说明</label>
-                                <textarea disabled>${report.admin_action || '-'}</textarea>
-                            </div>
-                        `;
-                        showModal('举报详情', content);
-                    }
-                }
-            });
-        }
-
-        // 加载操作日志
-        function loadLogs(page = 1) {
-            let search = $('#logSearch').val();
-            let actionType = $('#logActionType').val();
-            
-            let url = `/api/admin/logs?page=${page}&page_size=20`;
-            if (search) url += `&admin_id=${search}`;
-            if (actionType) url += `&action_type=${actionType}`;
-            
-            $.ajax({
-                url: url,
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        renderLogsTable(response.data);
-                    }
-                }
-            });
-        }
-
-        function renderLogsTable(data) {
-            const tbody = $('#logsTable tbody');
-            tbody.empty();
-            
-            data.logs.forEach(log => {
-                tbody.append(`
-                    <tr>
-                        <td>${log.id}</td>
-                        <td>${log.admin_username}</td>
-                        <td>${log.action_type}</td>
-                        <td>${log.target_type}</td>
-                        <td>${log.target_id}</td>
-                        <td>${log.details || '-'}</td>
-                        <td>${log.ip_address}</td>
-                        <td>${log.created_at}</td>
-                    </tr>
-                `);
-            });
-            
-            renderPagination('logsPagination', data);
-        }
-
-        function searchLogs() {
-            loadLogs(1);
-        }
-
-        // 加载权限分配
-        function loadPermissions() {
-            $.ajax({
-                url: '/api/admin/roles',
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        const select = $('#roleSelect');
-                        select.empty();
-                        select.append('<option value="">请选择角色</option>');
-                        response.data.roles.forEach(role => {
-                            select.append(`<option value="${role.id}">${role.name} - ${role.description}</option>`);
-                        });
-                    }
-                }
-            });
-
-            $.ajax({
-                url: '/api/admin/users?page=1&page_size=100',
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        const tbody = $('#usersRolesTable tbody');
-                        tbody.empty();
-                        response.data.users.forEach(user => {
-                            tbody.append(`
-                                <tr>
-                                    <td>${user.id}</td>
-                                    <td>${user.username}</td>
-                                    <td>${user.email}</td>
-                                    <td>${user.role || 'user'}</td>
-                                    <td><button class="action-btn btn-primary" onclick="editUserRoles(${user.id})">分配角色</button></td>
-                                </tr>
-                            `);
-                        });
-                    }
-                }
-            });
-        }
-
-        function editUserRoles(userId) {
-            $.ajax({
-                url: '/api/admin/roles',
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(rolesResponse) {
-                    if (rolesResponse.success) {
-                        let content = '<div class="form-group"><label>选择角色</label><select id="userRoles" multiple style="height: 150px;">';
-                        rolesResponse.data.roles.forEach(role => {
-                            content += `<option value="${role.id}">${role.name} - ${role.description}</option>`;
-                        });
-                        content += '</select></div>';
-                        content += '<button class="btn btn-primary" onclick="saveUserRoles(' + userId + ')">保存</button>';
-                        showModal('分配用户角色', content);
-                    }
-                }
-            });
-        }
-
-        function saveUserRoles(userId) {
-            const roleIds = $('#userRoles').val() || [];
-            
-            $.ajax({
-                url: `/api/admin/users/${userId}/roles`,
-                method: 'PUT',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                contentType: 'application/json',
-                data: JSON.stringify({ role_ids: roleIds }),
-                success: function(response) {
-                    if (response.success) {
-                        closeModal();
-                        loadPermissions();
-                        showSuccessMessage('更新用户角色成功');
-                    } else {
-                        showErrorMessage(response.error);
-                    }
-                }
-            });
-        }
-
-        function loadRolePermissions(roleId) {
-            if (!roleId) return;
-            
-            $.ajax({
-                url: `/api/admin/roles/${roleId}/permissions`,
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                success: function(response) {
-                    if (response.success) {
-                        let content = '<div class="form-group"><label>权限列表</label><div id="permissionsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">';
-                        response.data.permissions.forEach(permission => {
-                            content += `
-                                <label style="display: flex; align-items: center; gap: 8px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
-                                    <input type="checkbox" class="permission-checkbox" value="${permission.id}">
-                                    ${permission.name}
-                                </label>
-                            `;
-                        });
-                        content += '</div></div>';
-                        content += '<button class="btn btn-primary" onclick="saveRolePermissions(' + roleId + ')">保存</button>';
-                        
-                        $('#rolePermissionsContainer').html(content);
-                    }
-                }
-            });
-        }
-
-        function saveRolePermissions(roleId) {
-            const permissionIds = $('.permission-checkbox:checked').map(function() {
-                return this.value;
-            }).get();
-            
-            $.ajax({
-                url: `/api/admin/roles/${roleId}/permissions`,
-                method: 'PUT',
-                headers: {
-                    'Authorization': 'Bearer ' + currentToken
-                },
-                contentType: 'application/json',
-                data: JSON.stringify({ permission_ids: permissionIds }),
-                success: function(response) {
-                    if (response.success) {
-                        showSuccessMessage('更新角色权限成功');
-                    } else {
-                        showErrorMessage(response.error);
-                    }
-                }
-            });
-        }
-
-        // 模态框
-        function showModal(title, content) {
-            $('#modalTitle').text(title);
-            $('#modalBody').html(content);
-            $('#modal').addClass('active');
-        }
-
-        function closeModal() {
-            $('#modal').removeClass('active');
-            $('#modalBody').empty();
-        }
-
-        // 提示消息
-        function showSuccessMessage(message) {
-            const messageDiv = $('<div class="message message-success">' + message + '</div>');
-            $('.main-content').prepend(messageDiv);
-            setTimeout(() => messageDiv.remove(), 3000);
-        }
-
-        function showErrorMessage(message) {
-            const messageDiv = $('<div class="message message-error">' + message + '</div>');
-            $('.main-content').prepend(messageDiv);
-            setTimeout(() => messageDiv.remove(), 3000);
-        }
+        // 每30秒更新一次服务器指标
+        setInterval(loadServerMetrics, 30000);
     </script>
 </body>
 </html>
