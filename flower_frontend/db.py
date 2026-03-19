@@ -1,6 +1,7 @@
 import pymysql
 import time
 import os
+import json
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # MySQL数据库配置
@@ -1296,9 +1297,14 @@ class SQLDatabaseManager:
         
         try:
             now = int(time.time())
+            # 从image_path提取image_name
+            import os
+            image_name = os.path.basename(image_path)
+            image_description = f"{flower_name} - 识别置信度: {confidence:.2f}" if flower_name and confidence else ""
+            
             cursor.execute(
-                "INSERT INTO album_images (album_id, recognition_result_id, image_path, flower_name, confidence, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                (album_id, recognition_result_id, image_path, flower_name, confidence, now)
+                "INSERT INTO album_images (album_id, user_id, recognition_result_id, image_path, image_name, image_description, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (album_id, user_id, recognition_result_id, image_path, image_name, image_description, now)
             )
             
             cursor.execute(
@@ -1763,209 +1769,346 @@ class SQLDatabaseManager:
             conn.close()
 
 # 创建全局数据库管理器实例
-db_manager = SQLDatabaseManager()
+try:
+    db_manager = SQLDatabaseManager()
+except Exception as e:
+    print(f"数据库初始化失败: {str(e)}")
+    print("应用将以无数据库模式启动")
+    db_manager = None
 
 # 导出便捷函数
 def create_user(username, email, password):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.create_user(username, email, password)
 
 def get_user_by_username(username):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_user_by_username(username)
 
 def get_user_by_id(user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_user_by_id(user_id)
 
 def verify_password(stored_password_hash, provided_password):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.verify_password(stored_password_hash, provided_password)
 
 def get_user_roles(user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_user_roles(user_id)
 
 def get_user_permissions(user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_user_permissions(user_id)
 
 def check_user_permission(user_id, permission_name):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.check_user_permission(user_id, permission_name)
 
 def save_recognition_result(user_id, image_path, result, confidence):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.save_recognition_result(user_id, image_path, result, confidence)
 
 def get_user_recognition_results(user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_user_recognition_results(user_id)
 
 # 帖子相关便捷函数
 def create_post(user_id, content, image_url=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.create_post(user_id, content, image_url)
 
 def get_posts(limit=20, offset=0):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_posts(limit, offset)
 
 def get_post_by_id(post_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_post_by_id(post_id)
 
 def update_post(post_id, content, image_url=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.update_post(post_id, content, image_url)
 
 def delete_post(post_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.delete_post(post_id)
 
 # 评论相关便捷函数
 def create_comment(post_id, user_id, content):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.create_comment(post_id, user_id, content)
 
 def get_comments_by_post_id(post_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_comments_by_post_id(post_id)
 
 def delete_comment(comment_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.delete_comment(comment_id)
 
 # 点赞相关便捷函数
 def like_post(post_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.like_post(post_id, user_id)
 
 def unlike_post(post_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.unlike_post(post_id, user_id)
 
 def is_post_liked_by_user(post_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.is_post_liked_by_user(post_id, user_id)
 
 # 关注相关便捷函数
 def follow_user(follower_id, following_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.follow_user(follower_id, following_id)
 
 def unfollow_user(follower_id, following_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.unfollow_user(follower_id, following_id)
 
 def is_following(follower_id, following_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.is_following(follower_id, following_id)
 
 def get_user_following(user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_user_following(user_id)
 
 def get_user_followers(user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_user_followers(user_id)
 
 def test_connection():
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.test_connection()
 
 def create_system_log(log_level, module, message, user_id=None, username=None, ip_address=None, user_agent=None):
+    if db_manager is None:
+        return
     return db_manager.create_system_log(log_level, module, message, user_id, username, ip_address, user_agent)
 
 def get_system_logs(limit=100, offset=0, log_level=None, module=None, start_time=None, end_time=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_system_logs(limit, offset, log_level, module, start_time, end_time)
 
 def record_traffic(endpoint, method, ip_address=None, user_id=None, response_status=200, response_time=0):
+    if db_manager is None:
+        return
     return db_manager.record_traffic(endpoint, method, ip_address, user_id, response_status, response_time)
 
 def get_traffic_stats(start_date=None, end_date=None, limit=100):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_traffic_stats(start_date, end_date, limit)
 
 def get_traffic_by_endpoint(start_date=None, end_date=None, limit=20):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_traffic_by_endpoint(start_date, end_date, limit)
 
 def record_server_status(metric_name, metric_value, unit=None, status='normal'):
+    if db_manager is None:
+        return
     return db_manager.record_server_status(metric_name, metric_value, unit, status)
 
 def get_server_status(metric_name=None, limit=100):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_server_status(metric_name, limit)
 
 def get_latest_server_metrics():
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_latest_server_metrics()
 
 def record_admin_operation(admin_id, admin_username, operation_type, target_type=None, target_id=None, description=None, ip_address=None):
+    if db_manager is None:
+        return
     return db_manager.record_admin_operation(admin_id, admin_username, operation_type, target_type, target_id, description, ip_address)
 
 def get_admin_operations(admin_id=None, operation_type=None, limit=100, offset=0):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_admin_operations(admin_id, operation_type, limit, offset)
 
 def get_all_admins():
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_all_admins()
 
 def update_user_role(user_id, role_name):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.update_user_role(user_id, role_name)
 
 def get_system_summary():
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_system_summary()
 
 def update_user_profile(user_id, email=None, password_hash=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.update_user_profile(user_id, email, password_hash)
 
 def get_user_recognition_history(user_id, limit=20, offset=0):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_user_recognition_history(user_id, limit, offset)
 
 def delete_recognition_result(result_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.delete_recognition_result(result_id, user_id)
 
 def create_album(user_id, name, category, cover_image=None, description=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.create_album(user_id, name, category, cover_image, description)
 
 def get_user_albums(user_id, category=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_user_albums(user_id, category)
 
 def get_album_by_id(album_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_album_by_id(album_id, user_id)
 
 def update_album(album_id, user_id, name=None, description=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.update_album(album_id, user_id, name, description)
 
 def delete_album(album_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.delete_album(album_id, user_id)
 
 def add_image_to_album(album_id, user_id, image_path, flower_name=None, confidence=None, recognition_result_id=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.add_image_to_album(album_id, user_id, image_path, flower_name, confidence, recognition_result_id)
 
 def get_album_images(album_id, user_id, limit=50, offset=0):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_album_images(album_id, user_id, limit, offset)
 
 def delete_album_image(image_id, album_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.delete_album_image(image_id, album_id, user_id)
 
 def get_album_categories(user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_album_categories(user_id)
 
 def create_feedback(user_id, title, content, feedback_type):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.create_feedback(user_id, title, content, feedback_type)
 
 def get_user_feedback(user_id, limit=20, offset=0):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_user_feedback(user_id, limit, offset)
 
 def get_feedback_by_id(feedback_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_feedback_by_id(feedback_id, user_id)
 
 def delete_feedback(feedback_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.delete_feedback(feedback_id, user_id)
 
 def get_all_feedback(status=None, limit=50, offset=0):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_all_feedback(status, limit, offset)
 
 def respond_feedback(feedback_id, response):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.respond_feedback(feedback_id, response)
 
 def create_announcement(title, content, announcement_type, admin_id, admin_username):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.create_announcement(title, content, announcement_type, admin_id, admin_username)
 
 def get_announcements(is_active=None, limit=20, offset=0):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_announcements(is_active, limit, offset)
 
 def update_announcement(announcement_id, title, content, announcement_type, admin_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.update_announcement(announcement_id, title, content, announcement_type, admin_id)
 
 def delete_announcement(announcement_id, admin_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.delete_announcement(announcement_id, admin_id)
 
 def move_to_recycle_bin(user_id, item_type, original_id, item_data=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.move_to_recycle_bin(user_id, item_type, original_id, item_data)
 
 def get_recycle_bin_items(user_id, item_type=None, limit=50, offset=0):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.get_recycle_bin_items(user_id, item_type, limit, offset)
 
 def restore_from_recycle_bin(user_id, recycle_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.restore_from_recycle_bin(user_id, recycle_id)
 
 def permanently_delete(user_id, recycle_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.permanently_delete(user_id, recycle_id)
 
 def empty_recycle_bin(user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
     return db_manager.empty_recycle_bin(user_id)
 
 if __name__ == '__main__':
@@ -1974,11 +2117,3 @@ if __name__ == '__main__':
         print('数据库连接成功！')
     else:
         print('数据库连接失败！')
-    
-    # 导出当前数据库为SQL文件
-    db_manager.export_to_sql('flower_frontend/current_database.sql')
-    print('数据库已导出为SQL文件')
-    
-    # 删除数据库文件（只保留SQL文件）
-    db_manager.delete_database()
-    print('数据库文件已删除，只保留SQL文件作为数据源')

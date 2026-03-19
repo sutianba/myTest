@@ -16,28 +16,41 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
 
+# 导入配置
+from config import TEST_MODE, USE_MODEL
+
 # 导入数据库操作模块
-from db import (
-    create_user, get_user_by_username, get_user_by_id, verify_password,
-    create_post, get_posts, get_post_by_id, update_post, delete_post,
-    create_comment, get_comments_by_post_id, delete_comment,
-    like_post, unlike_post, is_post_liked_by_user,
-    follow_user, unfollow_user, is_following, get_user_following, get_user_followers,
-    check_user_permission,
-    # 超级管理员端函数
-    create_system_log, get_system_logs, record_traffic, get_traffic_stats, get_traffic_by_endpoint,
-    record_server_status, get_server_status, get_latest_server_metrics,
-    record_admin_operation, get_admin_operations, get_all_admins, update_user_role, get_system_summary,
-    # 用户端新功能
-    update_user_profile, get_user_recognition_history, delete_recognition_result,
-    create_album, get_user_albums, get_album_by_id, update_album, delete_album,
-    add_image_to_album, get_album_images, delete_album_image, get_album_categories,
-    create_feedback, get_user_feedback, get_feedback_by_id, delete_feedback,
-    get_all_feedback, respond_feedback,
-    create_announcement, get_announcements, update_announcement, delete_announcement,
-    move_to_recycle_bin, get_recycle_bin_items, restore_from_recycle_bin,
-    permanently_delete, empty_recycle_bin
-)
+if not TEST_MODE:
+    try:
+        from db import (
+            create_user, get_user_by_username, get_user_by_id, verify_password,
+            create_post, get_posts, get_post_by_id, update_post, delete_post,
+            create_comment, get_comments_by_post_id, delete_comment,
+            like_post, unlike_post, is_post_liked_by_user,
+            follow_user, unfollow_user, is_following, get_user_following, get_user_followers,
+            check_user_permission,
+            # 超级管理员端函数
+            create_system_log, get_system_logs, record_traffic, get_traffic_stats, get_traffic_by_endpoint,
+            record_server_status, get_server_status, get_latest_server_metrics,
+            record_admin_operation, get_admin_operations, get_all_admins, update_user_role, get_system_summary,
+            # 用户端新功能
+            update_user_profile, get_user_recognition_history, delete_recognition_result, save_recognition_result,
+            create_album, get_user_albums, get_album_by_id, update_album, delete_album,
+            add_image_to_album, get_album_images, delete_album_image, get_album_categories,
+            create_feedback, get_user_feedback, get_feedback_by_id, delete_feedback,
+            get_all_feedback, respond_feedback,
+            create_announcement, get_announcements, update_announcement, delete_announcement,
+            move_to_recycle_bin, get_recycle_bin_items, restore_from_recycle_bin,
+            permanently_delete, empty_recycle_bin
+        )
+        db_available = True
+    except Exception as e:
+        print(f"数据库模块导入失败: {str(e)}")
+        print("应用启动失败: 数据库初始化错误")
+        raise
+else:
+    print("测试模式: 跳过数据库初始化")
+    db_available = False
 
 app = Flask(__name__)
 CORS(app)  # 启用CORS以允许前端访问
@@ -54,21 +67,37 @@ import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # 加载YOLOv5模型
-import torch
-
-# 使用正确路径加载模型
 flower_model = None
-try:
-    # 使用BASE_DIR构建绝对路径
-    yolo_path = os.path.join(BASE_DIR, '..')
-    model_path = os.path.join(BASE_DIR, '..', 'testflowers.pt')
-    flower_model = torch.hub.load(yolo_path, 'custom', path=model_path, source='local', force_reload=True)
-    flower_model.conf = 0.5  # 提高置信度阈值，只保留高置信度结果
-    flower_model.iou = 0.5   # 提高NMS IOU阈值，更严格地过滤重叠边界框
-    print("成功加载YOLOv5花卉识别模型")
-except Exception as e:
-    print(f"无法加载YOLOv5模型: {e}")
-    print("使用模拟模型进行测试...")
+if USE_MODEL and not TEST_MODE:
+    try:
+        # 使用BASE_DIR构建绝对路径
+        import torch
+        yolo_path = os.path.join(BASE_DIR, '..')
+        model_path = os.path.join(BASE_DIR, '..', 'testflowers.pt')
+        flower_model = torch.hub.load(yolo_path, 'custom', path=model_path, source='local', force_reload=True)
+        flower_model.conf = 0.5  # 提高置信度阈值，只保留高置信度结果
+        flower_model.iou = 0.5   # 提高NMS IOU阈值，更严格地过滤重叠边界框
+        print("成功加载YOLOv5花卉识别模型")
+    except Exception as e:
+        print(f"无法加载YOLOv5模型: {e}")
+        print("使用模拟模型进行测试...")
+        # 创建一个模拟模型类，用于测试
+        class MockFlowerModel:
+            def __call__(self, image):
+                # 模拟返回结果
+                class MockResults:
+                    def pandas(self):
+                        class MockPandas:
+                            @property
+                            def xyxy(self):
+                                return [type('obj', (object,), {'to_dict': lambda self, orient: []})()]
+                        return MockPandas()
+                return MockResults()
+        flower_model = MockFlowerModel()
+        flower_model.conf = 0.5
+        flower_model.iou = 0.5
+else:
+    print("测试模式: 跳过模型加载")
     # 创建一个模拟模型类，用于测试
     class MockFlowerModel:
         def __call__(self, image):
@@ -331,6 +360,56 @@ def format_address(address):
 
 def process_single_image(image_data, user_id=None, save_to_album=False):
     """处理单个图片的识别"""
+    # 测试模式下的处理
+    if TEST_MODE:
+        # 移除base64头部
+        if image_data.startswith('data:image/'):
+            image_data = image_data.split(',')[1]
+
+        # 解码base64图片数据
+        image_bytes = base64.b64decode(image_data)
+        image = Image.open(io.BytesIO(image_bytes))
+        # 调整图片大小以提高处理速度
+        image = image.resize((640, 640))
+        
+        # 提取图片EXIF信息
+        image_info = {
+            'date_time': "未知",
+            'location': {
+                'has_location': False,
+                'latitude': None,
+                'longitude': None,
+                'formatted_address': "无GPS信息",
+                'raw_gps': None
+            },
+            'camera_info': {
+                'make': "未知",
+                'model': "未知"
+            },
+            'image_details': {
+                'width': image.width,
+                'height': image.height
+            }
+        }
+        
+        # 模拟识别结果
+        detection_results = [{
+            'name': '测试花卉',
+            'confidence': 0.95,
+            'bbox': [100, 100, 200, 200]
+        }]
+        
+        # 返回包含识别结果和EXIF信息的响应
+        return_result = {
+            'detections': detection_results,
+            'exif_info': image_info,
+            'test_mode': True,
+            'message': '测试模式下的模拟识别结果'
+        }
+        
+        return return_result
+    
+    # 正式模式下的处理
     saved_album_info = None
     
     # 移除base64头部
@@ -511,6 +590,9 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     """用户注册"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持注册功能'}), 503
+    
     try:
         data = request.get_json()
         username = data.get('username')
@@ -538,6 +620,9 @@ def register():
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     """用户登录"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持登录功能'}), 503
+    
     try:
         data = request.get_json()
         username = data.get('username')
@@ -567,6 +652,9 @@ def login():
 @app.route('/api/posts', methods=['GET'])
 def get_posts_api():
     """获取帖子列表"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持获取帖子功能'}), 503
+    
     try:
         limit = int(request.args.get('limit', 20))
         offset = int(request.args.get('offset', 0))
@@ -580,6 +668,9 @@ def get_posts_api():
 @app.route('/api/posts/<int:post_id>', methods=['GET'])
 def get_post_api(post_id):
     """获取帖子详情"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持获取帖子详情功能'}), 503
+    
     try:
         post = get_post_by_id(post_id)
         if not post:
@@ -595,6 +686,9 @@ def get_post_api(post_id):
 @permission_required('create_posts')
 def create_post_api():
     """创建帖子"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持创建帖子功能'}), 503
+    
     try:
         data = request.get_json()
         content = data.get('content')
@@ -614,6 +708,9 @@ def create_post_api():
 @auth_required
 def update_post_api(post_id):
     """更新帖子"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持更新帖子功能'}), 503
+    
     try:
         data = request.get_json()
         content = data.get('content')
@@ -642,6 +739,9 @@ def update_post_api(post_id):
 @auth_required
 def delete_post_api(post_id):
     """删除帖子"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持删除帖子功能'}), 503
+    
     try:
         post = get_post_by_id(post_id)
         if not post:
@@ -668,6 +768,9 @@ def delete_post_api(post_id):
 @app.route('/api/posts/<int:post_id>/comments', methods=['GET'])
 def get_comments_api(post_id):
     """获取帖子评论"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持获取评论功能'}), 503
+    
     try:
         comments = get_comments_by_post_id(post_id)
         return jsonify({'success': True, 'comments': comments})
@@ -680,6 +783,9 @@ def get_comments_api(post_id):
 @permission_required('comment_posts')
 def create_comment_api(post_id):
     """创建评论"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持创建评论功能'}), 503
+    
     try:
         data = request.get_json()
         content = data.get('content')
@@ -692,7 +798,7 @@ def create_comment_api(post_id):
         if not post:
             return jsonify({'success': False, 'error': '帖子不存在'}), 404
         
-        comment_id = create_comment(post_id, g.user_id, content)
+        comment_id = create_comment(g.user_id, post_id, content)
         
         return jsonify({'success': True, 'comment_id': comment_id})
     except Exception as e:
@@ -703,10 +809,12 @@ def create_comment_api(post_id):
 @auth_required
 def delete_comment_api(comment_id):
     """删除评论"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持删除评论功能'}), 503
+    
     try:
         # 这里简化处理，实际应该检查评论是否存在以及用户是否有权限删除
         delete_comment(comment_id)
-        
         return jsonify({'success': True})
     except Exception as e:
         print(f"删除评论时发生错误: {str(e)}")
@@ -717,6 +825,9 @@ def delete_comment_api(comment_id):
 @auth_required
 def like_post_api(post_id):
     """点赞帖子"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持点赞功能'}), 503
+    
     try:
         # 检查帖子是否存在
         post = get_post_by_id(post_id)
@@ -734,6 +845,9 @@ def like_post_api(post_id):
 @auth_required
 def unlike_post_api(post_id):
     """取消点赞"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持取消点赞功能'}), 503
+    
     try:
         # 检查帖子是否存在
         post = get_post_by_id(post_id)
@@ -751,6 +865,9 @@ def unlike_post_api(post_id):
 @auth_required
 def is_post_liked_api(post_id):
     """检查帖子是否被当前用户点赞"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持检查点赞状态功能'}), 503
+    
     try:
         is_liked = is_post_liked_by_user(post_id, g.user_id)
         
@@ -764,6 +881,9 @@ def is_post_liked_api(post_id):
 @auth_required
 def follow_user_api(user_id):
     """关注用户"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持关注用户功能'}), 503
+    
     try:
         # 不能关注自己
         if user_id == g.user_id:
@@ -780,6 +900,9 @@ def follow_user_api(user_id):
 @auth_required
 def unfollow_user_api(user_id):
     """取消关注用户"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持取消关注用户功能'}), 503
+    
     try:
         unfollow_user(g.user_id, user_id)
         
@@ -792,6 +915,9 @@ def unfollow_user_api(user_id):
 @auth_required
 def is_following_api(user_id):
     """检查是否关注了指定用户"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持检查关注状态功能'}), 503
+    
     try:
         is_following_status = is_following(g.user_id, user_id)
         
@@ -803,6 +929,9 @@ def is_following_api(user_id):
 @app.route('/api/users/<int:user_id>/following', methods=['GET'])
 def get_user_following_api(user_id):
     """获取用户关注的人"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持获取关注列表功能'}), 503
+    
     try:
         following = get_user_following(user_id)
         
@@ -814,6 +943,9 @@ def get_user_following_api(user_id):
 @app.route('/api/users/<int:user_id>/followers', methods=['GET'])
 def get_user_followers_api(user_id):
     """获取用户的粉丝"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持获取粉丝列表功能'}), 503
+    
     try:
         followers = get_user_followers(user_id)
         
@@ -1552,5 +1684,12 @@ def after_request(response):
     return response
 
 if __name__ == '__main__':
-    # 启动Flask服务器
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    print('启动应用...')
+    try:
+        # 启动Flask服务器
+        print('启动Flask服务器，监听在0.0.0.0:5000')
+        app.run(host='0.0.0.0', port=5000, debug=True)
+    except Exception as e:
+        print(f'应用启动失败: {str(e)}')
+        import traceback
+        traceback.print_exc()
