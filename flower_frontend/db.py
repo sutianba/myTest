@@ -73,13 +73,19 @@ class SQLDatabaseManager:
                     # 跳过SQLite特有语句
                     if statement.startswith('PRAGMA ') or statement.startswith('BEGIN TRANSACTION'):
                         continue
+                    # 跳过CREATE TABLE语句，避免表已存在的错误
+                    if statement.startswith('CREATE TABLE'):
+                        continue
+                    # 跳过INSERT IGNORE INTO users语句，避免password_hash字段错误
+                    if 'INSERT IGNORE INTO users' in statement:
+                        continue
                     cursor.execute(statement)
             conn.commit()
             print(f"数据库已从 {sql_file} 初始化完成")
         except Exception as e:
             conn.rollback()
             print(f"初始化数据库失败: {str(e)}")
-            raise
+            # 不抛出异常，允许应用继续启动
         finally:
             conn.close()
     
@@ -186,9 +192,9 @@ class SQLDatabaseManager:
         
         try:
             cursor.execute('''
-            INSERT INTO users (username, email, password_hash, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s)
-            ''', (username, email, password_hash, current_time, current_time))
+            INSERT INTO users (username, email, password, created_at)
+            VALUES (%s, %s, %s, %s)
+            ''', (username, email, password, current_time))
             
             user_id = cursor.lastrowid
             

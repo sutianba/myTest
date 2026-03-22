@@ -8,8 +8,10 @@ USE flower_recognition;
 CREATE TABLE IF NOT EXISTS users (
     id INT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    password VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    is_verified TINYINT(1) DEFAULT 0,
     created_at INT NOT NULL,
     updated_at INT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
