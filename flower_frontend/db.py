@@ -14,9 +14,12 @@ DB_CONFIG = {
     'cursorclass': pymysql.cursors.DictCursor
 }
 
+# 基准目录
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # SQL文件路径
-SCHEMA_SQL = 'database.sql'
-BACKUP_SQL = 'database_backup.sql'
+SCHEMA_SQL = os.path.join(BASE_DIR, 'database.sql')
+BACKUP_SQL = os.path.join(BASE_DIR, 'database_backup.sql')
 
 class SQLDatabaseManager:
     def __init__(self, db_config=DB_CONFIG):

@@ -6,6 +6,9 @@ import pymysql
 import time
 import os
 
+# 基准目录
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 def init_mysql_database():
     """初始化MySQL数据库"""
     
@@ -28,7 +31,7 @@ def init_mysql_database():
         cursor.execute("USE flower_recognition")
         
         # 读取并执行SQL文件
-        sql_file_path = 'database.sql'
+        sql_file_path = os.path.join(BASE_DIR, 'database.sql')
         if os.path.exists(sql_file_path):
             with open(sql_file_path, 'r', encoding='utf-8') as f:
                 sql_content = f.read()

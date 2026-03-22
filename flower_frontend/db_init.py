@@ -1,8 +1,12 @@
 import sqlite3
 import time
+import os
+
+# 基准目录
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 数据库路径
-DB_PATH = 'flower_recognition.db'
+DB_PATH = os.path.join(BASE_DIR, 'flower_recognition.db')
 
 # 连接数据库
 conn = sqlite3.connect(DB_PATH)
