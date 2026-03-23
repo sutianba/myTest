@@ -14,3 +14,4 @@ ultralytics>=8.2.64
 exifread>=3.0.0
 geopy>=2.4.0
 pymysql>=1.1.1
+Flask-Mail>=0.9.1

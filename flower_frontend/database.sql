@@ -8,8 +8,9 @@ USE flower_recognition;
 CREATE TABLE IF NOT EXISTS users (
     id INT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(255) UNIQUE NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE,
     password VARCHAR(255) NOT NULL,
+    role VARCHAR(20) DEFAULT 'user',
     is_verified TINYINT(1) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -44,6 +45,19 @@ CREATE TABLE IF NOT EXISTS role_permissions (
     permission_id INT NOT NULL,
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
     FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 邮箱验证码表
+CREATE TABLE IF NOT EXISTS email_codes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    email VARCHAR(255) NOT NULL,
+    code VARCHAR(10) NOT NULL,
+    purpose ENUM('register', 'reset_password') NOT NULL,
+    expire_at TIMESTAMP NOT NULL,
+    is_used TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_email_purpose (email, purpose),
+    INDEX idx_expire_at (expire_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 识别结果表

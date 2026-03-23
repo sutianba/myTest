@@ -2,6 +2,9 @@ import pymysql
 import time
 import os
 import json
+import random
+import string
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # MySQL数据库配置
@@ -185,7 +188,7 @@ class SQLDatabaseManager:
         return conn
     
     # 用户相关操作
-    def create_user(self, username, email, password):
+    def create_user(self, username, email, password, role='user'):
         """创建新用户"""
         password_hash = generate_password_hash(password, method='pbkdf2:sha256')
         
@@ -195,17 +198,18 @@ class SQLDatabaseManager:
         try:
             # 插入用户数据，使用password_hash，created_at使用数据库默认值
             cursor.execute('''
-            INSERT INTO users (username, email, password)
-            VALUES (%s, %s, %s)
-            ''', (username, email, password_hash))
+            INSERT INTO users (username, email, password, role)
+            VALUES (%s, %s, %s, %s)
+            ''', (username, email, password_hash, role))
             
             user_id = cursor.lastrowid
             
-            # 检查roles表是否存在user角色
-            cursor.execute('SELECT id FROM roles WHERE name = %s', ('user',))
-            role = cursor.fetchone()
-            if role:
-                role_id = role['id']
+            # 检查roles表是否存在对应的角色
+            role_name = role if role == 'admin' else 'user'
+            cursor.execute('SELECT id FROM roles WHERE name = %s', (role_name,))
+            role_record = cursor.fetchone()
+            if role_record:
+                role_id = role_record['id']
                 # 插入用户角色关联
                 cursor.execute('''
                 INSERT INTO user_roles (user_id, role_id)
@@ -214,9 +218,15 @@ class SQLDatabaseManager:
             
             conn.commit()
             return user_id
-        except pymysql.IntegrityError:
+        except pymysql.IntegrityError as e:
             conn.rollback()
-            raise ValueError('用户名或邮箱已存在')
+            if 'Duplicate entry' in str(e):
+                if 'email' in str(e):
+                    raise ValueError('邮箱已存在')
+                else:
+                    raise ValueError('用户名已存在')
+            else:
+                raise ValueError('用户名或邮箱已存在')
         except Exception as e:
             conn.rollback()
             raise Exception(f'创建用户失败: {str(e)}')
@@ -1779,6 +1789,104 @@ class SQLDatabaseManager:
             raise Exception(f'清空回收站失败: {str(e)}')
         finally:
             conn.close()
+    
+    def generate_verification_code(self, length=6):
+        """生成指定长度的数字验证码"""
+        return ''.join(random.choices(string.digits, k=length))
+    
+    def create_email_code(self, email, purpose, expire_seconds=300):
+        """创建邮箱验证码记录"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 使该邮箱之前的相同用途的验证码失效
+            cursor.execute(
+                "UPDATE email_codes SET is_used = 1 WHERE email = %s AND purpose = %s AND is_used = 0",
+                (email, purpose)
+            )
+            
+            # 生成新验证码
+            code = self.generate_verification_code()
+            expire_at = datetime.now() + timedelta(seconds=expire_seconds)
+            
+            # 插入新验证码记录
+            cursor.execute(
+                "INSERT INTO email_codes (email, code, purpose, expire_at) VALUES (%s, %s, %s, %s)",
+                (email, code, purpose, expire_at)
+            )
+            
+            conn.commit()
+            return code
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'创建验证码失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def verify_email_code(self, email, code, purpose):
+        """验证邮箱验证码"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 查找未使用且未过期的验证码
+            cursor.execute(
+                "SELECT * FROM email_codes WHERE email = %s AND code = %s AND purpose = %s AND is_used = 0 AND expire_at > %s",
+                (email, code, purpose, datetime.now())
+            )
+            
+            record = cursor.fetchone()
+            if not record:
+                return False
+            
+            # 标记验证码为已使用
+            cursor.execute(
+                "UPDATE email_codes SET is_used = 1 WHERE id = %s",
+                (record['id'],)
+            )
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'验证验证码失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def check_email_rate_limit(self, email, purpose, limit_seconds=60):
+        """检查发送验证码的频率限制"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 查找最近指定时间内的验证码记录
+            time_limit = datetime.now() - timedelta(seconds=limit_seconds)
+            cursor.execute(
+                "SELECT COUNT(*) as count FROM email_codes WHERE email = %s AND purpose = %s AND created_at > %s",
+                (email, purpose, time_limit)
+            )
+            
+            result = cursor.fetchone()
+            return result['count'] > 0
+        except Exception as e:
+            raise Exception(f'检查频率限制失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_user_by_email(self, email):
+        """根据邮箱获取用户信息"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('SELECT * FROM users WHERE email = %s', (email,))
+            user = cursor.fetchone()
+            return dict(user) if user else None
+        except Exception as e:
+            raise Exception(f'获取用户信息失败: {str(e)}')
+        finally:
+            conn.close()
 
 # 创建全局数据库管理器实例
 try:
@@ -1789,10 +1897,10 @@ except Exception as e:
     db_manager = None
 
 # 导出便捷函数
-def create_user(username, email, password):
+def create_user(username, email, password, role='user'):
     if db_manager is None:
         raise Exception("数据库未初始化")
-    return db_manager.create_user(username, email, password)
+    return db_manager.create_user(username, email, password, role)
 
 def get_user_by_username(username):
     if db_manager is None:
@@ -1992,6 +2100,26 @@ def update_user_profile(user_id, email=None, password_hash=None):
     if db_manager is None:
         raise Exception("数据库未初始化")
     return db_manager.update_user_profile(user_id, email, password_hash)
+
+def create_email_code(email, purpose, expire_seconds=300):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.create_email_code(email, purpose, expire_seconds)
+
+def verify_email_code(email, code, purpose):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.verify_email_code(email, code, purpose)
+
+def check_email_rate_limit(email, purpose, limit_seconds=60):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.check_email_rate_limit(email, purpose, limit_seconds)
+
+def get_user_by_email(email):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.get_user_by_email(email)
 
 def get_user_recognition_history(user_id, limit=20, offset=0):
     if db_manager is None:

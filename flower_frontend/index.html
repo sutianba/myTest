@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>花卉识别AI系统</title>
+    <title>园艺相册自动分类工具</title>
     <style>
         * {
             margin: 0;
@@ -510,11 +510,35 @@
             gap: 15px;
         }
 
+        .form-group {
+            margin-bottom: 5px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .role-select {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .role-select label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: normal;
+            cursor: pointer;
+        }
+        
         .form input {
-            padding: 12px;
+            padding: 10px;
             border: 1px solid #ddd;
-            border-radius: 10px;
-            font-size: 1.1em;
+            border-radius: 4px;
+            font-size: 1rem;
         }
 
         .form button {
@@ -694,8 +718,8 @@
         <!-- 社区页面 -->
         <div class="page" id="community">
             <div class="community-page">
-                <h2>🌼 花卉社区</h2>
-                <p>分享你的花卉识别经历，与其他花卉爱好者交流</p>
+                <h2>🌼 园艺社区</h2>
+                <p>分享你的植物花卉识别经历，与其他爱好者交流</p>
 
                 <!-- 创建帖子区域 -->
                 <div class="create-post-section" id="createPostSection">
@@ -750,10 +774,6 @@
                 <div id="recycleList"></div>
             </div>
         </div>
-
-        <div class="footer">
-            <p>&copy; 2024 花卉识别AI系统. 保留所有权利.</p>
-        </div>
     </div>
 
     <!-- 登录模态框 -->
@@ -782,12 +802,59 @@
                 <span class="close">&times;</span>
             </div>
             <form class="form" id="registerForm">
+                <div class="form-group">
+                    <label>角色选择：</label>
+                    <div class="role-select">
+                        <label><input type="radio" name="role" value="user" checked> 普通用户</label>
+                        <label><input type="radio" name="role" value="admin"> 管理员</label>
+                    </div>
+                </div>
                 <input type="text" id="registerUsername" placeholder="用户名" required>
-                <input type="email" id="registerEmail" placeholder="邮箱" required>
+                <div class="form-group">
+                    <input type="email" id="registerEmail" placeholder="邮箱">
+                </div>
+                <div class="form-group" id="verificationCodeGroup" style="display: none;">
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="registerCode" placeholder="验证码" style="flex: 1;">
+                        <button type="button" id="sendCodeBtn" class="btn btn-secondary" style="white-space: nowrap;">发送验证码</button>
+                    </div>
+                    <div id="codeCountdown" style="color: #999; font-size: 12px; margin-top: 5px; display: none;"></div>
+                </div>
                 <input type="password" id="registerPassword" placeholder="密码" required>
+                <div id="emailRequiredHint" style="color: #999; font-size: 12px; margin-bottom: 10px; display: none;">管理员注册时邮箱必填</div>
                 <button type="submit">注册</button>
                 <div class="form-footer">
                     已有账号？<a href="#" id="switchToLogin">立即登录</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 忘记密码模态框 -->
+    <div class="modal" id="forgotPasswordModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>忘记密码</h2>
+                <span class="close">&times;</span>
+            </div>
+            <form class="form" id="forgotPasswordForm">
+                <div class="form-group">
+                    <label>管理员邮箱：</label>
+                    <input type="email" id="forgotEmail" placeholder="请输入管理员邮箱" required>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="forgotCode" placeholder="验证码" style="flex: 1;">
+                        <button type="button" id="sendForgotCodeBtn" class="btn btn-secondary" style="white-space: nowrap;">发送验证码</button>
+                    </div>
+                    <div id="forgotCodeCountdown" style="color: #999; font-size: 12px; margin-top: 5px; display: none;"></div>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="newPassword" placeholder="新密码" required>
+                </div>
+                <button type="submit">重置密码</button>
+                <div class="form-footer">
+                    想起密码了？<a href="#" id="switchToLoginFromForgot">立即登录</a>
                 </div>
             </form>
         </div>
@@ -891,6 +958,159 @@
                 handleLogin();
             });
 
+            // 角色选择事件监听
+            const roleRadios = document.querySelectorAll('input[name="role"]');
+            const emailInput = document.getElementById('registerEmail');
+            const emailRequiredHint = document.getElementById('emailRequiredHint');
+            const verificationCodeGroup = document.getElementById('verificationCodeGroup');
+            
+            roleRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.value === 'admin') {
+                        emailInput.required = true;
+                        emailRequiredHint.style.display = 'block';
+                        verificationCodeGroup.style.display = 'block';
+                    } else {
+                        emailInput.required = false;
+                        emailRequiredHint.style.display = 'none';
+                        verificationCodeGroup.style.display = 'none';
+                    }
+                });
+            });
+
+            // 发送验证码按钮事件
+            const sendCodeBtn = document.getElementById('sendCodeBtn');
+            sendCodeBtn.addEventListener('click', function() {
+                const email = document.getElementById('registerEmail').value;
+                if (!email) {
+                    alert('请先输入邮箱');
+                    return;
+                }
+                
+                // 禁用按钮并开始倒计时
+                sendCodeBtn.disabled = true;
+                let countdown = 60;
+                const codeCountdown = document.getElementById('codeCountdown');
+                codeCountdown.style.display = 'block';
+                codeCountdown.textContent = `验证码已发送，${countdown}秒后可重新发送`;
+                
+                const timer = setInterval(() => {
+                    countdown--;
+                    codeCountdown.textContent = `验证码已发送，${countdown}秒后可重新发送`;
+                    if (countdown <= 0) {
+                        clearInterval(timer);
+                        sendCodeBtn.disabled = false;
+                        codeCountdown.style.display = 'none';
+                    }
+                }, 1000);
+                
+                // 发送验证码请求
+                fetch('/api/auth/send-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, purpose: 'register' })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        alert('发送验证码失败: ' + data.error);
+                        clearInterval(timer);
+                        sendCodeBtn.disabled = false;
+                        codeCountdown.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('发送验证码错误:', error);
+                    alert('发送验证码失败，请稍后重试');
+                    clearInterval(timer);
+                    sendCodeBtn.disabled = false;
+                    codeCountdown.style.display = 'none';
+                });
+            });
+
+            // 忘记密码相关事件
+            const forgotPasswordLink = document.createElement('a');
+            forgotPasswordLink.href = '#';
+            forgotPasswordLink.textContent = '忘记密码？';
+            forgotPasswordLink.id = 'forgotPasswordLink';
+            const loginFormFooter = document.querySelector('#loginForm .form-footer');
+            loginFormFooter.appendChild(document.createTextNode(' '));
+            loginFormFooter.appendChild(forgotPasswordLink);
+
+            // 打开忘记密码模态框
+            document.getElementById('forgotPasswordLink').addEventListener('click', function(e) {
+                e.preventDefault();
+                closeModal('loginModal');
+                openModal('forgotPasswordModal');
+            });
+
+            // 从忘记密码模态框切换到登录
+            document.getElementById('switchToLoginFromForgot').addEventListener('click', function(e) {
+                e.preventDefault();
+                closeModal('forgotPasswordModal');
+                openModal('loginModal');
+            });
+
+            // 发送忘记密码验证码
+            const sendForgotCodeBtn = document.getElementById('sendForgotCodeBtn');
+            sendForgotCodeBtn.addEventListener('click', function() {
+                const email = document.getElementById('forgotEmail').value;
+                if (!email) {
+                    alert('请先输入邮箱');
+                    return;
+                }
+                
+                // 禁用按钮并开始倒计时
+                sendForgotCodeBtn.disabled = true;
+                let countdown = 60;
+                const forgotCodeCountdown = document.getElementById('forgotCodeCountdown');
+                forgotCodeCountdown.style.display = 'block';
+                forgotCodeCountdown.textContent = `验证码已发送，${countdown}秒后可重新发送`;
+                
+                const timer = setInterval(() => {
+                    countdown--;
+                    forgotCodeCountdown.textContent = `验证码已发送，${countdown}秒后可重新发送`;
+                    if (countdown <= 0) {
+                        clearInterval(timer);
+                        sendForgotCodeBtn.disabled = false;
+                        forgotCodeCountdown.style.display = 'none';
+                    }
+                }, 1000);
+                
+                // 发送验证码请求
+                fetch('/api/auth/send-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, purpose: 'reset_password' })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        alert('发送验证码失败: ' + data.error);
+                        clearInterval(timer);
+                        sendForgotCodeBtn.disabled = false;
+                        forgotCodeCountdown.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('发送验证码错误:', error);
+                    alert('发送验证码失败，请稍后重试');
+                    clearInterval(timer);
+                    sendForgotCodeBtn.disabled = false;
+                    forgotCodeCountdown.style.display = 'none';
+                });
+            });
+
+            // 忘记密码表单提交
+            document.getElementById('forgotPasswordForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                handleForgotPassword();
+            });
+
             // 注册表单提交
             document.getElementById('registerForm').addEventListener('submit', function(e) {
                 e.preventDefault();
@@ -953,6 +1173,8 @@
             const username = document.getElementById('registerUsername').value;
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
+            const role = document.querySelector('input[name="role"]:checked').value;
+            const code = document.getElementById('registerCode')?.value;
 
             try {
                 const response = await fetch('/api/auth/register', {
@@ -960,7 +1182,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ username, password, email })
+                    body: JSON.stringify({ username, password, email, role, code })
                 });
 
                 const data = await response.json();
@@ -968,19 +1190,49 @@
                     token = data.token;
                     user = {
                         id: data.user_id,
-                        username: data.username
+                        username: data.username,
+                        role: data.role
                     };
                     localStorage.setItem('token', token);
                     localStorage.setItem('user', JSON.stringify(user));
                     updateAuthState();
                     closeModal('registerModal');
-                    alert('注册成功！');
+                    alert(data.message);
                 } else {
                     alert('注册失败: ' + data.error);
                 }
             } catch (error) {
                 console.error('注册错误:', error);
                 alert('注册失败，请稍后重试');
+            }
+        }
+
+        // 处理忘记密码
+        async function handleForgotPassword() {
+            const email = document.getElementById('forgotEmail').value;
+            const code = document.getElementById('forgotCode').value;
+            const newPassword = document.getElementById('newPassword').value;
+
+            try {
+                const response = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, code, new_password: newPassword })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    closeModal('forgotPasswordModal');
+                    alert(data.message);
+                    openModal('loginModal');
+                } else {
+                    alert('重置密码失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('重置密码错误:', error);
+                alert('重置密码失败，请稍后重试');
             }
         }
 

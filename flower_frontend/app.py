@@ -17,17 +17,25 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
 
 # 导入配置
-from config import TEST_MODE, USE_MODEL
+from config import (
+    TEST_MODE, USE_MODEL,
+    MAIL_SERVER, MAIL_PORT, MAIL_USE_TLS, MAIL_USE_SSL, MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER,
+    VERIFICATION_CODE_EXPIRY, VERIFICATION_CODE_RATE_LIMIT
+)
+
+# 导入Flask-Mail
+from flask_mail import Mail, Message
 
 # 导入数据库操作模块
 if not TEST_MODE:
     try:
         from db import (
-            create_user, get_user_by_username, get_user_by_id, verify_password,
+            create_user, get_user_by_username, get_user_by_id, get_user_by_email, verify_password,
             create_post, get_posts, get_post_by_id, update_post, delete_post,
             create_comment, get_comments_by_post_id, delete_comment,
             like_post, unlike_post, is_post_liked_by_user,
             follow_user, unfollow_user, is_following, get_user_following, get_user_followers,
+            create_email_code, verify_email_code, check_email_rate_limit,
             check_user_permission,
             # 超级管理员端函数
             create_system_log, get_system_logs, record_traffic, get_traffic_stats, get_traffic_by_endpoint,
@@ -55,6 +63,18 @@ else:
 app = Flask(__name__)
 CORS(app)  # 启用CORS以允许前端访问
 
+# 配置Flask-Mail
+app.config['MAIL_SERVER'] = MAIL_SERVER
+app.config['MAIL_PORT'] = MAIL_PORT
+app.config['MAIL_USE_TLS'] = MAIL_USE_TLS
+app.config['MAIL_USE_SSL'] = MAIL_USE_SSL
+app.config['MAIL_USERNAME'] = MAIL_USERNAME
+app.config['MAIL_PASSWORD'] = MAIL_PASSWORD
+app.config['MAIL_DEFAULT_SENDER'] = MAIL_DEFAULT_SENDER
+
+# 初始化Mail
+mail = Mail(app)
+
 # 定义静态文件目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -65,6 +85,29 @@ app.config['JWT_EXPIRATION_DELTA'] = 3600  # JWT过期时间（秒）
 # JWT相关导入
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
+
+# 发送验证码函数
+def send_verification_email(email, code, purpose):
+    """发送验证码邮件"""
+    try:
+        msg = Message(
+            subject='花卉识别系统验证码',
+            recipients=[email],
+            sender=MAIL_DEFAULT_SENDER
+        )
+        
+        if purpose == 'register':
+            msg.body = f'您的注册验证码是：{code}\n\n验证码有效期为5分钟，请及时使用。\n\n请勿将验证码泄露给他人。'
+        elif purpose == 'reset_password':
+            msg.body = f'您的密码重置验证码是：{code}\n\n验证码有效期为5分钟，请及时使用。\n\n请勿将验证码泄露给他人。'
+        else:
+            msg.body = f'您的验证码是：{code}\n\n验证码有效期为5分钟，请及时使用。\n\n请勿将验证码泄露给他人。'
+        
+        mail.send(msg)
+        return True
+    except Exception as e:
+        print(f"发送邮件失败: {str(e)}")
+        return False
 
 # 加载YOLOv5模型
 flower_model = None
@@ -587,6 +630,47 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
     return return_result
 
 # 认证相关API
+@app.route('/api/auth/send-code', methods=['POST'])
+def send_verification_code():
+    """发送验证码"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持发送验证码'}), 503
+    
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        purpose = data.get('purpose')  # register 或 reset_password
+        
+        if not email or not purpose:
+            return jsonify({'success': False, 'error': '缺少必要参数'}), 400
+        
+        if purpose not in ['register', 'reset_password']:
+            return jsonify({'success': False, 'error': '无效的验证码用途'}), 400
+        
+        # 检查频率限制
+        if check_email_rate_limit(email, purpose, VERIFICATION_CODE_RATE_LIMIT):
+            return jsonify({'success': False, 'error': '发送验证码过于频繁，请稍后再试'}), 429
+        
+        # 对于密码重置，检查邮箱是否存在且对应管理员账号
+        if purpose == 'reset_password':
+            user = get_user_by_email(email)
+            if not user:
+                return jsonify({'success': False, 'error': '邮箱不存在'}), 400
+            if user['role'] != 'admin':
+                return jsonify({'success': False, 'error': '只有管理员可以通过邮箱重置密码'}), 400
+        
+        # 生成并保存验证码
+        code = create_email_code(email, purpose, VERIFICATION_CODE_EXPIRY)
+        
+        # 发送验证码邮件
+        if not send_verification_email(email, code, purpose):
+            return jsonify({'success': False, 'error': '发送验证码失败，请稍后再试'}), 500
+        
+        return jsonify({'success': True, 'message': '验证码已发送，请查收邮箱'})
+    except Exception as e:
+        print(f"发送验证码过程中发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     """用户注册"""
@@ -598,21 +682,45 @@ def register():
         username = data.get('username')
         password = data.get('password')
         email = data.get('email')
+        role = data.get('role', 'user')
+        code = data.get('code')  # 验证码
         
-        if not username or not password or not email:
-            return jsonify({'success': False, 'error': '缺少必要参数'}), 400
+        # 验证角色值
+        if role not in ['user', 'admin']:
+            return jsonify({'success': False, 'error': '无效的角色'}), 400
+        
+        # 验证必填字段
+        if not username or not password:
+            return jsonify({'success': False, 'error': '用户名和密码不能为空'}), 400
+        
+        # 管理员注册时邮箱和验证码必填
+        if role == 'admin':
+            if not email:
+                return jsonify({'success': False, 'error': '管理员注册时邮箱不能为空'}), 400
+            if not code:
+                return jsonify({'success': False, 'error': '管理员注册时验证码不能为空'}), 400
+            
+            # 验证验证码
+            if not verify_email_code(email, code, 'register'):
+                return jsonify({'success': False, 'error': '验证码无效或已过期'}), 400
         
         # 检查用户名是否已存在
         if get_user_by_username(username):
             return jsonify({'success': False, 'error': '用户名已存在'}), 400
         
+        # 检查邮箱是否已存在（如果提供了邮箱）
+        if email and get_user_by_email(email):
+            return jsonify({'success': False, 'error': '邮箱已存在'}), 400
+        
         # 创建用户
-        user_id = create_user(username, email, password)
+        user_id = create_user(username, email, password, role)
         
         # 生成JWT令牌
         token = generate_jwt(user_id, username)
         
-        return jsonify({'success': True, 'user_id': user_id, 'username': username, 'token': token})
+        return jsonify({'success': True, 'user_id': user_id, 'username': username, 'role': role, 'token': token, 'message': f'{"管理员" if role == "admin" else "普通用户"}注册成功'})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         print(f"注册过程中发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -646,6 +754,44 @@ def login():
         return jsonify({'success': True, 'user_id': user['id'], 'username': user['username'], 'token': token})
     except Exception as e:
         print(f"登录过程中发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def reset_password():
+    """重置密码"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持重置密码'}), 503
+    
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        code = data.get('code')
+        new_password = data.get('new_password')
+        
+        if not email or not code or not new_password:
+            return jsonify({'success': False, 'error': '缺少必要参数'}), 400
+        
+        # 验证验证码
+        if not verify_email_code(email, code, 'reset_password'):
+            return jsonify({'success': False, 'error': '验证码无效或已过期'}), 400
+        
+        # 获取用户
+        user = get_user_by_email(email)
+        if not user:
+            return jsonify({'success': False, 'error': '用户不存在'}), 400
+        
+        if user['role'] != 'admin':
+            return jsonify({'success': False, 'error': '只有管理员可以通过邮箱重置密码'}), 400
+        
+        # 生成新密码哈希
+        password_hash = generate_password_hash(new_password)
+        
+        # 更新密码
+        update_user_profile(user['id'], password_hash=password_hash)
+        
+        return jsonify({'success': True, 'message': '密码重置成功，请使用新密码登录'})
+    except Exception as e:
+        print(f"重置密码过程中发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # 帖子相关API
