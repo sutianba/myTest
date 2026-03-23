@@ -322,9 +322,9 @@ class SQLDatabaseManager:
         finally:
             conn.close()
     
-    # 花卉识别结果相关操作
+    # 植物花卉识别结果相关操作
     def save_recognition_result(self, user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None):
-        """保存花卉识别结果"""
+        """保存植物花卉识别结果"""
         current_time = int(time.time())
         
         conn = self.get_connection()

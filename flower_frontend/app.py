@@ -91,7 +91,7 @@ def send_verification_email(email, code, purpose):
     """发送验证码邮件"""
     try:
         msg = Message(
-            subject='花卉识别系统验证码',
+            subject='植物花卉识别工具验证码',
             recipients=[email],
             sender=MAIL_DEFAULT_SENDER
         )
@@ -120,7 +120,7 @@ if USE_MODEL and not TEST_MODE:
         flower_model = torch.hub.load(yolo_path, 'custom', path=model_path, source='local', force_reload=True)
         flower_model.conf = 0.5  # 提高置信度阈值，只保留高置信度结果
         flower_model.iou = 0.5   # 提高NMS IOU阈值，更严格地过滤重叠边界框
-        print("成功加载YOLOv5花卉识别模型")
+        print("成功加载YOLOv5植物花卉识别工具模型")
     except Exception as e:
         print(f"无法加载YOLOv5模型: {e}")
         print("使用模拟模型进行测试...")
@@ -268,7 +268,7 @@ def serve_file(filename):
 
 @app.route('/api/detect', methods=['POST'])
 def detect_flower():
-    """花卉识别API接口"""
+    """植物花卉识别工具API接口"""
     try:
         data = request.get_json()
         
@@ -623,7 +623,7 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
     except Exception as e:
         print(f"提取图片EXIF信息失败: {e}")
 
-    # 使用YOLOv5模型进行花卉识别
+    # 使用YOLOv5模型进行植物花卉识别
     model_results = flower_model(image)
     
     # 解析识别结果
