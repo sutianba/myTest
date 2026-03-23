@@ -1810,6 +1810,9 @@ class SQLDatabaseManager:
             code = self.generate_verification_code()
             expire_at = datetime.now() + timedelta(seconds=expire_seconds)
             
+            # 打印验证码（仅用于测试）
+            print(f"生成验证码: {code} 用于邮箱: {email} 用途: {purpose}")
+            
             # 插入新验证码记录
             cursor.execute(
                 "INSERT INTO email_codes (email, code, purpose, expire_at) VALUES (%s, %s, %s, %s)",
