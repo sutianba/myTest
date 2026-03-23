@@ -465,7 +465,7 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
         
         # 生成分类标签
         classification_tags = ["测试花卉", shoot_season, region_label]
-        final_category = "-" .join(classification_tags)
+        final_category = "-".join(classification_tags)
         
         # 返回包含识别结果和EXIF信息的响应
         return_result = {
