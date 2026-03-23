@@ -329,14 +329,4 @@ INSERT IGNORE INTO role_permissions (role_id, permission_id) VALUES
 ((SELECT id FROM roles WHERE name = 'user'), (SELECT id FROM permissions WHERE name = 'comment_posts')),
 ((SELECT id FROM roles WHERE name = 'user'), (SELECT id FROM permissions WHERE name = 'like_posts')),
 ((SELECT id FROM roles WHERE name = 'user'), (SELECT id FROM permissions WHERE name = 'follow_users')),
-((SELECT id FROM roles WHERE name = 'user'), (SELECT id FROM permissions WHERE name = 'manage_albums'));
-
--- 插入测试用户
-INSERT IGNORE INTO users (username, email, password_hash, created_at, updated_at) VALUES
-('admin', 'admin@example.com', 'pbkdf2:sha256:1000000$A3wkEuJm94FlOPHg$7b215c12d3c301d920da0a8f6629eba4d69e0804a51a0f6f929f8b5fbbef5a60', 1769563038, 1769563038),
-('testuser', 'test@example.com', 'pbkdf2:sha256:1000000$A3wkEuJm94FlOPHg$7b215c12d3c301d920da0a8f6629eba4d69e0804a51a0f6f929f8b5fbbef5a60', 1769563038, 1769563038);
-
--- 给用户分配角色
-INSERT IGNORE INTO user_roles (user_id, role_id) VALUES
-((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM roles WHERE name = 'super_admin')),
-((SELECT id FROM users WHERE username = 'testuser'), (SELECT id FROM roles WHERE name = 'user'));
+((SELECT id FROM roles WHERE name = 'user'), (SELECT id FROM permissions WHERE name = 'manage_albums'))
