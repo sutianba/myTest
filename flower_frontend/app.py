@@ -401,6 +401,17 @@ def format_address(address):
     return '，'.join(filter(None, address_parts))
 
 
+def get_season(month):
+    """根据月份获取季节"""
+    if 3 <= month <= 5:
+        return "春季"
+    elif 6 <= month <= 8:
+        return "夏季"
+    elif 9 <= month <= 11:
+        return "秋季"
+    else:
+        return "冬季"
+
 def process_single_image(image_data, user_id=None, save_to_album=False):
     """处理单个图片的识别"""
     # 测试模式下的处理
@@ -417,12 +428,12 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
         
         # 提取图片EXIF信息
         image_info = {
-            'date_time': "未知",
+            'date_time': "2024:03:15 10:30:00",
             'location': {
-                'has_location': False,
-                'latitude': None,
-                'longitude': None,
-                'formatted_address': "无GPS信息",
+                'has_location': True,
+                'latitude': 39.9042,
+                'longitude': 116.4074,
+                'formatted_address': "北京市",
                 'raw_gps': None
             },
             'camera_info': {
@@ -442,12 +453,36 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
             'bbox': [100, 100, 200, 200]
         }]
         
+        # 生成分类信息
+        shoot_time = image_info['date_time']
+        shoot_year = 2024
+        shoot_month = 3
+        shoot_season = "春季"
+        latitude = image_info['location']['latitude']
+        longitude = image_info['location']['longitude']
+        location_text = image_info['location']['formatted_address']
+        region_label = "华北地区"
+        
+        # 生成分类标签
+        classification_tags = ["测试花卉", shoot_season, region_label]
+        final_category = "-" .join(classification_tags)
+        
         # 返回包含识别结果和EXIF信息的响应
         return_result = {
             'detections': detection_results,
             'exif_info': image_info,
             'test_mode': True,
-            'message': '测试模式下的模拟识别结果'
+            'message': '测试模式下的模拟识别结果',
+            'shoot_time': shoot_time,
+            'shoot_year': shoot_year,
+            'shoot_month': shoot_month,
+            'shoot_season': shoot_season,
+            'latitude': latitude,
+            'longitude': longitude,
+            'location_text': location_text,
+            'region_label': region_label,
+            'classification_tags': classification_tags,
+            'final_category': final_category
         }
         
         return return_result
@@ -485,6 +520,16 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
         }
     }
     
+    # 初始化分类信息
+    shoot_time = "未获取到"
+    shoot_year = None
+    shoot_month = None
+    shoot_season = "未获取到"
+    latitude = None
+    longitude = None
+    location_text = "未获取到"
+    region_label = "未获取到"
+    
     try:
         # 创建临时文件保存图片
         temp_file_path = "temp_image.jpg"
@@ -496,12 +541,24 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
             exif_tags = exifread.process_file(f)
             
             # 获取拍摄时间
-            if 'Image DateTime' in exif_tags:
-                image_info['date_time'] = str(exif_tags['Image DateTime'])
-            elif 'EXIF DateTimeOriginal' in exif_tags:
-                image_info['date_time'] = str(exif_tags['EXIF DateTimeOriginal'])
+            if 'EXIF DateTimeOriginal' in exif_tags:
+                shoot_time = str(exif_tags['EXIF DateTimeOriginal'])
+            elif 'Image DateTime' in exif_tags:
+                shoot_time = str(exif_tags['Image DateTime'])
             elif 'EXIF DateTimeDigitized' in exif_tags:
-                image_info['date_time'] = str(exif_tags['EXIF DateTimeDigitized'])
+                shoot_time = str(exif_tags['EXIF DateTimeDigitized'])
+            
+            # 解析拍摄时间
+            if shoot_time != "未获取到":
+                try:
+                    # 格式：2024:03:15 10:30:00
+                    date_part = shoot_time.split(' ')[0]
+                    year, month, day = map(int, date_part.split(':'))
+                    shoot_year = year
+                    shoot_month = month
+                    shoot_season = get_season(month)
+                except Exception as e:
+                    print(f"解析时间失败: {e}")
         
         # 获取相机信息
         if 'Image Make' in exif_tags:
@@ -540,6 +597,24 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
                         'lon': str(lon)
                     }
                 }
+                
+                # 更新分类信息
+                latitude = dec_lat
+                longitude = dec_lon
+                location_text = formatted_address
+                
+                # 简单的区域标签生成
+                if latitude is not None and longitude is not None:
+                    if 32 <= latitude <= 42 and 110 <= longitude <= 122:
+                        region_label = "华北地区"
+                    elif 23 <= latitude <= 32 and 108 <= longitude <= 123:
+                        region_label = "华南地区"
+                    elif 32 <= latitude <= 40 and 105 <= longitude <= 115:
+                        region_label = "西北地区"
+                    elif 42 <= latitude <= 53 and 120 <= longitude <= 135:
+                        region_label = "东北地区"
+                    else:
+                        region_label = "其他地区"
             except Exception as e:
                 print(f"处理GPS信息时出错: {e}")
         
@@ -567,23 +642,53 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
     
     # 处理识别结果：只保留置信度最高的结果
     detection_results = []
+    flower_type = "未识别"
+    confidence = 0.0
+    classification_tags = []
+    final_category = "未识别"
+    
     if results:
         # 按置信度降序排序
         results.sort(key=lambda x: x['confidence'], reverse=True)
         # 只添加置信度最高的结果
+        top_result = results[0]
         detection_results.append({
-            'name': results[0]['name'],
-            'confidence': float(results[0]['confidence']),
-            'bbox': results[0]['bbox']
+            'name': top_result['name'],
+            'confidence': float(top_result['confidence']),
+            'bbox': top_result['bbox']
         })
-    else:
-        # 如果没有识别到任何结果，返回空列表
-        detection_results = []
+        flower_type = top_result['name']
+        confidence = top_result['confidence']
+        
+        # 生成分类标签
+        classification_tags = [flower_type]
+        if shoot_season != "未获取到":
+            classification_tags.append(shoot_season)
+        if region_label != "未获取到":
+            classification_tags.append(region_label)
+        
+        # 生成最终分类
+        final_category = "-".join(classification_tags)
+    
+    # 更新image_info
+    image_info['date_time'] = shoot_time
     
     # 返回包含识别结果和EXIF信息的响应
     return_result = {
         'detections': detection_results,
-        'exif_info': image_info
+        'exif_info': image_info,
+        'flower_type': flower_type,
+        'confidence': confidence,
+        'shoot_time': shoot_time,
+        'shoot_year': shoot_year,
+        'shoot_month': shoot_month,
+        'shoot_season': shoot_season,
+        'latitude': latitude,
+        'longitude': longitude,
+        'location_text': location_text,
+        'region_label': region_label,
+        'classification_tags': classification_tags,
+        'final_category': final_category
     }
     
     if save_to_album and user_id and detection_results:
@@ -611,7 +716,21 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
                 
                 relative_path = f"/static/uploads/{image_filename}"
                 
-                result_id = save_recognition_result(user_id, relative_path, flower_name, confidence)
+                result_id = save_recognition_result(
+                    user_id, 
+                    relative_path, 
+                    flower_name, 
+                    confidence,
+                    shoot_time=shoot_time,
+                    shoot_year=shoot_year,
+                    shoot_month=shoot_month,
+                    shoot_season=shoot_season,
+                    latitude=latitude,
+                    longitude=longitude,
+                    location_text=location_text,
+                    region_label=region_label,
+                    final_category=final_category
+                )
                 
                 add_image_to_album(album['id'], user_id, relative_path, flower_name, confidence, result_id)
                 

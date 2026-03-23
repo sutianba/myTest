@@ -1444,9 +1444,17 @@
                 exifTitle.style.marginBottom = '15px';
 
                 const exifContent = document.createElement('div');
+                const shootTime = item.shoot_time || item.exif_info.date_time || '未获取到';
+                const shootMonth = item.shoot_month || '未获取到';
+                const shootSeason = item.shoot_season || '未获取到';
+                const location = item.location_text || item.exif_info.location.formatted_address || '未获取到';
+                const regionLabel = item.region_label || '未获取到';
                 exifContent.innerHTML = `
-                    <p><strong>拍摄时间:</strong> ${item.exif_info.date_time}</p>
-                    <p><strong>位置:</strong> ${item.exif_info.location.formatted_address}</p>
+                    <p><strong>拍摄时间:</strong> ${shootTime}</p>
+                    <p><strong>拍摄月份:</strong> ${shootMonth}</p>
+                    <p><strong>拍摄季节:</strong> ${shootSeason}</p>
+                    <p><strong>拍摄地点:</strong> ${location}</p>
+                    <p><strong>区域分类:</strong> ${regionLabel}</p>
                     <p><strong>相机:</strong> ${item.exif_info.camera_info.make} ${item.exif_info.camera_info.model}</p>
                     <p><strong>尺寸:</strong> ${item.exif_info.image_details.width} × ${item.exif_info.image_details.height}</p>
                 `;
@@ -1480,6 +1488,19 @@
 
                 detectionsDiv.appendChild(detectionsTitle);
                 detectionsDiv.appendChild(detectionsList);
+                
+                // 添加综合分类信息
+                if (item.final_category) {
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.style.marginTop = '15px';
+                    categoryDiv.style.padding = '15px';
+                    categoryDiv.style.backgroundColor = '#f5f5f5';
+                    categoryDiv.style.borderRadius = '8px';
+                    categoryDiv.innerHTML = `
+                        <p><strong>综合分类:</strong> ${item.final_category}</p>
+                    `;
+                    detectionsDiv.appendChild(categoryDiv);
+                }
 
                 const rerunBtn = document.createElement('button');
                 rerunBtn.className = 'rerun-btn';
@@ -1493,12 +1514,41 @@
                         const newItem = {
                             detections: newResults.detections,
                             exif_info: newResults.exif_info,
+                            shoot_time: newResults.shoot_time,
+                            shoot_year: newResults.shoot_year,
+                            shoot_month: newResults.shoot_month,
+                            shoot_season: newResults.shoot_season,
+                            latitude: newResults.latitude,
+                            longitude: newResults.longitude,
+                            location_text: newResults.location_text,
+                            region_label: newResults.region_label,
+                            final_category: newResults.final_category,
                             imageData: item.imageData,
                             saved_to_album: newResults.saved_to_album
                         };
                         
                         const parentContainer = rerunBtn.closest('.single-result');
+                        const exifDiv = parentContainer.querySelector('div:nth-child(2) div');
                         const detectionsDiv = parentContainer.querySelector('.detection-results');
+                        
+                        if (exifDiv) {
+                            const shootTime = newItem.shoot_time || newItem.exif_info.date_time || '未获取到';
+                            const shootMonth = newItem.shoot_month || '未获取到';
+                            const shootSeason = newItem.shoot_season || '未获取到';
+                            const location = newItem.location_text || newItem.exif_info.location.formatted_address || '未获取到';
+                            const regionLabel = newItem.region_label || '未获取到';
+                            
+                            exifDiv.innerHTML = `
+                                <p><strong>拍摄时间:</strong> ${shootTime}</p>
+                                <p><strong>拍摄月份:</strong> ${shootMonth}</p>
+                                <p><strong>拍摄季节:</strong> ${shootSeason}</p>
+                                <p><strong>拍摄地点:</strong> ${location}</p>
+                                <p><strong>区域分类:</strong> ${regionLabel}</p>
+                                <p><strong>相机:</strong> ${newItem.exif_info.camera_info.make} ${newItem.exif_info.camera_info.model}</p>
+                                <p><strong>尺寸:</strong> ${newItem.exif_info.image_details.width} × ${newItem.exif_info.image_details.height}</p>
+                            `;
+                        }
+                        
                         if (detectionsDiv) {
                             detectionsDiv.innerHTML = '';
                             newItem.detections.forEach(detection => {
@@ -1510,6 +1560,19 @@
                                 `;
                                 detectionsDiv.appendChild(detectionItem);
                             });
+                            
+                            // 添加综合分类信息
+                            if (newItem.final_category) {
+                                const categoryDiv = document.createElement('div');
+                                categoryDiv.style.marginTop = '15px';
+                                categoryDiv.style.padding = '15px';
+                                categoryDiv.style.backgroundColor = '#f5f5f5';
+                                categoryDiv.style.borderRadius = '8px';
+                                categoryDiv.innerHTML = `
+                                    <p><strong>综合分类:</strong> ${newItem.final_category}</p>
+                                `;
+                                detectionsDiv.appendChild(categoryDiv);
+                            }
                         }
                         
                         const existingAlbumInfo = parentContainer.querySelector('.album-info');

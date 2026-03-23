@@ -323,7 +323,7 @@ class SQLDatabaseManager:
             conn.close()
     
     # 花卉识别结果相关操作
-    def save_recognition_result(self, user_id, image_path, result, confidence):
+    def save_recognition_result(self, user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None):
         """保存花卉识别结果"""
         current_time = int(time.time())
         
@@ -332,9 +332,9 @@ class SQLDatabaseManager:
         
         try:
             cursor.execute('''
-            INSERT INTO recognition_results (user_id, image_path, result, confidence, created_at)
-            VALUES (%s, %s, %s, %s, %s)
-            ''', (user_id, image_path, result, confidence, current_time))
+            INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, current_time))
             conn.commit()
             return cursor.lastrowid
         except Exception as e:
@@ -1932,10 +1932,10 @@ def check_user_permission(user_id, permission_name):
         raise Exception("数据库未初始化")
     return db_manager.check_user_permission(user_id, permission_name)
 
-def save_recognition_result(user_id, image_path, result, confidence):
+def save_recognition_result(user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None):
     if db_manager is None:
         raise Exception("数据库未初始化")
-    return db_manager.save_recognition_result(user_id, image_path, result, confidence)
+    return db_manager.save_recognition_result(user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category)
 
 def get_user_recognition_results(user_id):
     if db_manager is None:
