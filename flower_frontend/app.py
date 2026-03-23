@@ -637,7 +637,7 @@ def login():
             return jsonify({'success': False, 'error': '用户名或密码错误'}), 401
         
         # 验证密码
-        if not verify_password(user['password_hash'], password):
+        if not verify_password(user['password'], password):
             return jsonify({'success': False, 'error': '用户名或密码错误'}), 401
         
         # 生成JWT令牌

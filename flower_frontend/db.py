@@ -188,26 +188,29 @@ class SQLDatabaseManager:
     def create_user(self, username, email, password):
         """创建新用户"""
         password_hash = generate_password_hash(password, method='pbkdf2:sha256')
-        current_time = int(time.time())
         
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
+            # 插入用户数据，使用password_hash，created_at使用数据库默认值
             cursor.execute('''
-            INSERT INTO users (username, email, password, created_at)
-            VALUES (%s, %s, %s, %s)
-            ''', (username, email, password, current_time))
+            INSERT INTO users (username, email, password)
+            VALUES (%s, %s, %s)
+            ''', (username, email, password_hash))
             
             user_id = cursor.lastrowid
             
+            # 检查roles表是否存在user角色
             cursor.execute('SELECT id FROM roles WHERE name = %s', ('user',))
-            role_id = cursor.fetchone()['id']
-            
-            cursor.execute('''
-            INSERT INTO user_roles (user_id, role_id)
-            VALUES (%s, %s)
-            ''', (user_id, role_id))
+            role = cursor.fetchone()
+            if role:
+                role_id = role['id']
+                # 插入用户角色关联
+                cursor.execute('''
+                INSERT INTO user_roles (user_id, role_id)
+                VALUES (%s, %s)
+                ''', (user_id, role_id))
             
             conn.commit()
             return user_id
