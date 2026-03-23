@@ -7,13 +7,11 @@ USE flower_recognition;
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
     is_verified TINYINT(1) DEFAULT 0,
-    created_at INT NOT NULL,
-    updated_at INT NOT NULL
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 角色表
