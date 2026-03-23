@@ -12,12 +12,12 @@ USE_MODEL = True
 
 # SMTP邮件配置
 MAIL_SERVER = 'smtp.qq.com'
-MAIL_PORT = 587
-MAIL_USE_TLS = True
-MAIL_USE_SSL = False
-MAIL_USERNAME = 'your_email@qq.com'  # 替换为你的QQ邮箱
-MAIL_PASSWORD = 'your_authorization_code'  # 替换为你的QQ邮箱授权码
-MAIL_DEFAULT_SENDER = 'your_email@qq.com'  # 替换为你的QQ邮箱
+MAIL_PORT = 465
+MAIL_USE_TLS = False
+MAIL_USE_SSL = True
+MAIL_USERNAME = '3501123586@qq.com'  # QQ邮箱
+MAIL_PASSWORD = 'mlbaryqvgbmbchib'  # QQ邮箱授权码
+MAIL_DEFAULT_SENDER = '3501123586@qq.com'  # QQ邮箱
 
 # 验证码配置
 VERIFICATION_CODE_EXPIRY = 300  # 验证码过期时间（秒）

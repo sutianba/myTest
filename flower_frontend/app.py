@@ -75,6 +75,21 @@ app.config['MAIL_DEFAULT_SENDER'] = MAIL_DEFAULT_SENDER
 # 初始化Mail
 mail = Mail(app)
 
+# 打印脱敏后的邮件配置
+print("===== 邮件配置信息 =====")
+print(f"MAIL_SERVER: {MAIL_SERVER}")
+print(f"MAIL_PORT: {MAIL_PORT}")
+print(f"MAIL_USE_TLS: {MAIL_USE_TLS}")
+print(f"MAIL_USE_SSL: {MAIL_USE_SSL}")
+print(f"MAIL_USERNAME: {MAIL_USERNAME}")
+if MAIL_PASSWORD:
+    masked_password = MAIL_PASSWORD[:2] + '***' if len(MAIL_PASSWORD) > 2 else MAIL_PASSWORD + '***'
+    print(f"MAIL_PASSWORD: {masked_password}")
+else:
+    print("MAIL_PASSWORD: 未设置")
+print(f"MAIL_DEFAULT_SENDER: {MAIL_DEFAULT_SENDER}")
+print("=======================")
+
 # 定义静态文件目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -104,9 +119,12 @@ def send_verification_email(email, code, purpose):
             msg.body = f'您的验证码是：{code}\n\n验证码有效期为5分钟，请及时使用。\n\n请勿将验证码泄露给他人。'
         
         mail.send(msg)
+        print(f"邮件发送成功，收件邮箱: {email}")
         return True
     except Exception as e:
-        print(f"发送邮件失败: {str(e)}")
+        import traceback
+        print(f"邮件发送失败: {str(e)}")
+        print(f"详细异常信息: {traceback.format_exc()}")
         return False
 
 # 加载YOLOv5模型
@@ -783,12 +801,43 @@ def send_verification_code():
         
         # 发送验证码邮件
         if not send_verification_email(email, code, purpose):
-            return jsonify({'success': False, 'error': '发送验证码失败，请稍后再试'}), 500
+            return jsonify({'success': False, 'error': '发送验证码失败，请检查SMTP配置或网络连接'}), 500
         
         return jsonify({'success': True, 'message': '验证码已发送，请查收邮箱'})
     except Exception as e:
+        import traceback
         print(f"发送验证码过程中发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"详细异常信息: {traceback.format_exc()}")
+        return jsonify({'success': False, 'error': f'发送验证码失败: {str(e)}'}), 500
+
+@app.route('/api/test_email', methods=['POST'])
+def test_email():
+    """测试邮件发送功能"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持发送邮件'}), 503
+    
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({'success': False, 'error': '缺少邮箱参数'}), 400
+        
+        # 生成测试验证码
+        import random
+        import string
+        code = ''.join(random.choices(string.digits, k=6))
+        
+        # 发送测试邮件
+        if not send_verification_email(email, code, 'test'):
+            return jsonify({'success': False, 'error': '邮件发送失败，请检查SMTP配置或网络连接'}), 500
+        
+        return jsonify({'success': True, 'message': '测试邮件已发送，请查收邮箱'})
+    except Exception as e:
+        import traceback
+        print(f"测试邮件发送过程中发生错误: {str(e)}")
+        print(f"详细异常信息: {traceback.format_exc()}")
+        return jsonify({'success': False, 'error': f'测试邮件发送失败: {str(e)}'}), 500
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
