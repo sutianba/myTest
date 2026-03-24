@@ -1030,6 +1030,11 @@
         let token = localStorage.getItem('token');
         let user = JSON.parse(localStorage.getItem('user'));
 
+        // 获取token
+        function getToken() {
+            return localStorage.getItem('token');
+        }
+
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
             initializeApp();
@@ -1506,19 +1511,33 @@
             try {
                 const allResults = [];
                 const totalFiles = imageFiles.length;
-
+                
+                // 读取所有图片文件
+                const imageDataList = [];
                 for (let i = 0; i < totalFiles; i++) {
                     const file = imageFiles[i];
                     const imageData = await readFileAsDataURL(file);
-                    const result = await callRecognitionAPI(imageData);
-
-                    allResults.push({
+                    imageDataList.push({
                         file: file,
-                        imageData: imageData,
+                        imageData: imageData
+                    });
+                }
+                
+                // 调用多图识别API
+                const results = await callRecognitionAPI(imageDataList.map(item => item.imageData));
+                
+                // 处理识别结果
+                for (let i = 0; i < totalFiles; i++) {
+                    const item = imageDataList[i];
+                    const result = results[i].results;
+                    
+                    allResults.push({
+                        file: item.file,
+                        imageData: item.imageData,
                         detections: result.detections,
                         exif_info: result.exif_info
                     });
-
+                    
                     const progress = ((i + 1) / totalFiles) * 100;
                     progressBar.style.width = `${progress}%`;
                     progressText.textContent = `${Math.round(progress)}% (${i + 1}/${totalFiles})`;
@@ -1552,21 +1571,37 @@
         async function callRecognitionAPI(imageData) {
             const saveToAlbum = document.getElementById('saveToAlbum') ? document.getElementById('saveToAlbum').checked : false;
             
+            let body;
+            if (Array.isArray(imageData)) {
+                // 多图识别
+                body = JSON.stringify({ 
+                    images: imageData,
+                    save_to_album: saveToAlbum
+                });
+            } else {
+                // 单图识别
+                body = JSON.stringify({ 
+                    image: imageData,
+                    save_to_album: saveToAlbum
+                });
+            }
+            
             const response = await fetch('/api/detect', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + getToken()
                 },
-                body: JSON.stringify({ 
-                    image: imageData,
-                    save_to_album: saveToAlbum
-                })
+                body: body
             });
 
             const data = await response.json();
             if (data.success) {
-                return data.results;
+                if (Array.isArray(imageData)) {
+                    return data.all_results;
+                } else {
+                    return data.results;
+                }
             } else {
                 throw new Error('识别失败: ' + (data.error || '未知错误'));
             }
