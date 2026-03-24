@@ -1961,14 +1961,23 @@
                     body: JSON.stringify({ content, image_url: imageUrl })
                 });
 
-                const data = await response.json();
-                if (data.success) {
-                    alert('帖子发布成功！');
-                    document.getElementById('postContent').value = '';
-                    document.getElementById('postImage').value = '';
-                    loadPosts();
-                } else {
-                    alert('发布失败: ' + data.error);
+                console.log('发布帖子响应状态:', response.status);
+                const responseText = await response.text();
+                console.log('发布帖子响应内容:', responseText);
+
+                try {
+                    const data = JSON.parse(responseText);
+                    if (data.success) {
+                        alert('帖子发布成功！');
+                        document.getElementById('postContent').value = '';
+                        document.getElementById('postImage').value = '';
+                        loadPosts();
+                    } else {
+                        alert('发布失败: ' + data.error);
+                    }
+                } catch (parseError) {
+                    console.error('解析JSON失败:', parseError);
+                    alert('发布失败，服务器返回非JSON响应: ' + responseText.substring(0, 100) + '...');
                 }
             } catch (error) {
                 console.error('发布帖子错误:', error);
