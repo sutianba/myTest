@@ -2006,7 +2006,8 @@
             const albumsList = document.getElementById('albumsList');
             if (!albumsList) return;
 
-            if (!token) {
+            const currentToken = getToken();
+            if (!currentToken) {
                 albumsList.innerHTML = '<p>请先登录查看相册</p>';
                 return;
             }
@@ -2015,7 +2016,7 @@
 
             try {
                 const response = await fetch('/api/albums', {
-                    headers: { 'Authorization': 'Bearer ' + token }
+                    headers: { 'Authorization': 'Bearer ' + currentToken }
                 });
                 const data = await response.json();
 
@@ -2059,8 +2060,9 @@
         // 查看相册详情
         async function viewAlbumDetail(albumId) {
             try {
+                const currentToken = getToken();
                 const response = await fetch(`/api/albums/${albumId}`, {
-                    headers: { 'Authorization': 'Bearer ' + token }
+                    headers: { 'Authorization': 'Bearer ' + currentToken }
                 });
                 const data = await response.json();
                 if (data.success) {
