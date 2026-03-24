@@ -326,16 +326,14 @@ class SQLDatabaseManager:
     # 植物花卉识别结果相关操作
     def save_recognition_result(self, user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None):
         """保存植物花卉识别结果"""
-        current_time = int(time.time())
-        
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
             cursor.execute('''
             INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, current_time))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category))
             conn.commit()
             return cursor.lastrowid
         except Exception as e:
@@ -513,8 +511,6 @@ class SQLDatabaseManager:
     # 评论相关操作
     def create_comment(self, post_id, user_id, content):
         """创建评论"""
-        current_time = int(time.time())
-        
         conn = self.get_connection()
         cursor = conn.cursor()
         
@@ -522,8 +518,8 @@ class SQLDatabaseManager:
             # 创建评论
             cursor.execute('''
             INSERT INTO comments (post_id, user_id, content, created_at)
-            VALUES (%s, %s, %s, %s)
-            ''', (post_id, user_id, content, current_time))
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            ''', (post_id, user_id, content))
             
             # 增加帖子评论数
             cursor.execute('''
@@ -595,8 +591,6 @@ class SQLDatabaseManager:
     # 点赞相关操作
     def like_post(self, post_id, user_id):
         """点赞帖子"""
-        current_time = int(time.time())
-        
         conn = self.get_connection()
         cursor = conn.cursor()
         
@@ -609,8 +603,8 @@ class SQLDatabaseManager:
             # 创建点赞记录
             cursor.execute('''
             INSERT INTO likes (post_id, user_id, created_at)
-            VALUES (%s, %s, %s)
-            ''', (post_id, user_id, current_time))
+            VALUES (%s, %s, CURRENT_TIMESTAMP)
+            ''', (post_id, user_id))
             
             # 增加帖子点赞数
             cursor.execute('''
@@ -673,8 +667,6 @@ class SQLDatabaseManager:
     # 关注相关操作
     def follow_user(self, follower_id, following_id):
         """关注用户"""
-        current_time = int(time.time())
-        
         conn = self.get_connection()
         cursor = conn.cursor()
         
@@ -687,8 +679,8 @@ class SQLDatabaseManager:
             # 创建关注记录
             cursor.execute('''
             INSERT INTO follows (follower_id, following_id, created_at)
-            VALUES (%s, %s, %s)
-            ''', (follower_id, following_id, current_time))
+            VALUES (%s, %s, CURRENT_TIMESTAMP)
+            ''', (follower_id, following_id))
             
             conn.commit()
             return True

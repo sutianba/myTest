@@ -771,14 +771,9 @@
                             <label>图片上传（可选）</label>
                             <div class="custom-file">
                                 <input type="file" class="custom-file-input" id="postImageFile" accept="image/*">
-                                <label class="custom-file-label" for="postImageFile">选择图片</label>
+                                <label class="custom-file-label" for="postImageFile">选择图片支持的文件格式： - PNG (.png) - JPG (.jpg) - JPEG (.jpeg) - GIF (.gif)</label>
                             </div>
                             <small id="imageUploadStatus" class="form-text text-muted">未选择图片</small>
-                            <small class="form-text text-muted">支持的文件格式：</small>
-                            <small class="form-text text-muted">- PNG (.png)</small>
-                            <small class="form-text text-muted">- JPG (.jpg)</small>
-                            <small class="form-text text-muted">- JPEG (.jpeg)</small>
-                            <small class="form-text text-muted">- GIF (.gif)</small>
                         </div>
                         <div class="form-group">
                             <label for="postImage">图片URL（可选，与上传二选一）</label>
@@ -2155,7 +2150,7 @@
                 postCard.innerHTML = `
                     <div class="post-header">
                         <span class="post-author">${post.username}</span>
-                        <span class="post-time">${new Date(post.created_at * 1000).toLocaleString()}</span>
+                        <span class="post-time">${formatPostDate(post.created_at)}</span>
                     </div>
                     ${post.topics ? `<div class="post-topics">${post.topics.split(',').map(topic => `<span class="topic">#${topic.trim()}</span>`).join(' ')}</div>` : ''}
                     ${post.tags ? `<div class="post-tags">${post.tags.split(',').map(tag => `<span class="tag">${tag.trim()}</span>`).join(' ')}</div>` : ''}
@@ -2179,6 +2174,33 @@
 
                 postsList.appendChild(postCard);
             });
+        }
+
+        // 格式化帖子日期
+        function formatPostDate(dateValue) {
+            try {
+                let date;
+                if (typeof dateValue === 'number') {
+                    // 如果是数字，假设是Unix时间戳
+                    date = new Date(dateValue * 1000);
+                } else if (typeof dateValue === 'string') {
+                    // 如果是字符串，尝试直接解析
+                    date = new Date(dateValue);
+                } else {
+                    // 其他情况，返回未知时间
+                    return '未知时间';
+                }
+                
+                if (isNaN(date.getTime())) {
+                    // 如果解析失败，返回未知时间
+                    return '未知时间';
+                }
+                
+                return date.toLocaleString();
+            } catch (error) {
+                // 发生错误时，返回未知时间
+                return '未知时间';
+            }
         }
 
         // 处理点赞
