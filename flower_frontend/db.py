@@ -1316,10 +1316,9 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            now = int(time.time())
             cursor.execute(
-                "INSERT INTO albums (user_id, name, cover_image, description, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                (user_id, name, cover_image, description, now, now)
+                "INSERT INTO albums (user_id, name, cover_image, description) VALUES (%s, %s, %s, %s)",
+                (user_id, name, cover_image, description)
             )
             conn.commit()
             return cursor.lastrowid
