@@ -738,14 +738,14 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
                 print(f"开始保存图片: album_id={album['id']}")
                 timestamp = int(time.time())
                 image_filename = f"recognition_{user_id}_{timestamp}.jpg"
-                uploads_dir = os.path.join(BASE_DIR, 'static', 'uploads')
+                uploads_dir = os.path.join(BASE_DIR, 'static', 'uploads', 'recognition')
                 os.makedirs(uploads_dir, exist_ok=True)
                 image_path = os.path.join(uploads_dir, image_filename)
                 
                 with open(image_path, 'wb') as f:
                     f.write(image_bytes)
                 
-                relative_path = f"/static/uploads/{image_filename}"
+                relative_path = f"/static/uploads/recognition/{image_filename}"
                 print(f"保存图片成功, relative_path={relative_path}")
                 
                 print(f"保存识别结果: user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}")
