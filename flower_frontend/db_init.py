@@ -141,6 +141,54 @@ CREATE TABLE IF NOT EXISTS follows (
 )
 ''')
 
+# 创建相册表
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS albums (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT,
+    cover_image TEXT,
+    description TEXT,
+    image_count INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted_at INTEGER,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+)
+''')
+
+# 创建相册图片表
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS album_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    album_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    image_path TEXT NOT NULL,
+    image_name TEXT NOT NULL,
+    image_description TEXT,
+    recognition_result_id INTEGER,
+    created_at INTEGER NOT NULL,
+    deleted_at INTEGER,
+    FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (recognition_result_id) REFERENCES recognition_results (id) ON DELETE SET NULL
+)
+''')
+
+# 创建回收站表
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS recycle_bin (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    item_type TEXT NOT NULL,
+    original_id INTEGER NOT NULL,
+    item_data TEXT,
+    deleted_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+)
+''')
+
 # 插入初始角色数据
 initial_roles = [
     ('admin', '系统管理员'),
@@ -184,8 +232,8 @@ conn.commit()
 conn.close()
 
 print('数据库初始化完成！')
-print('创建的表：users, roles, permissions, user_roles, role_permissions, recognition_results, posts, comments, likes, follows')
+print('创建的表：users, roles, permissions, user_roles, role_permissions, recognition_results, posts, comments, likes, follows, albums, album_images, recycle_bin')
 print('初始角色：admin, user')
 print('初始权限：view_results, upload_images, manage_users, manage_roles, view_community, create_posts, comment_posts, like_posts, follow_users')
-print('admin角色已分配所有权限')
-print('user角色已分配基本权限')
+print('admin 角色已分配所有权限')
+print('user 角色已分配基本权限')

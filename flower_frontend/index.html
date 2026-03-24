@@ -1172,6 +1172,13 @@
         </div>
     </div>
 
+    <!-- 相册详情模态框 -->
+    <div class="modal" id="albumDetailModal">
+        <div class="modal-content" style="max-width: 900px;">
+            <!-- 内容由 JavaScript 动态生成 -->
+        </div>
+    </div>
+
     <script>
         // 全局变量
         let token = localStorage.getItem('token');
@@ -1447,7 +1454,12 @@
 
         // 关闭模态框
         function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('active');
+            const modal = document.getElementById(modalId);
+            if (modalId === 'albumDetailModal') {
+                modal.style.display = 'none';
+            } else {
+                modal.classList.remove('active');
+            }
         }
 
         // 处理登录
@@ -2083,6 +2095,61 @@
                 }
             } catch (error) {
                 alert('加载失败');
+            }
+        }
+
+        // 显示相册详情
+        function displayAlbumDetail(album, images) {
+            const modal = document.getElementById('albumDetailModal');
+            if (!modal) {
+                console.error('相册详情模态框不存在');
+                return;
+            }
+            const modalContent = modal.querySelector('.modal-content');
+            
+            // 构建图片列表 HTML
+            let imagesHtml = '';
+            if (images && images.length > 0) {
+                imagesHtml = '<div class="album-images-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px;">';
+                images.forEach(img => {
+                    const flowerName = img.image_description ? img.image_description.split(' - ')[0] : '未知花卉';
+                    const confidence = img.image_description && img.image_description.includes('置信度') ? 
+                        img.image_description.split('置信度：')[1] : '';
+                    
+                    imagesHtml += `
+                        <div class="album-image-card" style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; text-align: center;">
+                            <img src="${img.image_path}" alt="${flowerName}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 5px;">
+                            <p style="margin: 10px 0 5px 0; font-weight: bold; font-size: 14px;">${flowerName}</p>
+                            ${confidence ? `<p style="margin: 0; color: #666; font-size: 12px;">置信度：${confidence}</p>` : ''}
+                        </div>
+                    `;
+                });
+                imagesHtml += '</div>';
+            } else {
+                imagesHtml = '<p style="text-align: center; color: #999; margin-top: 20px;">暂无图片</p>';
+            }
+            
+            modalContent.innerHTML = `
+                <div class="modal-header">
+                    <h2>${album.name}</h2>
+                    <span class="close" onclick="closeAlbumDetailModal()">&times;</span>
+                </div>
+                <div class="modal-body" style="padding: 20px;">
+                    <p><strong>分类:</strong> ${album.category || '未分类'}</p>
+                    <p><strong>图片数量:</strong> ${album.image_count || 0}</p>
+                    ${album.description ? `<p><strong>描述:</strong> ${album.description}</p>` : ''}
+                    ${imagesHtml}
+                </div>
+            `;
+            
+            modal.style.display = 'block';
+        }
+
+        // 关闭相册详情模态框
+        function closeAlbumDetailModal() {
+            const modal = document.getElementById('albumDetailModal');
+            if (modal) {
+                modal.style.display = 'none';
             }
         }
 
