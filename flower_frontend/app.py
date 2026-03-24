@@ -1165,7 +1165,7 @@ def create_comment_api(post_id):
         if not post:
             return jsonify({'success': False, 'error': '帖子不存在'}), 404
         
-        comment_id = create_comment(g.user_id, post_id, content)
+        comment_id = create_comment(post_id, g.user_id, content)
         
         return jsonify({'success': True, 'comment_id': comment_id})
     except Exception as e:

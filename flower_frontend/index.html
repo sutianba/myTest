@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>园艺相册自动分类工具</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -479,6 +480,124 @@
 
         .action-btn.liked {
             color: #e74c3c;
+        }
+
+        .action-btn .fa-heart.liked {
+            color: #e74c3c;
+        }
+
+        .action-btn .fa-star.favorited {
+            color: #ffd700;
+        }
+
+        .comments-container {
+            margin-top: 15px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 12px;
+            border: 1px solid #eee;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .comments-list {
+            margin-bottom: 20px;
+        }
+
+        .comment-item {
+            padding: 15px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .comment-item:last-child {
+            border-bottom: none;
+        }
+
+        .comment-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .comment-author {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .comment-time {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .comment-content {
+            font-size: 14px;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        .comment-input-box {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        .comment-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 24px;
+            outline: none;
+            font-size: 14px;
+            background-color: white;
+            transition: all 0.3s ease;
+        }
+
+        .comment-input:focus {
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1);
+        }
+
+        .submit-comment-btn {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 16px;
+        }
+
+        .submit-comment-btn:hover {
+            background-color: #357abd;
+            transform: scale(1.05);
+        }
+
+        .comment-form {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        .no-comments {
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+            padding: 20px 0;
+        }
+
+        .load-error {
+            text-align: center;
+            color: #ff4757;
+            font-size: 14px;
+            padding: 20px 0;
         }
 
         /* 模态框 */
@@ -2150,25 +2269,36 @@
                 postCard.innerHTML = `
                     <div class="post-header">
                         <span class="post-author">${post.username}</span>
-                        <span class="post-time">${formatPostDate(post.created_at)}</span>
+                        <span class="post-time">${formatPostTime(post.created_at)}</span>
                     </div>
                     ${post.topics ? `<div class="post-topics">${post.topics.split(',').map(topic => `<span class="topic">#${topic.trim()}</span>`).join(' ')}</div>` : ''}
                     ${post.tags ? `<div class="post-tags">${post.tags.split(',').map(tag => `<span class="tag">${tag.trim()}</span>`).join(' ')}</div>` : ''}
                     <div class="post-content">${post.content}</div>
                     ${post.image_url ? `<img src="${post.image_url}" class="post-image">` : ''}
                     <div class="post-actions">
-                        <button class="action-btn" onclick="handleLike(${post.id})">
-                            <i class="fa fa-heart"></i>
-                            <span>${post.likes_count}</span>
+                        <button class="action-btn like-btn" data-post-id="${post.id}" onclick="handleLike(this)">
+                            <i class="fa fa-heart${post.is_liked ? ' liked' : ''}"></i>
+                            <span class="like-count">${post.likes_count}</span>
                         </button>
-                        <button class="action-btn">
+                        <button class="action-btn comment-btn" data-post-id="${post.id}" onclick="toggleComments(this)">
                             <i class="fa fa-comment"></i>
                             <span>${post.comments_count}</span>
                         </button>
-                        <button class="action-btn">
+                        <button class="action-btn favorite-btn" data-post-id="${post.id}" onclick="toggleFavorite(this)">
+                            <i class="fa fa-star${post.is_favorited ? ' favorited' : ''}"></i>
+                            <span>${post.is_favorited ? '已收藏' : '收藏'}</span>
+                        </button>
+                        <button class="action-btn share-btn" data-post-id="${post.id}" onclick="sharePost(this)">
                             <i class="fa fa-share"></i>
                             <span>分享</span>
                         </button>
+                    </div>
+                    <div class="comments-container" data-post-id="${post.id}" style="display: none;">
+                        <div class="comments-list"></div>
+                        <div class="comment-input-box">
+                            <input type="text" class="comment-input" placeholder="说点什么吧...">
+                            <button class="submit-comment-btn" onclick="submitComment(this, ${post.id})"><i class="fa fa-paper-plane"></i></button>
+                        </div>
                     </div>
                 `;
 
@@ -2176,8 +2306,8 @@
             });
         }
 
-        // 格式化帖子日期
-        function formatPostDate(dateValue) {
+        // 格式化帖子时间
+        function formatPostTime(dateValue) {
             try {
                 let date;
                 if (typeof dateValue === 'number') {
@@ -2196,7 +2326,23 @@
                     return '未知时间';
                 }
                 
-                return date.toLocaleString();
+                const now = new Date();
+                const diff = now - date;
+                const minutes = Math.floor(diff / 60000);
+                const hours = Math.floor(diff / 3600000);
+                const days = Math.floor(diff / 86400000);
+                
+                if (minutes < 1) {
+                    return '刚刚';
+                } else if (minutes < 60) {
+                    return `${minutes}分钟前`;
+                } else if (hours < 24) {
+                    return `${hours}小时前`;
+                } else if (days === 1) {
+                    return '昨天';
+                } else {
+                    return date.toISOString().split('T')[0];
+                }
             } catch (error) {
                 // 发生错误时，返回未知时间
                 return '未知时间';
@@ -2204,7 +2350,8 @@
         }
 
         // 处理点赞
-        async function handleLike(postId) {
+        async function handleLike(button) {
+            const postId = button.dataset.postId;
             if (!user || !token) {
                 alert('请先登录');
                 return;
@@ -2220,7 +2367,19 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    loadPosts();
+                    // 更新前端状态
+                    const likeIcon = button.querySelector('i');
+                    const likeCount = button.querySelector('.like-count');
+                    
+                    if (likeIcon.classList.contains('liked')) {
+                        // 取消点赞
+                        likeIcon.classList.remove('liked');
+                        likeCount.textContent = parseInt(likeCount.textContent) - 1;
+                    } else {
+                        // 点赞
+                        likeIcon.classList.add('liked');
+                        likeCount.textContent = parseInt(likeCount.textContent) + 1;
+                    }
                 } else {
                     alert('点赞失败: ' + data.error);
                 }
@@ -2229,6 +2388,140 @@
                 alert('点赞失败，请稍后重试');
             }
         }
+
+        // 切换评论区
+        function toggleComments(button) {
+            const postId = button.dataset.postId;
+            const commentsContainer = document.querySelector(`.comments-container[data-post-id="${postId}"]`);
+            
+            if (commentsContainer.style.display === 'none') {
+                commentsContainer.style.display = 'block';
+                // 这里可以加载评论列表
+                loadComments(postId);
+            } else {
+                commentsContainer.style.display = 'none';
+            }
+        }
+
+        // 加载评论
+        async function loadComments(postId) {
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const commentsList = document.querySelector(`.comments-container[data-post-id="${postId}"] .comments-list`);
+                    commentsList.innerHTML = '';
+                    
+                    if (data.comments.length === 0) {
+                        commentsList.innerHTML = '<p class="no-comments">暂无评论，快来发表第一条评论吧！</p>';
+                        return;
+                    }
+                    
+                    data.comments.forEach(comment => {
+                        const commentElement = document.createElement('div');
+                        commentElement.className = 'comment-item';
+                        commentElement.innerHTML = `
+                            <div class="comment-meta">
+                                <span class="comment-author">${comment.username}</span>
+                                <span class="comment-time">${formatPostTime(comment.created_at)}</span>
+                            </div>
+                            <div class="comment-content">${comment.content}</div>
+                        `;
+                        commentsList.appendChild(commentElement);
+                    });
+                } else {
+                    const commentsList = document.querySelector(`.comments-container[data-post-id="${postId}"] .comments-list`);
+                    commentsList.innerHTML = '<p class="load-error">加载评论失败，请稍后重试</p>';
+                }
+            } catch (error) {
+                console.error('加载评论错误:', error);
+                const commentsList = document.querySelector(`.comments-container[data-post-id="${postId}"] .comments-list`);
+                commentsList.innerHTML = '<p class="load-error">加载评论失败，请稍后重试</p>';
+            }
+        }
+
+        // 提交评论
+        async function submitComment(button, postId) {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            const commentInput = button.parentElement.querySelector('.comment-input');
+            const content = commentInput.value.trim();
+            
+            if (!content) {
+                alert('请输入评论内容');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ content })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    // 清空输入框
+                    commentInput.value = '';
+                    // 重新加载评论
+                    loadComments(postId);
+                    // 更新评论数
+                    const commentButton = document.querySelector(`.comment-btn[data-post-id="${postId}"] span`);
+                    commentButton.textContent = parseInt(commentButton.textContent) + 1;
+                } else {
+                    alert('评论失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('评论错误:', error);
+                alert('评论失败，请稍后重试');
+            }
+        }
+
+        // 切换收藏状态
+        function toggleFavorite(button) {
+            const postId = button.dataset.postId;
+            const favoriteIcon = button.querySelector('i');
+            const favoriteText = button.querySelector('span');
+            
+            if (favoriteIcon.classList.contains('favorited')) {
+                // 取消收藏
+                favoriteIcon.classList.remove('favorited');
+                favoriteText.textContent = '收藏';
+                // 这里可以调用取消收藏接口
+                // saveFavorite(postId, false);
+            } else {
+                // 收藏
+                favoriteIcon.classList.add('favorited');
+                favoriteText.textContent = '已收藏';
+                // 这里可以调用收藏接口
+                // saveFavorite(postId, true);
+            }
+        }
+
+        // 分享帖子
+        function sharePost(button) {
+            const postId = button.dataset.postId;
+            const postUrl = `${window.location.origin}/post/${postId}`;
+            
+            // 复制链接到剪贴板
+            navigator.clipboard.writeText(postUrl)
+                .then(() => {
+                    alert('链接已复制');
+                })
+                .catch(err => {
+                    console.error('复制失败:', err);
+                    alert('复制失败，请手动复制');
+                });
+        }
+
+
     </script>
 </body>
 </html>
