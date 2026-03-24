@@ -364,16 +364,14 @@ class SQLDatabaseManager:
     # 帖子相关操作
     def create_post(self, user_id, content, image_url=None):
         """创建新帖子"""
-        current_time = int(time.time())
-        
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
             cursor.execute('''
             INSERT INTO posts (user_id, content, image_url, likes_count, comments_count, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ''', (user_id, content, image_url, 0, 0, current_time, current_time))
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ''', (user_id, content, image_url, 0, 0))
             
             post_id = cursor.lastrowid
             conn.commit()
@@ -393,7 +391,6 @@ class SQLDatabaseManager:
             cursor.execute('''
             SELECT p.*, u.username FROM posts p
             JOIN users u ON p.user_id = u.id
-            WHERE p.deleted_at IS NULL
             ORDER BY p.created_at DESC
             LIMIT %s OFFSET %s
             ''', (limit, offset))
@@ -424,17 +421,15 @@ class SQLDatabaseManager:
     
     def update_post(self, post_id, content, image_url=None):
         """更新帖子"""
-        current_time = int(time.time())
-        
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
             cursor.execute('''
             UPDATE posts
-            SET content = %s, image_url = %s, updated_at = %s
+            SET content = %s, image_url = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
-            ''', (content, image_url, current_time, post_id))
+            ''', (content, image_url, post_id))
             
             conn.commit()
             return cursor.rowcount > 0
@@ -445,13 +440,12 @@ class SQLDatabaseManager:
             conn.close()
     
     def delete_post(self, post_id):
-        """删除帖子（软删除）"""
+        """删除帖子（硬删除）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            now = int(time.time())
-            cursor.execute('UPDATE posts SET deleted_at = %s WHERE id = %s', (now, post_id))
+            cursor.execute('DELETE FROM posts WHERE id = %s', (post_id,))
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
@@ -1690,21 +1684,13 @@ class SQLDatabaseManager:
             original_id = item['original_id']
             item_data = item.get('item_data')
             
-            if item_type == 'post':
-                cursor.execute(
-                    "UPDATE posts SET deleted_at = NULL WHERE id = %s",
-                    (original_id,)
-                )
-            elif item_type == 'image':
+            if item_type == 'image':
+                # 只有相册图片可以恢复，因为它有 deleted_at 字段
                 cursor.execute(
                     "UPDATE album_images SET deleted_at = NULL WHERE id = %s",
                     (original_id,)
                 )
-            elif item_type == 'recognition':
-                cursor.execute(
-                    "UPDATE recognition_results SET deleted_at = NULL WHERE id = %s",
-                    (original_id,)
-                )
+            # 帖子和识别结果无法从回收站恢复，因为它们没有 deleted_at 字段
             
             cursor.execute(
                 "DELETE FROM recycle_bin WHERE id = %s",
