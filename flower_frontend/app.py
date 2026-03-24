@@ -429,6 +429,7 @@ def get_season(month):
 
 def process_single_image(image_data, user_id=None, save_to_album=False):
     """处理单个图片的识别"""
+    print(f"process_single_image called with save_to_album={save_to_album}, user_id={user_id}")
     # 测试模式下的处理
     if TEST_MODE:
         # 移除base64头部
@@ -707,19 +708,27 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
     }
     
     if save_to_album and user_id and detection_results:
+        print(f"开始保存到相册: save_to_album={save_to_album}, user_id={user_id}, detection_results={detection_results}")
         try:
             flower_name = detection_results[0]['name']
             confidence = detection_results[0]['confidence']
             
+            print(f"获取用户相册: user_id={user_id}, flower_name={flower_name}")
             albums = get_user_albums(user_id, flower_name)
+            print(f"获取到相册: {albums}")
             
             if albums:
                 album = albums[0]
+                print(f"使用现有相册: {album}")
             else:
+                print(f"创建新相册: user_id={user_id}, name={flower_name}相册, category={flower_name}")
                 album_id = create_album(user_id, f"{flower_name}相册", flower_name)
+                print(f"创建相册成功, album_id={album_id}")
                 album = get_album_by_id(album_id, user_id)
+                print(f"获取新相册: {album}")
             
             if album:
+                print(f"开始保存图片: album_id={album['id']}")
                 timestamp = int(time.time())
                 image_filename = f"recognition_{user_id}_{timestamp}.jpg"
                 uploads_dir = os.path.join(BASE_DIR, 'static', 'uploads')
@@ -730,7 +739,9 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
                     f.write(image_bytes)
                 
                 relative_path = f"/static/uploads/{image_filename}"
+                print(f"保存图片成功, relative_path={relative_path}")
                 
+                print(f"保存识别结果: user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}")
                 result_id = save_recognition_result(
                     user_id, 
                     relative_path, 
@@ -746,8 +757,11 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
                     region_label=region_label,
                     final_category=final_category
                 )
+                print(f"保存识别结果成功, result_id={result_id}")
                 
+                print(f"添加图片到相册: album_id={album['id']}, user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}, result_id={result_id}")
                 add_image_to_album(album['id'], user_id, relative_path, flower_name, confidence, result_id)
+                print(f"添加图片到相册成功")
                 
                 saved_album_info = {
                     'album_id': album['id'],
@@ -757,9 +771,14 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
                 }
                 
                 return_result['saved_to_album'] = saved_album_info
+                print(f"保存到相册完成, saved_album_info={saved_album_info}")
         except Exception as e:
             print(f"保存到相册失败: {e}")
+            import traceback
+            traceback.print_exc()
             return_result['save_error'] = str(e)
+    else:
+        print(f"不保存到相册: save_to_album={save_to_album}, user_id={user_id}, detection_results={detection_results}")
     
     return return_result
 

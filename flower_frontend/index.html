@@ -1466,15 +1466,20 @@
 
                 const data = await response.json();
                 if (data.success) {
+                    // 更新全局变量
                     token = data.token;
                     user = {
                         id: data.user_id,
                         username: data.username
                     };
+                    // 保存到localStorage
                     localStorage.setItem('token', token);
                     localStorage.setItem('user', JSON.stringify(user));
+                    // 更新UI状态
                     updateAuthState();
+                    // 关闭模态框
                     closeModal('loginModal');
+                    // 显示成功消息
                     alert('登录成功！');
                 } else {
                     alert('登录失败: ' + data.error);
@@ -1624,7 +1629,8 @@
             uploadBtn.addEventListener('click', function() {
                 const saveToAlbum = document.getElementById('saveToAlbum');
                 if (saveToAlbum && saveToAlbum.checked) {
-                    if (!token) {
+                    const currentToken = getToken();
+                    if (!currentToken) {
                         alert('保存到相册需要登录，请先登录！');
                         return;
                     }
@@ -1733,12 +1739,18 @@
                 });
             }
             
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            const token = getToken();
+            if (token) {
+                headers['Authorization'] = 'Bearer ' + token;
+            }
+            
             const response = await fetch('/api/detect', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + getToken()
-                },
+                headers: headers,
                 body: body
             });
 
