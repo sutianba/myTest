@@ -80,7 +80,7 @@ user = get_user_by_username('username')
 user = get_user_by_id(user_id)
 
 # 验证密码
-is_valid = verify_password(user['password_hash'], 'password123')
+is_valid = verify_password(user['password'], 'password123')
 ```
 
 ### 权限管理
@@ -116,7 +116,7 @@ results = get_user_recognition_results(user_id)
 - id: 用户ID（主键）
 - username: 用户名（唯一）
 - email: 邮箱（唯一）
-- password_hash: 密码哈希
+- password: 密码哈希
 - created_at: 创建时间
 - updated_at: 更新时间
 
