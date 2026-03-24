@@ -1722,7 +1722,14 @@
 
         // 调用识别API
         async function callRecognitionAPI(imageData) {
-            const saveToAlbum = document.getElementById('saveToAlbum') ? document.getElementById('saveToAlbum').checked : false;
+            const saveToAlbumElement = document.getElementById('saveToAlbum');
+            const saveToAlbum = saveToAlbumElement ? saveToAlbumElement.checked : false;
+            
+            console.log('=== callRecognitionAPI 调试信息 ===');
+            console.log('saveToAlbum 元素存在:', !!saveToAlbumElement);
+            console.log('saveToAlbum.checked =', saveToAlbum);
+            console.log('token =', getToken());
+            console.log('===================================');
             
             let body;
             if (Array.isArray(imageData)) {
@@ -1731,12 +1738,14 @@
                     images: imageData,
                     save_to_album: saveToAlbum
                 });
+                console.log('多图识别，save_to_album =', saveToAlbum);
             } else {
                 // 单图识别
                 body = JSON.stringify({ 
                     image: imageData,
                     save_to_album: saveToAlbum
                 });
+                console.log('单图识别，save_to_album =', saveToAlbum);
             }
             
             const headers = {
@@ -1744,17 +1753,21 @@
             };
             
             const token = getToken();
+            console.log('获取 token:', token ? token.substring(0, 20) + '...' : 'null');
             if (token) {
                 headers['Authorization'] = 'Bearer ' + token;
             }
             
+            console.log('正在发送请求到 /api/detect');
             const response = await fetch('/api/detect', {
                 method: 'POST',
                 headers: headers,
                 body: body
             });
 
+            console.log('响应状态码:', response.status);
             const data = await response.json();
+            console.log('响应数据:', data);
             if (data.success) {
                 if (Array.isArray(imageData)) {
                     return data.all_results;

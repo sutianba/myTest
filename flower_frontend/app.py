@@ -283,9 +283,13 @@ def serve_file(filename):
 
 @app.route('/api/detect', methods=['POST'])
 def detect_flower():
-    """植物花卉识别工具API接口"""
+    """植物花卉识别工具 API 接口"""
     try:
         data = request.get_json()
+        
+        print(f"\n=== /api/detect 请求信息 ===")
+        print(f"请求数据：{data}")
+        print(f"save_to_album = {data.get('save_to_album', False)}")
         
         user_id = None
         token = request.headers.get('Authorization')
@@ -295,8 +299,11 @@ def detect_flower():
             payload = verify_jwt(token)
             if payload:
                 user_id = payload.get('user_id')
+                print(f"user_id = {user_id}")
         
         save_to_album = data.get('save_to_album', False)
+        print(f"解析后的 save_to_album = {save_to_album}")
+        print(f"===========================\n")
         
         if 'image' in data:
             image_data = data['image']
