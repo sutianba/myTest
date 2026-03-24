@@ -1310,7 +1310,7 @@ class SQLDatabaseManager:
         finally:
             conn.close()
     
-    def create_album(self, user_id, name, category, cover_image=None, description=None):
+    def create_album(self, user_id, name, category=None, cover_image=None, description=None):
         """创建相册"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -1318,8 +1318,8 @@ class SQLDatabaseManager:
         try:
             now = int(time.time())
             cursor.execute(
-                "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, 0, %s, %s)",
-                (user_id, name, category, cover_image, description, now, now)
+                "INSERT INTO albums (user_id, name, cover_image, description, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                (user_id, name, cover_image, description, now, now)
             )
             conn.commit()
             return cursor.lastrowid
@@ -1335,17 +1335,18 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
+            # 获取用户所有相册
+            cursor.execute(
+                "SELECT * FROM albums WHERE user_id = %s ORDER BY created_at DESC",
+                (user_id,)
+            )
+            albums = cursor.fetchall()
+            
+            # 如果指定了 category，在 Python 中过滤
             if category:
-                cursor.execute(
-                    "SELECT * FROM albums WHERE user_id = %s AND category = %s ORDER BY created_at DESC",
-                    (user_id, category)
-                )
-            else:
-                cursor.execute(
-                    "SELECT * FROM albums WHERE user_id = %s ORDER BY created_at DESC",
-                    (user_id,)
-                )
-            return cursor.fetchall()
+                albums = [album for album in albums if category in album.get('name', '')]
+            
+            return albums
         except Exception as e:
             raise Exception(f'获取相册列表失败: {str(e)}')
         finally:
