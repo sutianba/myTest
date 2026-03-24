@@ -362,17 +362,34 @@ class SQLDatabaseManager:
         finally:
             conn.close()
     
+    def get_recognition_result(self, result_id):
+        """根据ID获取单个识别记录"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+            SELECT * FROM recognition_results
+            WHERE id = %s
+            ''', (result_id,))
+            result = cursor.fetchone()
+            return dict(result) if result else None
+        except Exception as e:
+            raise Exception(f'获取识别记录失败: {str(e)}')
+        finally:
+            conn.close()
+    
     # 帖子相关操作
-    def create_post(self, user_id, content, image_url=None):
+    def create_post(self, user_id, content, image_url=None, topics=None, tags=None, source_type=None, source_id=None):
         """创建新帖子"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
             cursor.execute('''
-            INSERT INTO posts (user_id, content, image_url, likes_count, comments_count, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ''', (user_id, content, image_url, 0, 0))
+            INSERT INTO posts (user_id, content, image_url, topics, tags, source_type, source_id, likes_count, comments_count, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ''', (user_id, content, image_url, topics, tags, source_type, source_id, 0, 0))
             
             post_id = cursor.lastrowid
             conn.commit()
@@ -1931,11 +1948,16 @@ def get_user_recognition_results(user_id):
         raise Exception("数据库未初始化")
     return db_manager.get_user_recognition_results(user_id)
 
-# 帖子相关便捷函数
-def create_post(user_id, content, image_url=None):
+def get_recognition_result(result_id):
     if db_manager is None:
         raise Exception("数据库未初始化")
-    return db_manager.create_post(user_id, content, image_url)
+    return db_manager.get_recognition_result(result_id)
+
+# 帖子相关便捷函数
+def create_post(user_id, content, image_url=None, topics=None, tags=None, source_type=None, source_id=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.create_post(user_id, content, image_url, topics, tags, source_type, source_id)
 
 def get_posts(limit=20, offset=0):
     if db_manager is None:

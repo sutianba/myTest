@@ -100,6 +100,7 @@ app.config['JWT_EXPIRATION_DELTA'] = 3600  # JWT过期时间（秒）
 # JWT相关导入
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 
 # 发送验证码函数
 def send_verification_email(email, code, purpose):
@@ -834,6 +835,50 @@ def test_email():
         print(f"详细异常信息: {traceback.format_exc()}")
         return jsonify({'success': False, 'error': f'测试邮件发送失败: {str(e)}'}), 500
 
+@app.route('/api/upload/post-image', methods=['POST'])
+@auth_required
+def upload_post_image():
+    """上传帖子图片"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持上传图片'}), 503
+    
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': '缺少文件参数'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': '未选择文件'}), 400
+        
+        # 检查文件类型
+        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            return jsonify({'success': False, 'error': '只支持图片文件'}), 400
+        
+        # 确保上传目录存在
+        upload_dir = os.path.join(BASE_DIR, 'static', 'uploads', 'posts')
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
+        
+        # 生成安全的文件名
+        filename = secure_filename(file.filename)
+        # 添加时间戳，避免文件名冲突
+        timestamp = int(time.time())
+        filename = f"{timestamp}_{filename}"
+        filepath = os.path.join(upload_dir, filename)
+        
+        # 保存文件
+        file.save(filepath)
+        
+        # 生成相对路径，用于存储到数据库
+        relative_path = f"/static/uploads/posts/{filename}"
+        
+        return jsonify({'success': True, 'image_url': relative_path})
+    except Exception as e:
+        import traceback
+        print(f"上传图片时发生错误: {str(e)}")
+        print(f"详细异常信息: {traceback.format_exc()}")
+        return jsonify({'success': False, 'error': f'上传失败: {str(e)}'}), 500
+
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     """用户注册"""
@@ -1002,11 +1047,24 @@ def create_post_api():
         data = request.get_json()
         content = data.get('content')
         image_url = data.get('image_url')
+        topics = data.get('topics')
+        tags = data.get('tags')
+        source_type = data.get('source_type')
+        source_id = data.get('source_id')
         
         if not content:
             return jsonify({'success': False, 'error': '帖子内容不能为空'}), 400
         
-        post_id = create_post(g.user_id, content, image_url)
+        # 如果有来源信息，检查权限
+        if source_type and source_id:
+            if source_type == 'recognition':
+                # 检查识别记录是否属于当前用户
+                from db import get_recognition_result
+                result = get_recognition_result(source_id)
+                if not result or result.get('user_id') != g.user_id:
+                    return jsonify({'success': False, 'error': '无权限分享此识别记录'}), 403
+        
+        post_id = create_post(g.user_id, content, image_url, topics, tags, source_type, source_id)
         
         return jsonify({'success': True, 'post_id': post_id})
     except Exception as e:

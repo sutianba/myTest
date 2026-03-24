@@ -425,6 +425,36 @@
             margin-bottom: 15px;
         }
 
+        .post-topics {
+            margin-bottom: 10px;
+        }
+
+        .post-topics .topic {
+            display: inline-block;
+            background-color: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 0.85em;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        .post-tags {
+            margin-bottom: 10px;
+        }
+
+        .post-tags .tag {
+            display: inline-block;
+            background-color: #f3e5f5;
+            color: #7b1fa2;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 0.85em;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
         .post-actions {
             display: flex;
             gap: 20px;
@@ -730,7 +760,23 @@
                             <textarea id="postContent" placeholder="分享你的花卉识别故事..."></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="postImage">图片URL（可选）</label>
+                            <label for="postTopics">话题（可选，用逗号分隔）</label>
+                            <input type="text" id="postTopics" placeholder="例如：花卉,植物,自然">
+                        </div>
+                        <div class="form-group">
+                            <label for="postTags">标签（可选，用逗号分隔）</label>
+                            <input type="text" id="postTags" placeholder="例如：玫瑰,向日葵,多肉">
+                        </div>
+                        <div class="form-group">
+                            <label>图片上传（可选）</label>
+                            <div class="custom-file">
+                                <input type="file" class="custom-file-input" id="postImageFile" accept="image/*">
+                                <label class="custom-file-label" for="postImageFile">选择图片</label>
+                            </div>
+                            <small id="imageUploadStatus" class="form-text text-muted">未选择图片</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="postImage">图片URL（可选，与上传二选一）</label>
                             <input type="text" id="postImage" placeholder="输入图片链接...">
                         </div>
                         <button type="submit" class="btn btn-primary">发布帖子</button>
@@ -1759,12 +1805,49 @@
                     <p><strong>置信度:</strong> ${(item.confidence * 100).toFixed(2)}%</p>
                     <p><strong>时间:</strong> ${new Date(item.created_at * 1000).toLocaleString()}</p>
                     <button class="btn-delete" data-id="${item.id}">删除</button>
+                    <button class="share-to-community-btn" data-id="${item.id}" data-result="${item.result}">分享到社区</button>
                 `;
                 
                 const deleteBtn = card.querySelector('.btn-delete');
                 deleteBtn.onclick = async function() {
                     if (confirm('确定要删除这条记录吗？')) {
                         await deleteHistoryItem(item.id);
+                    }
+                };
+                
+                const shareBtn = card.querySelector('.share-to-community-btn');
+                shareBtn.onclick = async function() {
+                    const content = `我识别了一种植物：${item.result}，置信度：${(item.confidence * 100).toFixed(2)}%`;
+                    const topics = '植物,识别,自然';
+                    const tags = item.result;
+                    
+                    try {
+                        const response = await fetch('/api/posts', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({ 
+                                content, 
+                                topics, 
+                                tags,
+                                source_type: 'recognition',
+                                source_id: item.id
+                            })
+                        });
+
+                        const responseText = await response.text();
+                        const data = JSON.parse(responseText);
+                        
+                        if (data.success) {
+                            alert('分享成功！');
+                        } else {
+                            alert('分享失败: ' + data.error);
+                        }
+                    } catch (error) {
+                        console.error('分享到社区错误:', error);
+                        alert('分享失败，请稍后重试');
                     }
                 };
                 
@@ -1945,10 +2028,44 @@
 
             const content = document.getElementById('postContent').value;
             const imageUrl = document.getElementById('postImage').value;
+            const topics = document.getElementById('postTopics').value;
+            const tags = document.getElementById('postTags').value;
+            const imageFile = document.getElementById('postImageFile').files[0];
 
             if (!content) {
                 alert('帖子内容不能为空');
                 return;
+            }
+
+            let finalImageUrl = imageUrl;
+
+            // 如果选择了文件，先上传图片
+            if (imageFile) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', imageFile);
+
+                    const uploadResponse = await fetch('/api/upload/post-image', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: formData
+                    });
+
+                    const uploadData = await uploadResponse.json();
+                    if (uploadData.success) {
+                        finalImageUrl = uploadData.image_url;
+                        document.getElementById('imageUploadStatus').textContent = '图片上传成功';
+                    } else {
+                        alert('图片上传失败: ' + uploadData.error);
+                        return;
+                    }
+                } catch (uploadError) {
+                    console.error('上传图片错误:', uploadError);
+                    alert('图片上传失败，请稍后重试');
+                    return;
+                }
             }
 
             try {
@@ -1958,7 +2075,12 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ content, image_url: imageUrl })
+                    body: JSON.stringify({ 
+                        content, 
+                        image_url: finalImageUrl,
+                        topics: topics || null,
+                        tags: tags || null
+                    })
                 });
 
                 console.log('发布帖子响应状态:', response.status);
@@ -1971,6 +2093,10 @@
                         alert('帖子发布成功！');
                         document.getElementById('postContent').value = '';
                         document.getElementById('postImage').value = '';
+                        document.getElementById('postTopics').value = '';
+                        document.getElementById('postTags').value = '';
+                        document.getElementById('postImageFile').value = '';
+                        document.getElementById('imageUploadStatus').textContent = '未选择图片';
                         loadPosts();
                     } else {
                         alert('发布失败: ' + data.error);
@@ -2026,6 +2152,8 @@
                         <span class="post-author">${post.username}</span>
                         <span class="post-time">${new Date(post.created_at * 1000).toLocaleString()}</span>
                     </div>
+                    ${post.topics ? `<div class="post-topics">${post.topics.split(',').map(topic => `<span class="topic">#${topic.trim()}</span>`).join(' ')}</div>` : ''}
+                    ${post.tags ? `<div class="post-tags">${post.tags.split(',').map(tag => `<span class="tag">${tag.trim()}</span>`).join(' ')}</div>` : ''}
                     <div class="post-content">${post.content}</div>
                     ${post.image_url ? `<img src="${post.image_url}" class="post-image">` : ''}
                     <div class="post-actions">
