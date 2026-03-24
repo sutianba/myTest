@@ -1700,7 +1700,8 @@
                         file: item.file,
                         imageData: item.imageData,
                         detections: result.detections,
-                        exif_info: result.exif_info
+                        exif_info: result.exif_info,
+                        saved_to_album: result.saved_to_album
                     });
                     
                     const progress = ((i + 1) / totalFiles) * 100;
@@ -2091,9 +2092,12 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert(`相册: ${data.album.name}\n分类: ${data.album.category}\n图片数: ${data.total}`);
+                    displayAlbumDetail(data.album, data.images);
+                } else {
+                    alert('加载相册详情失败');
                 }
             } catch (error) {
+                console.error('加载相册详情错误:', error);
                 alert('加载失败');
             }
         }
