@@ -1142,12 +1142,12 @@ class SQLDatabaseManager:
                 updates.append("email = %s")
                 params.append(email)
             if password_hash:
-                updates.append("password_hash = %s")
+                updates.append("password = %s")
                 params.append(password_hash)
             
             if updates:
-                updates.append("updated_at = %s")
-                params.append(int(time.time()))
+                # 使用当前时间的标准格式，而不是 Unix 时间戳
+                updates.append("updated_at = CURRENT_TIMESTAMP")
                 params.append(user_id)
                 
                 sql = f"UPDATE users SET {', '.join(updates)} WHERE id = %s"
