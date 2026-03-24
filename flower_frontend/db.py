@@ -315,7 +315,8 @@ class SQLDatabaseManager:
             JOIN user_roles ur ON rp.role_id = ur.role_id
             WHERE ur.user_id = %s AND p.name = %s
             ''', (user_id, permission_name))
-            count = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            count = result[0] if result else 0
             return count > 0
         except Exception as e:
             raise Exception(f'检查用户权限失败: {str(e)}')
@@ -1162,13 +1163,13 @@ class SQLDatabaseManager:
         
         try:
             cursor.execute(
-                "SELECT * FROM recognition_results WHERE user_id = %s AND deleted_at IS NULL ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                "SELECT * FROM recognition_results WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
                 (user_id, limit, offset)
             )
             results = cursor.fetchall()
             
             cursor.execute(
-                "SELECT COUNT(*) as count FROM recognition_results WHERE user_id = %s AND deleted_at IS NULL",
+                "SELECT COUNT(*) as count FROM recognition_results WHERE user_id = %s",
                 (user_id,)
             )
             total = cursor.fetchone()['count']
@@ -1180,15 +1181,14 @@ class SQLDatabaseManager:
             conn.close()
     
     def delete_recognition_result(self, result_id, user_id):
-        """删除识别记录（软删除）"""
+        """删除识别记录（硬删除）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            now = int(time.time())
             cursor.execute(
-                "UPDATE recognition_results SET deleted_at = %s WHERE id = %s AND user_id = %s",
-                (now, result_id, user_id)
+                "DELETE FROM recognition_results WHERE id = %s AND user_id = %s",
+                (result_id, user_id)
             )
             conn.commit()
             return cursor.rowcount > 0
