@@ -530,10 +530,157 @@
             color: #999;
         }
 
+        .comment-floor {
+            background-color: #f0f0f0;
+            color: #666;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+
         .comment-content {
             font-size: 14px;
             color: #333;
             line-height: 1.4;
+        }
+
+        /* 评论操作按钮 */
+        .like-btn, .reply-btn {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .like-btn:hover, .reply-btn:hover {
+            background-color: #f0f0f0;
+            color: #333;
+        }
+
+        .like-btn.liked {
+            color: #ff4757;
+        }
+
+        /* 回复样式 */
+        .replies-list {
+            margin-top: 15px;
+            margin-left: 30px;
+        }
+
+        .reply-item {
+            background-color: #f9f9f9;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .reply-meta {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        .reply-author {
+            font-weight: 600;
+            margin-right: 5px;
+        }
+
+        .reply-to {
+            color: #999;
+            margin-right: 5px;
+        }
+
+        .reply-time {
+            color: #999;
+        }
+
+        .reply-content {
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+
+        .reply-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .reply-actions button {
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .reply-actions button:hover {
+            background-color: #f0f0f0;
+            color: #333;
+        }
+
+        /* 回复表单样式 */
+        .reply-form {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 6px;
+        }
+
+        .reply-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            min-height: 80px;
+            margin-bottom: 10px;
+        }
+
+        .reply-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .cancel-reply-btn, .submit-reply-btn {
+            padding: 5px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .cancel-reply-btn {
+            background-color: #f0f0f0;
+            color: #333;
+        }
+
+        .submit-reply-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .cancel-reply-btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        .submit-reply-btn:hover {
+            background-color: #45a049;
         }
 
         .comment-input-box {
@@ -2456,12 +2603,32 @@
                     data.comments.forEach(comment => {
                         const commentElement = document.createElement('div');
                         commentElement.className = 'comment-item';
+                        commentElement.dataset.commentId = comment.id;
                         commentElement.innerHTML = `
                             <div class="comment-meta">
+                                <span class="comment-floor">${comment.floor_number}楼</span>
                                 <span class="comment-author">${comment.username}</span>
                                 <span class="comment-time">${formatPostTime(comment.created_at)}</span>
                             </div>
                             <div class="comment-content">${comment.content}</div>
+                            <div class="comment-actions">
+                                <button class="like-btn" onclick="likeComment(${comment.id}, this)">
+                                    <i class="fa fa-thumbs-up"></i> <span>${comment.likes_count}</span>
+                                </button>
+                                <button class="reply-btn" onclick="showReplyForm(${postId}, ${comment.id}, '${comment.username}')">
+                                    <i class="fa fa-reply"></i> 回复
+                                </button>
+                            </div>
+                            <div class="replies-list" id="replies-${comment.id}">
+                                ${renderReplies(comment.replies)}
+                            </div>
+                            <div class="reply-form" id="reply-form-${comment.id}" style="display: none;">
+                                <textarea class="reply-input" placeholder="写下你的回复..."></textarea>
+                                <div class="reply-actions">
+                                    <button class="cancel-reply-btn" onclick="hideReplyForm(${comment.id})"></button>
+                                    <button class="submit-reply-btn" onclick="submitReply(${postId}, ${comment.id}, this)"></button>
+                                </div>
+                            </div>
                         `;
                         commentsList.appendChild(commentElement);
                     });
@@ -2473,6 +2640,59 @@
                 console.error('加载评论错误:', error);
                 const commentsList = document.querySelector(`.comments-container[data-post-id="${postId}"] .comments-list`);
                 commentsList.innerHTML = '<p class="load-error">加载评论失败，请稍后重试</p>';
+            }
+        }
+
+        // 渲染回复评论
+        function renderReplies(replies) {
+            if (!replies || replies.length === 0) {
+                return '';
+            }
+            
+            return replies.map(reply => `
+                <div class="reply-item" data-comment-id="${reply.id}">
+                    <div class="reply-meta">
+                        <span class="reply-author">${reply.username}</span>
+                        <span class="reply-to">回复 ${reply.reply_to_username || '楼主'}</span>
+                        <span class="reply-time">${formatPostTime(reply.created_at)}</span>
+                    </div>
+                    <div class="reply-content">${reply.content}</div>
+                    <div class="reply-actions">
+                        <button class="like-btn" onclick="likeComment(${reply.id}, this)">
+                            <i class="fa fa-thumbs-up"></i> <span>${reply.likes_count}</span>
+                        </button>
+                        <button class="reply-btn" onclick="showReplyForm(${reply.post_id}, ${reply.id}, '${reply.username}')">
+                            <i class="fa fa-reply"></i> 回复
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 显示回复表单
+        function showReplyForm(postId, commentId, username) {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+            
+            // 隐藏其他回复表单
+            document.querySelectorAll('.reply-form').forEach(form => {
+                form.style.display = 'none';
+            });
+            
+            const replyForm = document.getElementById(`reply-form-${commentId}`);
+            if (replyForm) {
+                replyForm.style.display = 'block';
+                replyForm.querySelector('.reply-input').focus();
+            }
+        }
+
+        // 隐藏回复表单
+        function hideReplyForm(commentId) {
+            const replyForm = document.getElementById(`reply-form-${commentId}`);
+            if (replyForm) {
+                replyForm.style.display = 'none';
             }
         }
 
@@ -2516,6 +2736,93 @@
             } catch (error) {
                 console.error('评论错误:', error);
                 alert('评论失败，请稍后重试');
+            }
+        }
+
+        // 提交回复
+        async function submitReply(postId, parentCommentId, button) {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            const replyForm = button.closest('.reply-form');
+            const replyInput = replyForm.querySelector('.reply-input');
+            const content = replyInput.value.trim();
+            
+            if (!content) {
+                alert('请输入回复内容');
+                return;
+            }
+
+            try {
+                // 获取被回复的用户ID
+                const response = await fetch(`/api/comments/${parentCommentId}`);
+                const commentData = await response.json();
+                const replyToUserId = commentData.comment.user_id;
+                
+                const response2 = await fetch(`/api/comments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                        post_id: postId, 
+                        content: content, 
+                        parent_comment_id: parentCommentId, 
+                        reply_to_user_id: replyToUserId 
+                    })
+                });
+
+                const data = await response2.json();
+                if (data.success) {
+                    // 清空输入框
+                    replyInput.value = '';
+                    // 隐藏回复表单
+                    hideReplyForm(parentCommentId);
+                    // 重新加载评论
+                    loadComments(postId);
+                    // 更新评论数
+                    const commentButton = document.querySelector(`.comment-btn[data-post-id="${postId}"] span`);
+                    commentButton.textContent = parseInt(commentButton.textContent) + 1;
+                } else {
+                    alert('回复失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('回复错误:', error);
+                alert('回复失败，请稍后重试');
+            }
+        }
+
+        // 点赞评论
+        async function likeComment(commentId, button) {
+            if (!user || !token) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/comments/${commentId}/like`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    // 更新点赞数
+                    const likeCount = button.querySelector('span');
+                    likeCount.textContent = parseInt(likeCount.textContent) + 1;
+                    // 改变按钮样式
+                    button.classList.add('liked');
+                } else {
+                    alert('点赞失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('点赞错误:', error);
+                alert('点赞失败，请稍后重试');
             }
         }
 

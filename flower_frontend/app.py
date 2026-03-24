@@ -34,6 +34,7 @@ if not TEST_MODE:
             create_post, get_posts, get_post_by_id, update_post, delete_post,
             create_comment, get_comments_by_post_id, delete_comment,
             like_post, unlike_post, is_post_liked_by_user,
+            like_comment, unlike_comment, is_comment_liked,
             follow_user, unfollow_user, is_following, get_user_following, get_user_followers,
             create_email_code, verify_email_code, check_email_rate_limit,
             check_user_permission,
@@ -1156,6 +1157,8 @@ def create_comment_api(post_id):
     try:
         data = request.get_json()
         content = data.get('content')
+        parent_comment_id = data.get('parent_comment_id')
+        reply_to_user_id = data.get('reply_to_user_id')
         
         if not content:
             return jsonify({'success': False, 'error': '评论内容不能为空'}), 400
@@ -1165,7 +1168,37 @@ def create_comment_api(post_id):
         if not post:
             return jsonify({'success': False, 'error': '帖子不存在'}), 404
         
-        comment_id = create_comment(post_id, g.user_id, content)
+        comment_id = create_comment(post_id, g.user_id, content, parent_comment_id, reply_to_user_id)
+        
+        return jsonify({'success': True, 'comment_id': comment_id})
+    except Exception as e:
+        print(f"创建评论时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/comments', methods=['POST'])
+@auth_required
+@permission_required('comment_posts')
+def create_comment_api_new():
+    """创建评论（新接口）"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持创建评论功能'}), 503
+    
+    try:
+        data = request.get_json()
+        post_id = data.get('post_id')
+        content = data.get('content')
+        parent_comment_id = data.get('parent_comment_id')
+        reply_to_user_id = data.get('reply_to_user_id')
+        
+        if not post_id or not content:
+            return jsonify({'success': False, 'error': '帖子ID和评论内容不能为空'}), 400
+        
+        # 检查帖子是否存在
+        post = get_post_by_id(post_id)
+        if not post:
+            return jsonify({'success': False, 'error': '帖子不存在'}), 404
+        
+        comment_id = create_comment(post_id, g.user_id, content, parent_comment_id, reply_to_user_id)
         
         return jsonify({'success': True, 'comment_id': comment_id})
     except Exception as e:
@@ -1185,6 +1218,51 @@ def delete_comment_api(comment_id):
         return jsonify({'success': True})
     except Exception as e:
         print(f"删除评论时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# 评论点赞相关API
+@app.route('/api/comments/<int:comment_id>/like', methods=['POST'])
+@auth_required
+def like_comment_api(comment_id):
+    """点赞评论"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持点赞功能'}), 503
+    
+    try:
+        # 检查评论是否存在
+        comment = get_comment_by_id(comment_id)
+        if not comment:
+            return jsonify({'success': False, 'error': '评论不存在'}), 404
+        
+        result = like_comment(comment_id, g.user_id)
+        if result:
+            return jsonify({'success': True, 'message': '点赞成功'})
+        else:
+            return jsonify({'success': False, 'error': '已经点赞过了'}), 400
+    except Exception as e:
+        print(f"点赞评论时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/comments/<int:comment_id>/unlike', methods=['POST'])
+@auth_required
+def unlike_comment_api(comment_id):
+    """取消点赞评论"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持取消点赞功能'}), 503
+    
+    try:
+        # 检查评论是否存在
+        comment = get_comment_by_id(comment_id)
+        if not comment:
+            return jsonify({'success': False, 'error': '评论不存在'}), 404
+        
+        result = unlike_comment(comment_id, g.user_id)
+        if result:
+            return jsonify({'success': True, 'message': '取消点赞成功'})
+        else:
+            return jsonify({'success': False, 'error': '没有点赞记录'}), 400
+    except Exception as e:
+        print(f"取消点赞时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # 点赞相关API

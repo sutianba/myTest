@@ -509,17 +509,28 @@ class SQLDatabaseManager:
             conn.close()
     
     # 评论相关操作
-    def create_comment(self, post_id, user_id, content):
+    def create_comment(self, post_id, user_id, content, parent_comment_id=None, reply_to_user_id=None):
         """创建评论"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
+            floor_number = None
+            # 计算楼层号（只有一级评论需要）
+            if parent_comment_id is None:
+                cursor.execute('''
+                SELECT COUNT(*) as count
+                FROM comments
+                WHERE post_id = %s AND parent_comment_id IS NULL
+                ''', (post_id,))
+                count = cursor.fetchone()['count']
+                floor_number = count + 1
+            
             # 创建评论
             cursor.execute('''
-            INSERT INTO comments (post_id, user_id, content, created_at)
-            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
-            ''', (post_id, user_id, content))
+            INSERT INTO comments (post_id, user_id, content, parent_comment_id, reply_to_user_id, floor_number, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ''', (post_id, user_id, content, parent_comment_id, reply_to_user_id, floor_number))
             
             # 增加帖子评论数
             cursor.execute('''
@@ -543,16 +554,108 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
+            # 先查询一级评论
             cursor.execute('''
             SELECT c.*, u.username FROM comments c
             JOIN users u ON c.user_id = u.id
-            WHERE c.post_id = %s
-            ORDER BY c.created_at ASC
+            WHERE c.post_id = %s AND c.parent_comment_id IS NULL
+            ORDER BY c.floor_number ASC
             ''', (post_id,))
-            comments = cursor.fetchall()
-            return [dict(comment) for comment in comments]
+            primary_comments = cursor.fetchall()
+            
+            result = []
+            for comment in primary_comments:
+                comment_dict = dict(comment)
+                # 查询该评论的回复
+                cursor.execute('''
+                SELECT c.*, u.username, ru.username as reply_to_username FROM comments c
+                JOIN users u ON c.user_id = u.id
+                LEFT JOIN users ru ON c.reply_to_user_id = ru.id
+                WHERE c.parent_comment_id = %s
+                ORDER BY c.created_at ASC
+                ''', (comment['id'],))
+                replies = cursor.fetchall()
+                comment_dict['replies'] = [dict(reply) for reply in replies]
+                # 获取评论点赞数
+                cursor.execute('''
+                SELECT COUNT(*) as likes_count
+                FROM comment_likes
+                WHERE comment_id = %s
+                ''', (comment['id'],))
+                likes_count = cursor.fetchone()['likes_count']
+                comment_dict['likes_count'] = likes_count
+                # 获取每个回复的点赞数
+                for reply in comment_dict['replies']:
+                    cursor.execute('''
+                    SELECT COUNT(*) as likes_count
+                    FROM comment_likes
+                    WHERE comment_id = %s
+                    ''', (reply['id'],))
+                    reply_likes_count = cursor.fetchone()['likes_count']
+                    reply['likes_count'] = reply_likes_count
+                result.append(comment_dict)
+            
+            return result
         except Exception as e:
             raise Exception(f'获取评论列表失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def like_comment(self, comment_id, user_id):
+        """点赞评论"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 检查是否已经点赞
+            cursor.execute('SELECT id FROM comment_likes WHERE comment_id = %s AND user_id = %s', (comment_id, user_id))
+            if cursor.fetchone():
+                return False  # 已经点赞过
+            
+            # 创建点赞记录
+            cursor.execute('''
+            INSERT INTO comment_likes (comment_id, user_id, created_at)
+            VALUES (%s, %s, CURRENT_TIMESTAMP)
+            ''', (comment_id, user_id))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'点赞评论失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def unlike_comment(self, comment_id, user_id):
+        """取消点赞评论"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 删除点赞记录
+            cursor.execute('DELETE FROM comment_likes WHERE comment_id = %s AND user_id = %s', (comment_id, user_id))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                return True
+            else:
+                return False  # 没有点赞记录
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'取消点赞失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def is_comment_liked(self, comment_id, user_id):
+        """检查用户是否已点赞评论"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('SELECT id FROM comment_likes WHERE comment_id = %s AND user_id = %s', (comment_id, user_id))
+            return cursor.fetchone() is not None
+        except Exception as e:
+            raise Exception(f'检查点赞状态失败: {str(e)}')
         finally:
             conn.close()
     
@@ -1971,11 +2074,27 @@ def delete_post(post_id):
         raise Exception("数据库未初始化")
     return db_manager.delete_post(post_id)
 
-# 评论相关便捷函数
-def create_comment(post_id, user_id, content):
+# 评论点赞相关便捷函数
+def like_comment(comment_id, user_id):
     if db_manager is None:
         raise Exception("数据库未初始化")
-    return db_manager.create_comment(post_id, user_id, content)
+    return db_manager.like_comment(comment_id, user_id)
+
+def unlike_comment(comment_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.unlike_comment(comment_id, user_id)
+
+def is_comment_liked(comment_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.is_comment_liked(comment_id, user_id)
+
+# 评论相关便捷函数
+def create_comment(post_id, user_id, content, parent_comment_id=None, reply_to_user_id=None):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.create_comment(post_id, user_id, content, parent_comment_id, reply_to_user_id)
 
 def get_comments_by_post_id(post_id):
     if db_manager is None:
