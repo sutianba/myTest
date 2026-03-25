@@ -2110,19 +2110,24 @@
             if (!albumsList) return;
 
             const currentToken = getToken();
-            console.log('当前读取到的 token:', currentToken);
+            console.log('=== 加载相册调试信息 ===');
+            console.log('当前读取到的 token:', currentToken ? currentToken.substring(0, 20) + '...' : 'null');
             console.log('token 是否存在:', !!currentToken);
             
             if (!currentToken) {
-                albumsList.innerHTML = '<p>请先登录查看相册</p>';
+                albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">请先登录查看相册</p>';
+                console.log('token 不存在，显示登录提示');
                 return;
             }
 
             albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载中...</p>';
 
             try {
-                const headers = { 'Authorization': 'Bearer ' + currentToken };
+                const headers = {
+                    'Authorization': 'Bearer ' + currentToken
+                };
                 console.log('请求头:', headers);
+                console.log('请求 URL: /api/albums');
                 
                 const response = await fetch('/api/albums', {
                     headers: headers
@@ -2133,13 +2138,17 @@
                 console.log('响应体:', data);
 
                 if (data.success) {
+                    console.log('加载相册成功，共', data.albums.length, '个相册');
                     displayAlbums(data.albums);
                 } else {
+                    console.log('加载相册失败:', data.error);
                     albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载失败，请稍后重试</p>';
                 }
             } catch (error) {
                 console.error('加载相册错误:', error);
                 albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载失败，请稍后重试</p>';
+            } finally {
+                console.log('=== 加载相册调试结束 ===');
             }
         }
 
@@ -2212,23 +2221,36 @@
         
         // 查看相册详情
         async function viewAlbumDetail(albumId) {
+            console.log('=== 查看相册详情调试信息 ===');
+            console.log('相册 ID:', albumId);
+            
             try {
                 const currentToken = getToken();
-                console.log('查看相册详情 - 当前读取到的 token:', currentToken);
-                console.log('查看相册详情 - token 是否存在:', !!currentToken);
+                console.log('当前读取到的 token:', currentToken ? currentToken.substring(0, 20) + '...' : 'null');
+                console.log('token 是否存在:', !!currentToken);
                 
-                const headers = { 'Authorization': 'Bearer ' + currentToken };
-                console.log('查看相册详情 - 请求头:', headers);
+                if (!currentToken) {
+                    alert('请先登录查看相册详情');
+                    console.log('token 不存在，显示登录提示');
+                    return;
+                }
+                
+                const headers = {
+                    'Authorization': 'Bearer ' + currentToken
+                };
+                console.log('请求头:', headers);
+                console.log('请求 URL: /api/albums/' + albumId);
                 
                 const response = await fetch(`/api/albums/${albumId}`, {
                     headers: headers
                 });
                 
-                console.log('查看相册详情 - 响应状态码:', response.status);
+                console.log('响应状态码:', response.status);
                 const data = await response.json();
-                console.log('查看相册详情 - 响应体:', data);
+                console.log('响应体:', data);
                 
                 if (data.success) {
+                    console.log('加载相册详情成功');
                     // 显示相册详情页
                     document.getElementById('albumsOverview').style.display = 'none';
                     document.getElementById('albumDetail').style.display = 'block';
@@ -2248,11 +2270,14 @@
                     // 显示相册图片
                     displayAlbumImages(data.images);
                 } else {
+                    console.log('加载相册详情失败:', data.error);
                     alert('加载相册详情失败');
                 }
             } catch (error) {
                 console.error('加载相册详情错误:', error);
                 alert('加载失败');
+            } finally {
+                console.log('=== 查看相册详情调试结束 ===');
             }
         }
         
