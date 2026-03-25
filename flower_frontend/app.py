@@ -183,7 +183,7 @@ def generate_jwt(user_id, username):
     payload = {
         'user_id': user_id,
         'username': username,
-        'exp': time.time() + app.config['JWT_EXPIRATION_DELTA']
+        'exp': int(time.time()) + app.config['JWT_EXPIRATION_DELTA']
     }
     token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
     return token
@@ -193,14 +193,14 @@ def verify_jwt(token):
     try:
         payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         return payload
-    except jwt.ExpiredSignatureError:
-        print(f"JWT验证失败: 令牌已过期")
+    except jwt.ExpiredSignatureError as e:
+        print("JWT过期:", e)
         return None
     except jwt.InvalidTokenError as e:
-        print(f"JWT验证失败: 无效的令牌 - {str(e)}")
+        print("JWT无效:", e)
         return None
     except Exception as e:
-        print(f"JWT验证失败: 未知错误 - {str(e)}")
+        print("JWT验证失败:", e)
         return None
 
 # 认证中间件
@@ -208,6 +208,7 @@ def auth_required(f):
     """认证装饰器"""
     def decorated_function(*args, **kwargs):
         token = request.headers.get('Authorization')
+        print("Authorization:", request.headers.get('Authorization'))
         if not token:
             return jsonify({'success': False, 'error': '未提供认证令牌'}), 401
         

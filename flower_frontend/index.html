@@ -1092,7 +1092,7 @@
                     </div>
                     
                     <!-- 相册卡片网格 -->
-                    <div id="albumsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px;"></div>
+                    <div id="albumsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px;"></div>
                 </div>
                 
                 <!-- 相册详情页 -->
@@ -1239,12 +1239,24 @@
 
     <script>
         // 全局变量
-        let token = localStorage.getItem('token');
+        let token = localStorage.getItem('auth_token');
         let user = JSON.parse(localStorage.getItem('user'));
 
         // 获取token
         function getToken() {
-            return localStorage.getItem('token');
+            return localStorage.getItem('auth_token');
+        }
+
+        // 获取认证请求头
+        function getAuthHeaders() {
+            const token = getToken();
+            if (!token) {
+                return null;
+            }
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            };
         }
 
         // 页面加载完成后初始化
@@ -1549,7 +1561,7 @@
                         username: data.username
                     };
                     // 保存到localStorage
-                    localStorage.setItem('token', token);
+                    localStorage.setItem('auth_token', token);
                     localStorage.setItem('user', JSON.stringify(user));
                     // 更新UI状态
                     updateAuthState();
@@ -1557,6 +1569,8 @@
                     closeModal('loginModal');
                     // 显示成功消息
                     alert('登录成功！');
+                    // 登录成功后加载相册
+                    loadAlbums();
                 } else {
                     alert('登录失败: ' + data.error);
                 }
@@ -1591,11 +1605,13 @@
                         username: data.username,
                         role: data.role
                     };
-                    localStorage.setItem('token', token);
+                    localStorage.setItem('auth_token', token);
                     localStorage.setItem('user', JSON.stringify(user));
                     updateAuthState();
                     closeModal('registerModal');
                     alert(data.message);
+                    // 注册成功后加载相册
+                    loadAlbums();
                 } else {
                     alert('注册失败: ' + data.error);
                 }
@@ -1638,7 +1654,7 @@
         function handleLogout() {
             token = null;
             user = null;
-            localStorage.removeItem('token');
+            localStorage.removeItem('auth_token');
             localStorage.removeItem('user');
             updateAuthState();
             alert('已退出登录');
@@ -2107,55 +2123,38 @@
         // 加载相册
         async function loadAlbums() {
             const albumsList = document.getElementById('albumsList');
-            if (!albumsList) return;
-
-            // 记录调用时间
-            const callTime = new Date().toISOString();
-            console.log('=== 加载相册开始 ===');
-            console.log('调用时间:', callTime);
-
-            // 直接从 localStorage 读取 token，确保获取到最新的 token
-            const currentToken = localStorage.getItem('token');
-            console.log('currentToken =', currentToken);
-            console.log('token 是否存在:', !!currentToken);
+            const headers = getAuthHeaders();
             
-            if (!currentToken) {
+            if (!headers) {
                 albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">请先登录查看相册</p>';
-                console.log('token 不存在，显示登录提示');
-                console.log('=== 加载相册结束 ===');
                 return;
             }
-
-            albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载中...</p>';
-
+            
             try {
-                const headers = {
-                    'Authorization': 'Bearer ' + currentToken
-                };
-                console.log('headers =', headers);
-                console.log('Authorization =', headers.Authorization);
-                console.log('请求 URL: /api/albums');
-                
                 const response = await fetch('/api/albums', {
+                    method: 'GET',
                     headers: headers
                 });
                 
-                console.log('响应状态码:', response.status);
+                console.log("albums状态:", response.status);
+                
+                if (response.status === 401) {
+                    localStorage.removeItem('auth_token');
+                    albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">登录已失效，请重新登录</p>';
+                    return;
+                }
+                
                 const data = await response.json();
-                console.log('响应体:', data);
-
+                console.log(data);
+                
                 if (data.success) {
-                    console.log('加载相册成功，共', data.albums.length, '个相册');
                     displayAlbums(data.albums);
                 } else {
-                    console.log('加载相册失败:', data.error);
                     albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载失败，请稍后重试</p>';
                 }
-            } catch (error) {
-                console.error('加载相册错误:', error);
-                albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载失败，请稍后重试</p>';
-            } finally {
-                console.log('=== 加载相册结束 ===');
+            } catch (e) {
+                console.error(e);
+                albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">服务器异常，请稍后重试</p>';
             }
         }
 
@@ -2197,12 +2196,12 @@
                 });
                 
                 // 卡片内容
-                const coverImage = album.cover_image || 'https://via.placeholder.com/300x200?text=No+Image';
+                const coverImage = album.cover_image || album.image_path || 'https://via.placeholder.com/300x200?text=No+Image';
                 const updatedAt = new Date(album.updated_at).toLocaleString();
                 
                 albumCard.innerHTML = `
                     <div style="height: 180px; overflow: hidden;">
-                        <img src="${coverImage}" alt="${album.name}" style="width: 100%; height: 100%; object-fit: cover;">
+                        <img src="${coverImage}" alt="${album.name}" class="album-thumb" style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px; transition: 0.2s;">
                     </div>
                     <div style="padding: 15px;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
@@ -2232,19 +2231,14 @@
             console.log('相册 ID:', albumId);
             
             try {
-                const currentToken = getToken();
-                console.log('当前读取到的 token:', currentToken ? currentToken.substring(0, 20) + '...' : 'null');
-                console.log('token 是否存在:', !!currentToken);
+                const headers = getAuthHeaders();
                 
-                if (!currentToken) {
+                if (!headers) {
                     alert('请先登录查看相册详情');
                     console.log('token 不存在，显示登录提示');
                     return;
                 }
                 
-                const headers = {
-                    'Authorization': 'Bearer ' + currentToken
-                };
                 console.log('请求头:', headers);
                 console.log('请求 URL: /api/albums/' + albumId);
                 
@@ -2253,6 +2247,13 @@
                 });
                 
                 console.log('响应状态码:', response.status);
+                
+                if (response.status === 401) {
+                    localStorage.removeItem('auth_token');
+                    alert('登录已失效，请重新登录');
+                    return;
+                }
+                
                 const data = await response.json();
                 console.log('响应体:', data);
                 
@@ -2342,8 +2343,8 @@
                     const createdAt = new Date(imageData.created_at * 1000).toLocaleString();
                     
                     imageCard.innerHTML = `
-                        <div style="height: 150px; overflow: hidden; cursor: pointer;" onclick="previewImage('${imageData.image_path}', '${imageData.flower_name}', '${imageData.confidence}');">
-                            <img src="${imageData.image_path}" alt="${imageData.flower_name}" style="width: 100%; height: 100%; object-fit: cover;">
+                        <div style="height: 150px; overflow: hidden; cursor: pointer;" onclick="openImagePreview('${imageData.image_path}')">
+                            <img src="${imageData.image_path}" alt="${imageData.flower_name}" class="album-thumb" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px; transition: 0.2s;">
                         </div>
                         <div style="padding: 10px;">
                             <p style="margin: 5px 0; font-weight: bold; font-size: 14px;">${imageData.flower_name}</p>
@@ -2351,6 +2352,9 @@
                             <p style="margin: 2px 0; color: #999; font-size: 11px;">${createdAt}</p>
                         </div>
                         <div class="image-actions" style="position: absolute; top: 10px; right: 10px; display: none; flex-direction: column; gap: 5px; z-index: 10;">
+                            <button onclick="event.stopPropagation(); openImagePreview('${imageData.image_path}');" style="width: 30px; height: 30px; border: none; border-radius: 50%; background-color: rgba(255, 255, 255, 0.8); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 21a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v16z"></path><path d="M7 14 3 10l4-4"></path><path d="M21 10l-4 4-4-4"></path></svg>
+                            </button>
                             <button onclick="event.stopPropagation(); shareImage('${imageData.image_path}');" style="width: 30px; height: 30px; border: none; border-radius: 50%; background-color: rgba(255, 255, 255, 0.8); cursor: pointer; display: flex; align-items: center; justify-content: center;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
                             </button>
@@ -3260,7 +3264,44 @@
                 });
         }
 
+        // 打开图片预览
+        function openImagePreview(path) {
+            const modal = document.getElementById('previewModal');
+            const img = document.getElementById('previewImage');
+            img.src = path;
+            img.style.transform = 'scale(1)';
+            modal.style.display = 'flex';
+        }
+
+        // 关闭图片预览
+        function closePreview() {
+            const modal = document.getElementById('previewModal');
+            modal.style.display = 'none';
+        }
+
+        // 放大图片
+        let zoom = 1;
+        function zoomIn() {
+            zoom += 0.2;
+            const img = document.getElementById('previewImage');
+            img.style.transform = `scale(${zoom})`;
+        }
+
+        // 缩小图片
+        function zoomOut() {
+            zoom = Math.max(0.2, zoom - 0.2);
+            const img = document.getElementById('previewImage');
+            img.style.transform = `scale(${zoom})`;
+        }
 
     </script>
-</body>
+<!-- 图片预览模态框 -->
+        <div id="previewModal" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 9999;">
+            <button onclick="closePreview()" style="position: absolute; top: 20px; right: 20px; background: none; border: none; color: white; font-size: 30px; cursor: pointer; z-index: 10000;">×</button>
+            <button onclick="zoomOut()" style="position: absolute; bottom: 20px; left: 50px; background: rgba(0, 0, 0, 0.5); border: 1px solid white; color: white; font-size: 20px; cursor: pointer; padding: 10px 15px; border-radius: 5px; z-index: 10000;">－</button>
+            <button onclick="zoomIn()" style="position: absolute; bottom: 20px; left: 120px; background: rgba(0, 0, 0, 0.5); border: 1px solid white; color: white; font-size: 20px; cursor: pointer; padding: 10px 15px; border-radius: 5px; z-index: 10000;">＋</button>
+            <img id="previewImage" style="max-width: 85%; max-height: 85%; border-radius: 12px; transition: 0.2s;">
+        </div>
+
+    </body>
 </html>
