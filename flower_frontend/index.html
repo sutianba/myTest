@@ -1062,7 +1062,65 @@
             <div class="albums-page">
                 <h2>🖼️ 我的相册</h2>
                 <p>按花卉类别管理您的照片</p>
-                <div id="albumsList"></div>
+                
+                <!-- 相册总览页 -->
+                <div id="albumsOverview" style="display: block;">
+                    <!-- 顶部工具栏 -->
+                    <div class="albums-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                        <!-- 搜索框 -->
+                        <div style="flex: 1; min-width: 250px;">
+                            <input type="text" id="albumSearch" placeholder="搜索相册..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 20px; font-size: 14px;">
+                        </div>
+                        
+                        <!-- 分类筛选 -->
+                        <div>
+                            <select id="albumCategoryFilter" style="padding: 10px; border: 1px solid #ddd; border-radius: 20px; font-size: 14px; background-color: white;">
+                                <option value="all">所有分类</option>
+                                <option value="system">系统分类</option>
+                                <option value="custom">用户自定义</option>
+                            </select>
+                        </div>
+                        
+                        <!-- 排序方式 -->
+                        <div>
+                            <select id="albumSort" style="padding: 10px; border: 1px solid #ddd; border-radius: 20px; font-size: 14px; background-color: white;">
+                                <option value="updated_at">最近更新</option>
+                                <option value="name">名称</option>
+                                <option value="image_count">图片数量</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- 相册卡片网格 -->
+                    <div id="albumsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px;"></div>
+                </div>
+                
+                <!-- 相册详情页 -->
+                <div id="albumDetail" style="display: none;">
+                    <!-- 详情页头部 -->
+                    <div class="album-detail-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <button id="backToAlbums" class="btn btn-secondary" style="padding: 8px 16px; border: none; border-radius: 20px; background-color: #f0f0f0; cursor: pointer; font-size: 14px;">
+                            ← 返回相册列表
+                        </button>
+                        <h3 id="albumDetailName"></h3>
+                        <div style="width: 100px;"></div> <!-- 占位，保持标题居中 -->
+                    </div>
+                    
+                    <!-- 相册信息 -->
+                    <div class="album-info" style="margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 10px;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div id="albumCover" style="width: 80px; height: 80px; border-radius: 8px; overflow: hidden; background-color: #e0e0e0;"></div>
+                            <div>
+                                <p><strong>分类:</strong> <span id="albumDetailCategory"></span></p>
+                                <p><strong>图片数量:</strong> <span id="albumDetailImageCount"></span></p>
+                                <p><strong>更新时间:</strong> <span id="albumDetailUpdatedAt"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 图片网格 -->
+                    <div id="albumImagesGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;"></div>
+                </div>
             </div>
         </div>
 
@@ -1201,6 +1259,12 @@
             setupFileUpload();
             setupCommunity();
             updateAuthState();
+            
+            // 添加返回相册列表按钮的点击事件
+            const backToAlbumsBtn = document.getElementById('backToAlbums');
+            if (backToAlbumsBtn) {
+                backToAlbumsBtn.addEventListener('click', backToAlbums);
+            }
         }
 
         // 设置导航
@@ -2054,7 +2118,7 @@
                 return;
             }
 
-            albumsList.innerHTML = '<p>加载中...</p>';
+            albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载中...</p>';
 
             try {
                 const headers = { 'Authorization': 'Bearer ' + currentToken };
@@ -2071,11 +2135,11 @@
                 if (data.success) {
                     displayAlbums(data.albums);
                 } else {
-                    albumsList.innerHTML = '<p>加载失败，请稍后重试</p>';
+                    albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载失败，请稍后重试</p>';
                 }
             } catch (error) {
                 console.error('加载相册错误:', error);
-                albumsList.innerHTML = '<p>加载失败，请稍后重试</p>';
+                albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载失败，请稍后重试</p>';
             }
         }
 
@@ -2085,26 +2149,67 @@
             albumsList.innerHTML = '';
 
             if (albums.length === 0) {
-                albumsList.innerHTML = '<p>暂无相册，识别花卉并保存到相册后将自动创建</p>';
+                albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">暂无相册，识别花卉并保存到相册后将自动创建</p>';
                 return;
             }
 
             albums.forEach(album => {
+                // 确定相册类型（系统分类或用户自定义）
+                const isSystemAlbum = album.category && album.category !== 'custom';
+                
+                // 创建相册卡片
                 const albumCard = document.createElement('div');
                 albumCard.className = 'album-card';
-                albumCard.style.cssText = 'border:1px solid #ddd;border-radius:10px;padding:15px;margin:10px 0;cursor:pointer;';
-                albumCard.innerHTML = `
-                    <h3>${album.name}</h3>
-                    <p>分类: ${album.category}</p>
-                    <p>图片数量: ${album.image_count}</p>
+                albumCard.style.cssText = `
+                    border: 1px solid #ddd;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    cursor: pointer;
+                    transition: transform 0.2s, box-shadow 0.2s;
+                    background-color: white;
                 `;
+                
+                // 卡片悬停效果
+                albumCard.addEventListener('mouseover', function() {
+                    this.style.transform = 'translateY(-5px)';
+                    this.style.boxShadow = '0 10px 20px rgba(0, 0, 0, 0.1)';
+                });
+                
+                albumCard.addEventListener('mouseout', function() {
+                    this.style.transform = 'translateY(0)';
+                    this.style.boxShadow = 'none';
+                });
+                
+                // 卡片内容
+                const coverImage = album.cover_image || 'https://via.placeholder.com/300x200?text=No+Image';
+                const updatedAt = new Date(album.updated_at).toLocaleString();
+                
+                albumCard.innerHTML = `
+                    <div style="height: 180px; overflow: hidden;">
+                        <img src="${coverImage}" alt="${album.name}" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
+                    <div style="padding: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 600;">${album.name}</h3>
+                            ${isSystemAlbum ? 
+                                '<span style="padding: 2px 8px; background-color: #e3f2fd; color: #1976d2; border-radius: 10px; font-size: 12px;">系统分类</span>' : 
+                                '<span style="padding: 2px 8px; background-color: #f3e5f5; color: #7b1fa2; border-radius: 10px; font-size: 12px;">自定义</span>'
+                            }
+                        </div>
+                        <p style="margin: 5px 0; font-size: 14px; color: #666;">${album.image_count} 张图片</p>
+                        <p style="margin: 5px 0; font-size: 12px; color: #999;">更新于 ${updatedAt}</p>
+                    </div>
+                `;
+                
+                // 点击卡片查看详情
                 albumCard.onclick = function() {
                     viewAlbumDetail(album.id);
                 };
+                
                 albumsList.appendChild(albumCard);
             });
         }
-
+        
         // 查看相册详情
         async function viewAlbumDetail(albumId) {
             try {
@@ -2124,7 +2229,24 @@
                 console.log('查看相册详情 - 响应体:', data);
                 
                 if (data.success) {
-                    displayAlbumDetail(data.album, data.images);
+                    // 显示相册详情页
+                    document.getElementById('albumsOverview').style.display = 'none';
+                    document.getElementById('albumDetail').style.display = 'block';
+                    
+                    // 填充相册信息
+                    const album = data.album;
+                    document.getElementById('albumDetailName').textContent = album.name;
+                    document.getElementById('albumDetailCategory').textContent = album.category || '未分类';
+                    document.getElementById('albumDetailImageCount').textContent = album.image_count || 0;
+                    document.getElementById('albumDetailUpdatedAt').textContent = new Date(album.updated_at).toLocaleString();
+                    
+                    // 设置相册封面
+                    const albumCover = document.getElementById('albumCover');
+                    const coverImage = album.cover_image || 'https://via.placeholder.com/80x80?text=No+Image';
+                    albumCover.innerHTML = `<img src="${coverImage}" alt="${album.name}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                    
+                    // 显示相册图片
+                    displayAlbumImages(data.images);
                 } else {
                     alert('加载相册详情失败');
                 }
@@ -2133,20 +2255,13 @@
                 alert('加载失败');
             }
         }
-
-        // 显示相册详情
-        function displayAlbumDetail(album, images) {
-            const modal = document.getElementById('albumDetailModal');
-            if (!modal) {
-                console.error('相册详情模态框不存在');
-                return;
-            }
-            const modalContent = modal.querySelector('.modal-content');
+        
+        // 显示相册图片
+        function displayAlbumImages(images) {
+            const imagesGrid = document.getElementById('albumImagesGrid');
+            imagesGrid.innerHTML = '';
             
-            // 构建图片列表 HTML
-            let imagesHtml = '';
             if (images && images.length > 0) {
-                imagesHtml = '<div class="album-images-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px;">';
                 images.forEach(img => {
                     // 解析花卉名称和置信度
                     const imageDescription = img.image_description || '';
@@ -2165,33 +2280,89 @@
                         created_at: img.created_at
                     };
                     
-                    imagesHtml += `
-                        <div class="album-image-card" style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; text-align: center; cursor: pointer; transition: transform 0.2s;">
-                            <img src="${imageData.image_path}" alt="${imageData.flower_name}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 5px;" onclick="previewImage('${imageData.image_path}', '${imageData.flower_name}', '${imageData.confidence}');">
-                            <p style="margin: 10px 0 5px 0; font-weight: bold; font-size: 14px;">${imageData.flower_name}</p>
-                            ${imageData.confidence ? `<p style="margin: 0; color: #666; font-size: 12px;">置信度：${imageData.confidence}</p>` : ''}
+                    // 创建图片卡片
+                    const imageCard = document.createElement('div');
+                    imageCard.className = 'album-image-card';
+                    imageCard.style.cssText = `
+                        border: 1px solid #ddd;
+                        border-radius: 8px;
+                        overflow: hidden;
+                        text-align: center;
+                        background-color: white;
+                        position: relative;
+                        transition: transform 0.2s, box-shadow 0.2s;
+                    `;
+                    
+                    // 卡片悬停效果
+                    imageCard.addEventListener('mouseover', function() {
+                        this.style.transform = 'translateY(-5px)';
+                        this.style.boxShadow = '0 10px 20px rgba(0, 0, 0, 0.1)';
+                        this.querySelector('.image-actions').style.display = 'flex';
+                    });
+                    
+                    imageCard.addEventListener('mouseout', function() {
+                        this.style.transform = 'translateY(0)';
+                        this.style.boxShadow = 'none';
+                        this.querySelector('.image-actions').style.display = 'none';
+                    });
+                    
+                    // 图片卡片内容
+                    const createdAt = new Date(imageData.created_at * 1000).toLocaleString();
+                    
+                    imageCard.innerHTML = `
+                        <div style="height: 150px; overflow: hidden; cursor: pointer;" onclick="previewImage('${imageData.image_path}', '${imageData.flower_name}', '${imageData.confidence}');">
+                            <img src="${imageData.image_path}" alt="${imageData.flower_name}" style="width: 100%; height: 100%; object-fit: cover;">
+                        </div>
+                        <div style="padding: 10px;">
+                            <p style="margin: 5px 0; font-weight: bold; font-size: 14px;">${imageData.flower_name}</p>
+                            ${imageData.confidence ? `<p style="margin: 2px 0; color: #666; font-size: 12px;">置信度：${imageData.confidence}</p>` : ''}
+                            <p style="margin: 2px 0; color: #999; font-size: 11px;">${createdAt}</p>
+                        </div>
+                        <div class="image-actions" style="position: absolute; top: 10px; right: 10px; display: none; flex-direction: column; gap: 5px; z-index: 10;">
+                            <button onclick="event.stopPropagation(); shareImage('${imageData.image_path}');" style="width: 30px; height: 30px; border: none; border-radius: 50%; background-color: rgba(255, 255, 255, 0.8); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+                            </button>
+                            <button onclick="event.stopPropagation(); moveImage(${img.id});" style="width: 30px; height: 30px; border: none; border-radius: 50%; background-color: rgba(255, 255, 255, 0.8); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="15 19 12 22 9 19"></polyline><polyline points="19 9 22 12 19 15"></polyline><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line></svg>
+                            </button>
+                            <button onclick="event.stopPropagation(); deleteImage(${img.id});" style="width: 30px; height: 30px; border: none; border-radius: 50%; background-color: rgba(255, 255, 255, 0.8); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            </button>
                         </div>
                     `;
+                    
+                    imagesGrid.appendChild(imageCard);
                 });
-                imagesHtml += '</div>';
             } else {
-                imagesHtml = '<p style="text-align: center; color: #999; margin-top: 20px;">暂无图片</p>';
+                imagesGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">暂无图片</p>';
             }
-            
-            modalContent.innerHTML = `
-                <div class="modal-header">
-                    <h2>${album.name}</h2>
-                    <span class="close" onclick="closeAlbumDetailModal()">&times;</span>
-                </div>
-                <div class="modal-body" style="padding: 20px;">
-                    <p><strong>分类:</strong> ${album.category || '未分类'}</p>
-                    <p><strong>图片数量:</strong> ${album.image_count || 0}</p>
-                    ${album.description ? `<p><strong>描述:</strong> ${album.description}</p>` : ''}
-                    ${imagesHtml}
-                </div>
-            `;
-            
-            modal.style.display = 'block';
+        }
+        
+        // 返回相册列表
+        function backToAlbums() {
+            document.getElementById('albumDetail').style.display = 'none';
+            document.getElementById('albumsOverview').style.display = 'block';
+            loadAlbums();
+        }
+        
+        // 分享图片
+        function shareImage(imagePath) {
+            // 这里可以实现分享功能，例如生成分享链接或打开分享对话框
+            alert('分享功能暂未实现');
+        }
+        
+        // 移动图片到其他相册
+        function moveImage(imageId) {
+            // 这里可以实现移动图片功能，例如打开移动对话框
+            alert('移动功能暂未实现');
+        }
+        
+        // 删除图片
+        function deleteImage(imageId) {
+            if (confirm('确定要删除这张图片吗？')) {
+                // 这里可以实现删除功能，例如调用删除接口
+                alert('删除功能暂未实现');
+            }
         }
         
         // 预览图片
