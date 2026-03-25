@@ -1331,7 +1331,7 @@ class SQLDatabaseManager:
     def get_user_albums(self, user_id, category=None):
         """获取用户相册列表"""
         conn = self.get_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
         
         try:
             # 获取用户所有相册
