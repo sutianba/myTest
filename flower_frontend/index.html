@@ -1586,6 +1586,7 @@
             const userInfo = document.getElementById('userInfo');
             const usernameDisplay = document.getElementById('usernameDisplay');
             const createPostSection = document.getElementById('createPostSection');
+            const saveToAlbum = document.getElementById('saveToAlbum');
 
             if (user && token) {
                 authButtons.style.display = 'none';
@@ -1594,10 +1595,22 @@
                 userInfo.style.gap = '15px';
                 usernameDisplay.textContent = user.username;
                 createPostSection.style.display = 'block';
+                // 用户已登录，启用保存到相册选项
+                if (saveToAlbum) {
+                    saveToAlbum.disabled = false;
+                    saveToAlbum.parentElement.style.opacity = '1';
+                }
             } else {
                 authButtons.style.display = 'flex';
                 userInfo.style.display = 'none';
                 createPostSection.style.display = 'none';
+                // 用户未登录，禁用保存到相册选项
+                if (saveToAlbum) {
+                    saveToAlbum.disabled = true;
+                    saveToAlbum.checked = false;
+                    saveToAlbum.parentElement.style.opacity = '0.5';
+                    saveToAlbum.parentElement.title = '请先登录后再保存到相册';
+                }
             }
         }
 

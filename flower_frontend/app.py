@@ -714,78 +714,104 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
         'final_category': final_category
     }
     
-    if save_to_album and user_id and detection_results:
+    if save_to_album and user_id:
         print(f"开始保存到相册: save_to_album={save_to_album}, user_id={user_id}, detection_results={detection_results}")
         try:
-            flower_name = detection_results[0]['name']
-            confidence = detection_results[0]['confidence']
-            
-            print(f"获取用户相册: user_id={user_id}, flower_name={flower_name}")
-            albums = get_user_albums(user_id, flower_name)
-            print(f"获取到相册: {albums}")
-            
-            if albums:
-                album = albums[0]
-                print(f"使用现有相册: {album}")
+            # 1. 确定花卉名称和置信度
+            flower_name = None
+            confidence = None
+            if detection_results:
+                flower_name = detection_results[0]['name']
+                confidence = detection_results[0]['confidence']
+                final_category = flower_name
             else:
-                print(f"创建新相册: user_id={user_id}, name={flower_name}相册, category={flower_name}")
-                album_id = create_album(user_id, f"{flower_name}相册", flower_name)
-                print(f"创建相册成功, album_id={album_id}")
-                album = get_album_by_id(album_id, user_id)
-                print(f"获取新相册: {album}")
+                flower_name = "未知花卉"
+                confidence = 0.0
+                final_category = "未知"
             
-            if album:
-                print(f"开始保存图片: album_id={album['id']}")
-                timestamp = int(time.time())
-                image_filename = f"recognition_{user_id}_{timestamp}.jpg"
-                uploads_dir = os.path.join(BASE_DIR, 'static', 'uploads', 'recognition')
-                os.makedirs(uploads_dir, exist_ok=True)
-                image_path = os.path.join(uploads_dir, image_filename)
+            # 2. 保存图片文件
+            timestamp = int(time.time())
+            image_filename = f"recognition_{user_id}_{timestamp}.jpg"
+            uploads_dir = os.path.join(BASE_DIR, 'static', 'uploads', 'recognition')
+            os.makedirs(uploads_dir, exist_ok=True)
+            image_path = os.path.join(uploads_dir, image_filename)
+            
+            with open(image_path, 'wb') as f:
+                f.write(image_bytes)
+            
+            relative_path = f"/static/uploads/recognition/{image_filename}"
+            print(f"保存图片成功, relative_path={relative_path}")
+            
+            # 3. 保存识别结果
+            print(f"保存识别结果: user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}")
+            result_id = save_recognition_result(
+                user_id, 
+                relative_path, 
+                flower_name, 
+                confidence,
+                shoot_time=shoot_time,
+                shoot_year=shoot_year,
+                shoot_month=shoot_month,
+                shoot_season=shoot_season,
+                latitude=latitude,
+                longitude=longitude,
+                location_text=location_text,
+                region_label=region_label,
+                final_category=final_category
+            )
+            print(f"保存识别结果成功, result_id={result_id}")
+            
+            # 4. 处理相册逻辑
+            album = None
+            if detection_results:
+                # 有识别结果，尝试按花卉分类保存
+                print(f"获取用户相册: user_id={user_id}, flower_name={flower_name}")
+                albums = get_user_albums(user_id, flower_name)
+                print(f"获取到相册: {albums}")
                 
-                with open(image_path, 'wb') as f:
-                    f.write(image_bytes)
-                
-                relative_path = f"/static/uploads/recognition/{image_filename}"
-                print(f"保存图片成功, relative_path={relative_path}")
-                
-                print(f"保存识别结果: user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}")
-                result_id = save_recognition_result(
-                    user_id, 
-                    relative_path, 
-                    flower_name, 
-                    confidence,
-                    shoot_time=shoot_time,
-                    shoot_year=shoot_year,
-                    shoot_month=shoot_month,
-                    shoot_season=shoot_season,
-                    latitude=latitude,
-                    longitude=longitude,
-                    location_text=location_text,
-                    region_label=region_label,
-                    final_category=final_category
-                )
-                print(f"保存识别结果成功, result_id={result_id}")
-                
-                print(f"添加图片到相册: album_id={album['id']}, user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}, result_id={result_id}")
-                add_image_to_album(album['id'], user_id, relative_path, flower_name, confidence, result_id)
+                if albums:
+                    album = albums[0]
+                    print(f"使用现有相册: {album}")
+                else:
+                    print(f"创建新相册: user_id={user_id}, name={flower_name}相册, category={flower_name}")
+                    album_id = create_album(user_id, f"{flower_name}相册", flower_name)
+                    print(f"创建相册成功, album_id={album_id}")
+                    album = get_album_by_id(album_id, user_id)
+                    print(f"获取新相册: {album}")
+            
+            # 5. 添加图片到相册（如果没有相册，add_image_to_album会自动创建默认相册）
+            album_id = album['id'] if album else None
+            print(f"添加图片到相册: album_id={album_id}, user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}, result_id={result_id}")
+            image_id = add_image_to_album(album_id, user_id, relative_path, flower_name, confidence, result_id)
+            
+            if image_id:
                 print(f"添加图片到相册成功")
+                # 获取最终使用的相册信息
+                if not album:
+                    # 使用了默认相册，获取默认相册信息
+                    from db import get_user_albums as db_get_user_albums
+                    default_albums = db_get_user_albums(user_id, '默认')
+                    if default_albums:
+                        album = default_albums[0]
                 
                 saved_album_info = {
-                    'album_id': album['id'],
-                    'album_name': album['name'],
-                    'category': album['category'],
+                    'album_id': album['id'] if album else '默认相册',
+                    'album_name': album['name'] if album else '默认相册',
+                    'category': album['category'] if album else '默认',
                     'image_path': relative_path
                 }
                 
                 return_result['saved_to_album'] = saved_album_info
                 print(f"保存到相册完成, saved_album_info={saved_album_info}")
+            else:
+                print("图片已存在于相册中，跳过保存")
         except Exception as e:
             print(f"保存到相册失败: {e}")
             import traceback
             traceback.print_exc()
             return_result['save_error'] = str(e)
     else:
-        print(f"不保存到相册: save_to_album={save_to_album}, user_id={user_id}, detection_results={detection_results}")
+        print(f"不保存到相册: save_to_album={save_to_album}, user_id={user_id}")
     
     return return_result
 

@@ -1430,11 +1430,45 @@ class SQLDatabaseManager:
             image_name = os.path.basename(image_path)
             image_description = f"{flower_name} - 识别置信度：{confidence:.2f}" if flower_name and confidence else ""
             
+            # 1. 检查是否存在重复的识别结果
+            if recognition_result_id:
+                cursor.execute(
+                    "SELECT id FROM album_images WHERE recognition_result_id = %s AND deleted_at IS NULL",
+                    (recognition_result_id,)
+                )
+                if cursor.fetchone():
+                    # 已存在，避免重复插入
+                    print(f"识别结果 {recognition_result_id} 已存在于相册中，跳过重复插入")
+                    return None
+            
+            # 2. 确保有相册ID，如果没有则创建默认相册
+            if not album_id:
+                # 检查是否已有默认相册
+                cursor.execute(
+                    "SELECT id FROM albums WHERE user_id = %s AND name = '默认相册'",
+                    (user_id,)
+                )
+                default_album = cursor.fetchone()
+                
+                if not default_album:
+                    # 创建默认相册
+                    cursor.execute(
+                        "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                        (user_id, '默认相册', '默认', None, '默认相册', 0, now, now)
+                    )
+                    album_id = cursor.lastrowid
+                    print(f"创建默认相册成功，album_id={album_id}")
+                else:
+                    album_id = default_album['id']
+                    print(f"使用现有默认相册，album_id={album_id}")
+            
+            # 3. 插入图片到相册
             cursor.execute(
                 "INSERT INTO album_images (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (album_id, user_id, image_path, image_name, image_description, recognition_result_id, now)
             )
             
+            # 4. 更新相册图片数量
             cursor.execute(
                 "UPDATE albums SET image_count = image_count + 1, updated_at = %s WHERE id = %s",
                 (now, album_id)
