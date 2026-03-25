@@ -2046,6 +2046,9 @@
             if (!albumsList) return;
 
             const currentToken = getToken();
+            console.log('当前读取到的 token:', currentToken);
+            console.log('token 是否存在:', !!currentToken);
+            
             if (!currentToken) {
                 albumsList.innerHTML = '<p>请先登录查看相册</p>';
                 return;
@@ -2054,10 +2057,16 @@
             albumsList.innerHTML = '<p>加载中...</p>';
 
             try {
+                const headers = { 'Authorization': 'Bearer ' + currentToken };
+                console.log('请求头:', headers);
+                
                 const response = await fetch('/api/albums', {
-                    headers: { 'Authorization': 'Bearer ' + currentToken }
+                    headers: headers
                 });
+                
+                console.log('响应状态码:', response.status);
                 const data = await response.json();
+                console.log('响应体:', data);
 
                 if (data.success) {
                     displayAlbums(data.albums);
@@ -2100,10 +2109,20 @@
         async function viewAlbumDetail(albumId) {
             try {
                 const currentToken = getToken();
+                console.log('查看相册详情 - 当前读取到的 token:', currentToken);
+                console.log('查看相册详情 - token 是否存在:', !!currentToken);
+                
+                const headers = { 'Authorization': 'Bearer ' + currentToken };
+                console.log('查看相册详情 - 请求头:', headers);
+                
                 const response = await fetch(`/api/albums/${albumId}`, {
-                    headers: { 'Authorization': 'Bearer ' + currentToken }
+                    headers: headers
                 });
+                
+                console.log('查看相册详情 - 响应状态码:', response.status);
                 const data = await response.json();
+                console.log('查看相册详情 - 响应体:', data);
+                
                 if (data.success) {
                     displayAlbumDetail(data.album, data.images);
                 } else {
@@ -2129,15 +2148,28 @@
             if (images && images.length > 0) {
                 imagesHtml = '<div class="album-images-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px;">';
                 images.forEach(img => {
-                    const flowerName = img.image_description ? img.image_description.split(' - ')[0] : '未知花卉';
-                    const confidence = img.image_description && img.image_description.includes('置信度') ? 
-                        img.image_description.split('置信度：')[1] : '';
+                    // 解析花卉名称和置信度
+                    const imageDescription = img.image_description || '';
+                    const parts = imageDescription.split(' - ');
+                    const flowerName = parts[0] || '未知花卉';
+                    let confidence = '';
+                    if (parts.length > 1 && parts[1].includes('置信度：')) {
+                        confidence = parts[1].split('置信度：')[1];
+                    }
+                    
+                    // 统一字段名
+                    const imageData = {
+                        image_path: img.image_path,
+                        flower_name: flowerName,
+                        confidence: confidence,
+                        created_at: img.created_at
+                    };
                     
                     imagesHtml += `
-                        <div class="album-image-card" style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; text-align: center;">
-                            <img src="${img.image_path}" alt="${flowerName}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 5px;">
-                            <p style="margin: 10px 0 5px 0; font-weight: bold; font-size: 14px;">${flowerName}</p>
-                            ${confidence ? `<p style="margin: 0; color: #666; font-size: 12px;">置信度：${confidence}</p>` : ''}
+                        <div class="album-image-card" style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; text-align: center; cursor: pointer; transition: transform 0.2s;">
+                            <img src="${imageData.image_path}" alt="${imageData.flower_name}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 5px;" onclick="previewImage('${imageData.image_path}', '${imageData.flower_name}', '${imageData.confidence}');">
+                            <p style="margin: 10px 0 5px 0; font-weight: bold; font-size: 14px;">${imageData.flower_name}</p>
+                            ${imageData.confidence ? `<p style="margin: 0; color: #666; font-size: 12px;">置信度：${imageData.confidence}</p>` : ''}
                         </div>
                     `;
                 });
@@ -2160,6 +2192,57 @@
             `;
             
             modal.style.display = 'block';
+        }
+        
+        // 预览图片
+        function previewImage(imagePath, flowerName, confidence) {
+            // 创建预览模态框
+            let previewModal = document.getElementById('imagePreviewModal');
+            if (!previewModal) {
+                previewModal = document.createElement('div');
+                previewModal.id = 'imagePreviewModal';
+                previewModal.style.cssText = `
+                    display: none;
+                    position: fixed;
+                    z-index: 1000;
+                    left: 0;
+                    top: 0;
+                    width: 100%;
+                    height: 100%;
+                    overflow: auto;
+                    background-color: rgba(0,0,0,0.9);
+                `;
+                previewModal.innerHTML = `
+                    <div style="margin: 10% auto; padding: 20px; width: 80%; max-width: 800px; background-color: white; border-radius: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 id="previewFlowerName"></h2>
+                            <span onclick="closeImagePreview()" style="font-size: 30px; font-weight: bold; cursor: pointer;">&times;</span>
+                        </div>
+                        <div style="text-align: center;">
+                            <img id="previewImage" style="max-width: 100%; max-height: 500px; object-fit: contain;">
+                            <p id="previewConfidence" style="margin-top: 15px; font-size: 16px;"></p>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(previewModal);
+            }
+            
+            // 设置预览内容
+            document.getElementById('previewFlowerName').textContent = flowerName;
+            document.getElementById('previewImage').src = imagePath;
+            document.getElementById('previewImage').alt = flowerName;
+            document.getElementById('previewConfidence').textContent = confidence ? `置信度：${confidence}` : '';
+            
+            // 显示预览模态框
+            previewModal.style.display = 'block';
+        }
+        
+        // 关闭图片预览
+        function closeImagePreview() {
+            const previewModal = document.getElementById('imagePreviewModal');
+            if (previewModal) {
+                previewModal.style.display = 'none';
+            }
         }
 
         // 关闭相册详情模态框
