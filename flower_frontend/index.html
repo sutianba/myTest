@@ -2109,9 +2109,10 @@
             const albumsList = document.getElementById('albumsList');
             if (!albumsList) return;
 
-            const currentToken = getToken();
+            // 直接从 localStorage 读取 token，确保获取到最新的 token
+            const currentToken = localStorage.getItem('token');
             console.log('=== 加载相册调试信息 ===');
-            console.log('当前读取到的 token:', currentToken ? currentToken.substring(0, 20) + '...' : 'null');
+            console.log('currentToken =', currentToken);
             console.log('token 是否存在:', !!currentToken);
             
             if (!currentToken) {
@@ -2126,7 +2127,8 @@
                 const headers = {
                     'Authorization': 'Bearer ' + currentToken
                 };
-                console.log('请求头:', headers);
+                console.log('headers =', headers);
+                console.log('Authorization =', headers.Authorization);
                 console.log('请求 URL: /api/albums');
                 
                 const response = await fetch('/api/albums', {
