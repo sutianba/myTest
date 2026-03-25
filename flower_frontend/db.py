@@ -1424,7 +1424,6 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            now = int(time.time())
             # 从image_path提取image_name
             import os
             image_name = os.path.basename(image_path)
@@ -1464,8 +1463,8 @@ class SQLDatabaseManager:
             
             # 3. 插入图片到相册
             cursor.execute(
-                "INSERT INTO album_images (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (album_id, user_id, image_path, image_name, image_description, recognition_result_id, now)
+                "INSERT INTO album_images (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)",
+                (album_id, user_id, image_path, image_name, image_description, recognition_result_id)
             )
             
             # 4. 更新相册图片数量
