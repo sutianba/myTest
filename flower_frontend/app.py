@@ -194,8 +194,13 @@ def verify_jwt(token):
         payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         return payload
     except jwt.ExpiredSignatureError:
+        print(f"JWT验证失败: 令牌已过期")
         return None
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        print(f"JWT验证失败: 无效的令牌 - {str(e)}")
+        return None
+    except Exception as e:
+        print(f"JWT验证失败: 未知错误 - {str(e)}")
         return None
 
 # 认证中间件

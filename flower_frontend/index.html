@@ -2109,15 +2109,20 @@
             const albumsList = document.getElementById('albumsList');
             if (!albumsList) return;
 
+            // 记录调用时间
+            const callTime = new Date().toISOString();
+            console.log('=== 加载相册开始 ===');
+            console.log('调用时间:', callTime);
+
             // 直接从 localStorage 读取 token，确保获取到最新的 token
             const currentToken = localStorage.getItem('token');
-            console.log('=== 加载相册调试信息 ===');
             console.log('currentToken =', currentToken);
             console.log('token 是否存在:', !!currentToken);
             
             if (!currentToken) {
                 albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">请先登录查看相册</p>';
                 console.log('token 不存在，显示登录提示');
+                console.log('=== 加载相册结束 ===');
                 return;
             }
 
@@ -2150,7 +2155,7 @@
                 console.error('加载相册错误:', error);
                 albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载失败，请稍后重试</p>';
             } finally {
-                console.log('=== 加载相册调试结束 ===');
+                console.log('=== 加载相册结束 ===');
             }
         }
 
