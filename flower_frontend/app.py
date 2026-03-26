@@ -42,6 +42,8 @@ if not TEST_MODE:
             create_system_log, get_system_logs, record_traffic, get_traffic_stats, get_traffic_by_endpoint,
             record_server_status, get_server_status, get_latest_server_metrics,
             record_admin_operation, get_admin_operations, get_all_admins, update_user_role, get_system_summary,
+            # 用户管理函数
+            get_users, update_any_user_role, reset_user_password,
             # 用户端新功能
             update_user_profile, get_user_recognition_history, delete_recognition_result, save_recognition_result,
             create_album, get_user_albums, get_album_by_id, update_album, delete_album,
@@ -94,8 +96,8 @@ print("=======================")
 # 定义静态文件目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# JWT配置
-app.config['SECRET_KEY'] = 'flower_recognition_secret_key'
+# JWT配置 - 从环境变量读取密钥，如无则使用随机生成的密钥
+app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', os.urandom(32).hex())
 app.config['JWT_EXPIRATION_DELTA'] = 60 * 60 * 24 * 365  # JWT过期时间：365天（1年）
 
 # JWT相关导入
@@ -244,9 +246,8 @@ def permission_required(permission):
                     return jsonify({'success': False, 'error': '权限不足'}), 403
             except Exception as e:
                 print(f"检查权限时发生错误: {str(e)}")
-                # 如果权限检查失败，直接返回成功，允许用户发帖
-                # 这是临时解决方案，用于排查问题
-                return f(*args, **kwargs)
+                # 权限检查失败时返回错误，不允许继续执行
+                return jsonify({'success': False, 'error': '权限检查失败'}), 500
             
             return f(*args, **kwargs)
         decorated_function.__name__ = f.__name__
@@ -1608,16 +1609,93 @@ def update_user_role_api(user_id):
         print(f"更新用户角色时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/admin/operations', methods=['GET'])
+@app.route('/api/admin/users', methods=['GET'])
 @auth_required
 @permission_required('manage_admins')
+def get_users_api():
+    """获取用户列表（支持搜索和分页）"""
+    try:
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 10))
+        offset = (page - 1) * limit
+        search = request.args.get('search', '')
+        role = request.args.get('role', '')
+        
+        users, total = get_users(search, role, limit, offset)
+        return jsonify({'success': True, 'users': users, 'total': total})
+    except Exception as e:
+        print(f"获取用户列表时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/users/<int:user_id>/role', methods=['PUT'])
+@auth_required
+@permission_required('manage_admins')
+def update_any_user_role_api(user_id):
+    """更新任意用户角色（管理员功能）"""
+    try:
+        data = request.get_json()
+        role = data.get('role')
+        
+        if not role:
+            return jsonify({'success': False, 'error': '缺少角色参数'}), 400
+        
+        # 更新用户角色
+        success = update_any_user_role(user_id, role)
+        
+        if success:
+            # 记录管理员操作
+            ip_address = request.remote_addr
+            record_admin_operation(g.user_id, g.username, 'update_user_role', 'user', user_id, f'更新用户角色为 {role}', ip_address)
+            return jsonify({'success': True, 'message': '角色更新成功'})
+        else:
+            return jsonify({'success': False, 'error': '角色更新失败'}), 500
+    except Exception as e:
+        print(f"更新用户角色时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/users/<int:user_id>/password', methods=['PUT'])
+@auth_required
+@permission_required('manage_admins')
+def reset_user_password_api(user_id):
+    """重置用户密码（管理员功能）"""
+    try:
+        data = request.get_json()
+        new_password = data.get('password')
+        
+        if not new_password:
+            return jsonify({'success': False, 'error': '缺少密码参数'}), 400
+        
+        if len(new_password) < 6:
+            return jsonify({'success': False, 'error': '密码长度至少为6位'}), 400
+        
+        # 重置密码
+        success = reset_user_password(user_id, new_password)
+        
+        if success:
+            # 记录管理员操作
+            ip_address = request.remote_addr
+            record_admin_operation(g.user_id, g.username, 'reset_password', 'user', user_id, '重置用户密码', ip_address)
+            return jsonify({'success': True, 'message': '密码重置成功'})
+        else:
+            return jsonify({'success': False, 'error': '密码重置失败'}), 500
+    except Exception as e:
+        print(f"重置用户密码时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/operations', methods=['GET'])
+@auth_required
+@permission_required('view_operations')
 def get_admin_operations_api():
-    """获取管理员操作记录"""
+    """获取管理员操作记录（超级管理员可查看所有，普通管理员只能查看自己的）"""
     try:
         admin_id = request.args.get('admin_id', type=int)
         operation_type = request.args.get('operation_type')
         limit = int(request.args.get('limit', 100))
         offset = int(request.args.get('offset', 0))
+        
+        # 如果不是超级管理员，只能查看自己的操作记录
+        if g.role != 'super_admin':
+            admin_id = g.user_id
         
         operations = get_admin_operations(admin_id, operation_type, limit, offset)
         return jsonify({'success': True, 'operations': operations})

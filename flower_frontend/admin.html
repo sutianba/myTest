@@ -267,6 +267,7 @@
                 <li><a href="#system-logs" data-section="system-logs">系统日志</a></li>
                 <li><a href="#traffic-stats" data-section="traffic-stats">流量统计</a></li>
                 <li><a href="#server-status" data-section="server-status">服务器状态</a></li>
+                <li><a href="#user-management" data-section="user-management">用户管理</a></li>
                 <li><a href="#admin-management" data-section="admin-management">管理员管理</a></li>
                 <li><a href="#announcement-management" data-section="announcement-management">公告管理</a></li>
                 <li><a href="#feedback-management" data-section="feedback-management">反馈管理</a></li>
@@ -481,6 +482,48 @@
                     </div>
                 </div>
 
+                <!-- 用户管理 -->
+                <div id="user-management" class="section" style="display: none;">
+                    <div class="content-header">
+                        <h2>用户管理</h2>
+                        <p>管理系统所有用户账户</p>
+                    </div>
+                    
+                    <!-- 搜索和筛选 -->
+                    <div class="filter-bar" style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center;">
+                        <input type="text" id="userSearchInput" placeholder="搜索用户名或邮箱..." style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; width: 250px;">
+                        <select id="userRoleFilter" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;">
+                            <option value="">全部角色</option>
+                            <option value="user">普通用户</option>
+                            <option value="admin">管理员</option>
+                            <option value="super_admin">超级管理员</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadUsers()">搜索</button>
+                        <button class="btn btn-secondary" onclick="resetUserFilter()">重置</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="users-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户名</th>
+                                    <th>邮箱</th>
+                                    <th>角色</th>
+                                    <th>注册时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-body">
+                                <tr><td colspan="6" class="loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- 分页 -->
+                    <div class="pagination" id="userPagination" style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;"></div>
+                </div>
+
                 <!-- 管理员管理 -->
                 <div id="admin-management" class="section" style="display: none;">
                     <div class="content-header">
@@ -646,6 +689,7 @@
     </div>
 
     <!-- 角色更新对话框 -->
+    <!-- 角色更新对话框 -->
     <div id="role-dialog" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; width: 400px;">
             <h3>更新用户角色</h3>
@@ -664,6 +708,29 @@
             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
                 <button onclick="closeRoleDialog()">取消</button>
                 <button onclick="saveRole()" style="background: #3498db; color: white;">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重置密码对话框 -->
+    <div id="reset-password-dialog" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; width: 400px;">
+            <h3>重置用户密码</h3>
+            <div class="form-group">
+                <label>用户</label>
+                <input type="text" id="reset-password-user-info" readonly>
+            </div>
+            <div class="form-group">
+                <label>新密码</label>
+                <input type="password" id="new-password" placeholder="请输入新密码" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div class="form-group">
+                <label>确认密码</label>
+                <input type="password" id="confirm-password" placeholder="请再次输入新密码" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button onclick="closeResetPasswordDialog()">取消</button>
+                <button onclick="saveNewPassword()" style="background: #e74c3c; color: white;">重置密码</button>
             </div>
         </div>
     </div>
@@ -731,6 +798,8 @@
                         loadTrafficStats();
                     } else if (sectionId === 'server-status') {
                         loadServerStatus();
+                    } else if (sectionId === 'user-management') {
+                        loadUsers();
                     } else if (sectionId === 'admin-management') {
                         loadAdmins();
                     } else if (sectionId === 'announcement-management') {
@@ -1009,21 +1078,39 @@
         // 保存角色更新
         function saveRole() {
             const roleName = document.getElementById('new-role').value;
+            const token = localStorage.getItem('token');
             
-            fetch(`/api/admin/admins/${currentUserId}/role`, {
+            // 判断当前是在用户管理还是管理员管理页面
+            const currentSection = document.querySelector('.section.active')?.id;
+            const isUserManagement = currentSection === 'user-management';
+            
+            const apiUrl = isUserManagement 
+                ? `/api/admin/users/${currentUserId}/role`
+                : `/api/admin/admins/${currentUserId}/role`;
+            
+            const requestBody = isUserManagement
+                ? JSON.stringify({ role: roleName })
+                : JSON.stringify({ role_name: roleName });
+            
+            fetch(apiUrl, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    'Authorization': 'Bearer ' + token
                 },
-                body: JSON.stringify({ role_name: roleName })
+                body: requestBody
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     alert('角色更新成功');
                     closeRoleDialog();
-                    loadAdmins();
+                    // 根据当前页面刷新对应列表
+                    if (isUserManagement) {
+                        loadUsers(currentUserPage);
+                    } else {
+                        loadAdmins();
+                    }
                 } else {
                     alert('角色更新失败: ' + data.error);
                 }
@@ -1032,6 +1119,244 @@
                 console.error('更新角色失败:', error);
                 alert('更新角色失败');
             });
+        }
+
+        // ==================== 用户管理功能 ====================
+        
+        let currentManageUserId = null;
+        let currentUserPage = 1;
+
+        // 加载用户列表
+        function loadUsers(page = 1) {
+            currentUserPage = page;
+            const token = localStorage.getItem('token');
+            const search = document.getElementById('userSearchInput').value.trim();
+            const roleFilter = document.getElementById('userRoleFilter').value;
+            
+            document.getElementById('users-body').innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+            
+            let url = `/api/admin/users?page=${page}&limit=10`;
+            if (search) url += `&search=${encodeURIComponent(search)}`;
+            if (roleFilter) url += `&role=${roleFilter}`;
+            
+            fetch(url, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderUsers(data.users, data.total, page);
+                } else {
+                    document.getElementById('users-body').innerHTML = `<tr><td colspan="6" class="error">加载失败: ${data.error}</td></tr>`;
+                }
+            })
+            .catch(error => {
+                console.error('加载用户列表失败:', error);
+                document.getElementById('users-body').innerHTML = '<tr><td colspan="6" class="error">加载失败</td></tr>';
+            });
+        }
+
+        // 渲染用户列表
+        function renderUsers(users, total, currentPage) {
+            const tbody = document.getElementById('users-body');
+            tbody.innerHTML = '';
+            
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6">暂无用户</td></tr>';
+                document.getElementById('userPagination').innerHTML = '';
+                return;
+            }
+            
+            users.forEach(user => {
+                const date = formatDate(user.created_at);
+                const roleBadge = getRoleBadge(user.role);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.id}</td>
+                    <td>${user.username}</td>
+                    <td>${user.email || '-'}</td>
+                    <td>${roleBadge}</td>
+                    <td>${date}</td>
+                    <td>
+                        <button class="btn btn-sm" onclick="openUserRoleDialog(${user.id}, '${user.username}', '${user.role}')">修改角色</button>
+                        <button class="btn btn-sm btn-warning" onclick="openResetPasswordDialog(${user.id}, '${user.username}')">重置密码</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // 渲染分页
+            const totalPages = Math.ceil(total / 10);
+            renderUserPagination(currentPage, totalPages);
+        }
+
+        // 获取角色标签
+        function getRoleBadge(role) {
+            const roleMap = {
+                'user': '<span style="background: #e3f2fd; color: #1565c0; padding: 4px 12px; border-radius: 20px; font-size: 12px;">普通用户</span>',
+                'admin': '<span style="background: #fff3e0; color: #ef6c00; padding: 4px 12px; border-radius: 20px; font-size: 12px;">管理员</span>',
+                'super_admin': '<span style="background: #ffebee; color: #c62828; padding: 4px 12px; border-radius: 20px; font-size: 12px;">超级管理员</span>'
+            };
+            return roleMap[role] || role;
+        }
+
+        // 渲染分页
+        function renderUserPagination(currentPage, totalPages) {
+            const pagination = document.getElementById('userPagination');
+            let html = '';
+            
+            if (currentPage > 1) {
+                html += `<button class="btn btn-secondary" onclick="loadUsers(${currentPage - 1})">上一页</button>`;
+            }
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === currentPage) {
+                    html += `<button class="btn btn-primary" disabled>${i}</button>`;
+                } else {
+                    html += `<button class="btn btn-secondary" onclick="loadUsers(${i})">${i}</button>`;
+                }
+            }
+            
+            if (currentPage < totalPages) {
+                html += `<button class="btn btn-secondary" onclick="loadUsers(${currentPage + 1})">下一页</button>`;
+            }
+            
+            pagination.innerHTML = html;
+        }
+
+        // 重置筛选
+        function resetUserFilter() {
+            document.getElementById('userSearchInput').value = '';
+            document.getElementById('userRoleFilter').value = '';
+            loadUsers(1);
+        }
+
+        // 打开用户角色对话框
+        function openUserRoleDialog(userId, username, currentRole) {
+            currentManageUserId = userId;
+            document.getElementById('user-info').value = `${username} (当前角色: ${getRoleText(currentRole)})`;
+            document.getElementById('new-role').value = currentRole;
+            document.getElementById('role-dialog').style.display = 'block';
+        }
+
+        // 获取角色文本
+        function getRoleText(role) {
+            const roleMap = { 'user': '普通用户', 'admin': '管理员', 'super_admin': '超级管理员' };
+            return roleMap[role] || role;
+        }
+
+        // 保存用户角色
+        function saveUserRole() {
+            const roleName = document.getElementById('new-role').value;
+            const token = localStorage.getItem('token');
+            
+            fetch(`/api/admin/users/${currentManageUserId}/role`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ role: roleName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('角色更新成功');
+                    closeRoleDialog();
+                    loadUsers(currentUserPage);
+                } else {
+                    alert('角色更新失败: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('更新角色失败:', error);
+                alert('更新角色失败');
+            });
+        }
+
+        // 打开重置密码对话框
+        function openResetPasswordDialog(userId, username) {
+            currentManageUserId = userId;
+            document.getElementById('reset-password-user-info').value = username;
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
+            document.getElementById('reset-password-dialog').style.display = 'block';
+        }
+
+        // 关闭重置密码对话框
+        function closeResetPasswordDialog() {
+            currentManageUserId = null;
+            document.getElementById('reset-password-dialog').style.display = 'none';
+        }
+
+        // 保存新密码
+        function saveNewPassword() {
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const token = localStorage.getItem('token');
+            
+            if (!newPassword) {
+                alert('请输入新密码');
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                alert('两次输入的密码不一致');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                alert('密码长度至少为6位');
+                return;
+            }
+            
+            fetch(`/api/admin/users/${currentManageUserId}/password`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ password: newPassword })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('密码重置成功');
+                    closeResetPasswordDialog();
+                } else {
+                    alert('密码重置失败: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('重置密码失败:', error);
+                alert('重置密码失败');
+            });
+        }
+
+        // 格式化日期
+        function formatDate(dateValue) {
+            if (!dateValue) return '-';
+            
+            let date;
+            if (typeof dateValue === 'number') {
+                date = dateValue < 10000000000 ? new Date(dateValue * 1000) : new Date(dateValue);
+            } else if (typeof dateValue === 'string') {
+                date = new Date(dateValue);
+            } else {
+                return '-';
+            }
+            
+            if (isNaN(date.getTime())) {
+                return '-';
+            }
+            
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            
+            return `${year}-${month}-${day} ${hours}:${minutes}`;
         }
 
         // 加载公告列表

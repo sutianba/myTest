@@ -1237,6 +1237,105 @@ class SQLDatabaseManager:
         finally:
             conn.close()
     
+    def get_users(self, search='', role='', limit=10, offset=0):
+        """获取用户列表（支持搜索和筛选）"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 构建查询条件
+            conditions = []
+            params = []
+            
+            if search:
+                conditions.append("(u.username LIKE %s OR u.email LIKE %s)")
+                params.extend([f'%{search}%', f'%{search}%'])
+            
+            if role:
+                conditions.append("u.role = %s")
+                params.append(role)
+            
+            where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+            
+            # 查询用户列表
+            cursor.execute(f'''
+                SELECT u.id, u.username, u.email, u.role, u.created_at
+                FROM users u
+                {where_clause}
+                ORDER BY u.created_at DESC
+                LIMIT %s OFFSET %s
+            ''', params + [limit, offset])
+            users = cursor.fetchall()
+            
+            # 查询总数
+            cursor.execute(f'''
+                SELECT COUNT(*) as count FROM users u {where_clause}
+            ''', params)
+            total = cursor.fetchone()['count']
+            
+            return [dict(user) for user in users], total
+        except Exception as e:
+            raise Exception(f'获取用户列表失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def update_any_user_role(self, user_id, role):
+        """更新任意用户角色（直接更新users表的role字段）"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 更新users表的role字段
+            cursor.execute(
+                "UPDATE users SET role = %s WHERE id = %s",
+                (role, user_id)
+            )
+            
+            # 同时更新user_roles表
+            cursor.execute('SELECT id FROM roles WHERE name = %s', (role,))
+            role_record = cursor.fetchone()
+            
+            if role_record:
+                role_id = role_record['id']
+                # 删除现有角色关联
+                cursor.execute('DELETE FROM user_roles WHERE user_id = %s', (user_id,))
+                # 插入新角色关联
+                cursor.execute(
+                    'INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)',
+                    (user_id, role_id)
+                )
+            
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'更新用户角色失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def reset_user_password(self, user_id, new_password):
+        """重置用户密码"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 使用bcrypt加密密码
+            import bcrypt
+            password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            
+            cursor.execute(
+                "UPDATE users SET password = %s WHERE id = %s",
+                (password_hash, user_id)
+            )
+            
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'重置用户密码失败: {str(e)}')
+        finally:
+            conn.close()
+    
     def get_system_summary(self):
         """获取系统概要统计"""
         conn = self.get_connection()
@@ -2442,6 +2541,21 @@ def update_user_role(user_id, role_name):
     if db_manager is None:
         raise Exception("数据库未初始化")
     return db_manager.update_user_role(user_id, role_name)
+
+def get_users(search='', role='', limit=10, offset=0):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.get_users(search, role, limit, offset)
+
+def update_any_user_role(user_id, role):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.update_any_user_role(user_id, role)
+
+def reset_user_password(user_id, new_password):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.reset_user_password(user_id, new_password)
 
 def get_system_summary():
     if db_manager is None:
