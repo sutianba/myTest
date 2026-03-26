@@ -1524,6 +1524,15 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
+            # 1. 获取被删除图片的路径
+            cursor.execute(
+                "SELECT image_path FROM album_images WHERE id = %s AND album_id = %s",
+                (image_id, album_id)
+            )
+            image = cursor.fetchone()
+            deleted_image_path = image['image_path'] if image else None
+            
+            # 2. 软删除图片
             now = int(time.time())
             cursor.execute(
                 "UPDATE album_images SET deleted_at = %s WHERE id = %s AND album_id = %s AND album_id IN (SELECT id FROM albums WHERE user_id = %s)",
@@ -1531,10 +1540,39 @@ class SQLDatabaseManager:
             )
             
             if cursor.rowcount > 0:
+                # 3. 更新相册图片数量
                 cursor.execute(
                     "UPDATE albums SET image_count = image_count - 1 WHERE id = %s",
                     (album_id,)
                 )
+                
+                # 4. 如果被删除的是封面图，重新设置封面
+                cursor.execute(
+                    "SELECT cover_image FROM albums WHERE id = %s",
+                    (album_id,)
+                )
+                album = cursor.fetchone()
+                if album and album['cover_image'] == deleted_image_path:
+                    # 查找相册中最早的一张图片作为新封面
+                    cursor.execute(
+                        "SELECT image_path FROM album_images WHERE album_id = %s AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 1",
+                        (album_id,)
+                    )
+                    new_cover = cursor.fetchone()
+                    if new_cover:
+                        cursor.execute(
+                            "UPDATE albums SET cover_image = %s WHERE id = %s",
+                            (new_cover['image_path'], album_id)
+                        )
+                        print(f"更新相册封面: album_id={album_id}, new_cover={new_cover['image_path']}")
+                    else:
+                        # 相册没有图片了，清空封面
+                        cursor.execute(
+                            "UPDATE albums SET cover_image = NULL, image_count = 0 WHERE id = %s",
+                            (album_id,)
+                        )
+                        print(f"相册已空，清空封面: album_id={album_id}")
+                
                 conn.commit()
                 return True
             return False
