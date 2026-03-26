@@ -1469,6 +1469,26 @@
             color: #333;
             font-weight: 500;
         }
+
+        /* 无图片占位符 */
+        .no-image-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            color: #1976d2;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .no-image-placeholder::before {
+            content: "📷";
+            font-size: 48px;
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 <body>
@@ -3485,12 +3505,16 @@
             const imageHeight = itemData.image_height || '-';
             const imageSize = (itemData.image_width && itemData.image_height) ? `${itemData.image_width} × ${itemData.image_height}` : '-';
 
+            // 处理图片显示
+            const hasImage = imagePath && imagePath.trim() !== '';
+            const imageHtml = hasImage
+                ? `<img src="${imagePath}" alt="${flowerName}" onerror="this.parentElement.innerHTML='<div class=\\'no-image-placeholder\\'>📷<br>暂无图片</div>'">`
+                : `<div class="no-image-placeholder">📷<br>暂无图片</div>`;
+
             card.innerHTML = `
-                <div class="recycle-image-thumb" onclick="openImagePreview('${imagePath}')">
-                    <img src="${imagePath}" alt="${flowerName}" onerror="this.src='https://via.placeholder.com/220x180?text=No+Image'">
-                    <div class="image-overlay">
-                        <span class="preview-hint">🔍 点击查看大图</span>
-                    </div>
+                <div class="recycle-image-thumb" onclick="${hasImage ? `openImagePreview('${imagePath}')` : ''}">
+                    ${imageHtml}
+                    ${hasImage ? `<div class="image-overlay"><span class="preview-hint">🔍 点击查看大图</span></div>` : ''}
                 </div>
                 <div class="recycle-image-info">
                     <div class="flower-name">${flowerName}</div>
