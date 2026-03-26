@@ -750,10 +750,17 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
             
             # 3. 保存识别结果
             print(f"保存识别结果: user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}")
+
+            # 获取相机信息和图片尺寸
+            camera_make = image_info.get('camera_info', {}).get('make')
+            camera_model = image_info.get('camera_info', {}).get('model')
+            image_width = image_info.get('image_details', {}).get('width')
+            image_height = image_info.get('image_details', {}).get('height')
+
             result_id = save_recognition_result(
-                user_id, 
-                relative_path, 
-                flower_name, 
+                user_id,
+                relative_path,
+                flower_name,
                 confidence,
                 shoot_time=shoot_time,
                 shoot_year=shoot_year,
@@ -763,7 +770,11 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
                 longitude=longitude,
                 location_text=location_text,
                 region_label=region_label,
-                final_category=final_category
+                final_category=final_category,
+                camera_make=camera_make,
+                camera_model=camera_model,
+                image_width=image_width,
+                image_height=image_height
             )
             print(f"保存识别结果成功, result_id={result_id}")
             
@@ -1678,16 +1689,26 @@ def delete_recognition_result_api(result_id):
             if r['id'] == result_id:
                 result_info = r
                 break
-        
+
         if result_info:
             move_to_recycle_bin(g.user_id, 'recognition', result_id, {
                 'image_path': result_info.get('image_path'),
                 'result': result_info.get('result'),
-                'confidence': result_info.get('confidence')
+                'confidence': result_info.get('confidence'),
+                'shoot_time': result_info.get('shoot_time'),
+                'shoot_month': result_info.get('shoot_month'),
+                'shoot_season': result_info.get('shoot_season'),
+                'location_text': result_info.get('location_text'),
+                'region_label': result_info.get('region_label'),
+                'camera_make': result_info.get('camera_make'),
+                'camera_model': result_info.get('camera_model'),
+                'image_width': result_info.get('image_width'),
+                'image_height': result_info.get('image_height'),
+                'final_category': result_info.get('final_category')
             })
-        
+
         success = delete_recognition_result(result_id, g.user_id)
-        
+
         if success:
             return jsonify({'success': True, 'message': '记录已移入回收站'})
         else:

@@ -324,17 +324,17 @@ class SQLDatabaseManager:
             conn.close()
     
     # 植物花卉识别结果相关操作
-    def save_recognition_result(self, user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None):
+    def save_recognition_result(self, user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None):
         """保存植物花卉识别结果"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        
+
         try:
             print(f"[DB] 保存识别结果: user_id={user_id}, image_path={image_path}, result={result}, confidence={confidence}")
             cursor.execute('''
-            INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category))
+            INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height))
             conn.commit()
             result_id = cursor.lastrowid
             print(f"[DB] 识别结果保存成功: result_id={result_id}")
@@ -2150,10 +2150,10 @@ def check_user_permission(user_id, permission_name):
         raise Exception("数据库未初始化")
     return db_manager.check_user_permission(user_id, permission_name)
 
-def save_recognition_result(user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None):
+def save_recognition_result(user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None):
     if db_manager is None:
         raise Exception("数据库未初始化")
-    return db_manager.save_recognition_result(user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category)
+    return db_manager.save_recognition_result(user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height)
 
 def get_user_recognition_results(user_id):
     if db_manager is None:

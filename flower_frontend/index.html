@@ -1218,6 +1218,257 @@
             padding: 40px;
             color: #667eea;
         }
+
+        /* 历史记录页面样式 */
+        .history-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 24px;
+            padding: 10px;
+        }
+
+        .history-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+        }
+
+        .history-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .history-image-section {
+            position: relative;
+        }
+
+        .history-image {
+            width: 100%;
+            height: 220px;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .history-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.3s ease;
+        }
+
+        .history-image:hover img {
+            transform: scale(1.05);
+        }
+
+        .history-image .image-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .history-image:hover .image-overlay {
+            opacity: 1;
+        }
+
+        .history-main-info {
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        }
+
+        .flower-result {
+            font-size: 22px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .confidence-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .recognize-time {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .history-details {
+            padding: 16px 20px;
+        }
+
+        .detail-section {
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .detail-section:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .detail-section h4 {
+            font-size: 14px;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 8px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .detail-item .label {
+            font-size: 11px;
+            color: #999;
+        }
+
+        .detail-item .value {
+            font-size: 13px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .history-actions {
+            display: flex;
+            gap: 10px;
+            padding: 0 20px 20px;
+        }
+
+        .history-actions button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .history-actions .btn-share {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .history-actions .btn-share:hover {
+            background: #1976d2;
+            color: white;
+        }
+
+        .history-actions .btn-delete {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .history-actions .btn-delete:hover {
+            background: #c62828;
+            color: white;
+        }
+
+        .history-empty {
+            text-align: center;
+            padding: 80px 20px;
+            color: #999;
+        }
+
+        .history-empty .empty-icon {
+            font-size: 72px;
+            margin-bottom: 20px;
+        }
+
+        .history-empty p {
+            font-size: 20px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .history-empty .empty-tip {
+            font-size: 14px;
+            color: #999;
+        }
+
+        .history-loading {
+            text-align: center;
+            padding: 60px;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .history-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 回收站卡片详情样式 */
+        .recycle-details {
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .recycle-detail-section {
+            margin-bottom: 12px;
+        }
+
+        .recycle-detail-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .recycle-detail-section h5 {
+            font-size: 12px;
+            color: #667eea;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .recycle-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 6px;
+        }
+
+        .recycle-detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .recycle-detail-item .label {
+            font-size: 10px;
+            color: #999;
+        }
+
+        .recycle-detail-item .value {
+            font-size: 11px;
+            color: #333;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -2871,27 +3122,28 @@
             const historyList = document.getElementById('historyList');
             if (!historyList) return;
 
-            if (!token) {
-                historyList.innerHTML = '<p>请先登录查看历史记录</p>';
+            const currentToken = getToken();
+            if (!currentToken) {
+                historyList.innerHTML = '<div class="history-empty"><p>请先登录查看历史记录</p></div>';
                 return;
             }
 
-            historyList.innerHTML = '<p>加载中...</p>';
+            historyList.innerHTML = '<div class="history-loading"><p>加载中...</p></div>';
 
             try {
                 const response = await fetch('/api/recognition/history', {
-                    headers: { 'Authorization': 'Bearer ' + token }
+                    headers: { 'Authorization': 'Bearer ' + currentToken }
                 });
                 const data = await response.json();
 
                 if (data.success) {
                     displayHistory(data.results);
                 } else {
-                    historyList.innerHTML = '<p>加载失败，请稍后重试</p>';
+                    historyList.innerHTML = '<div class="history-empty"><p>加载失败，请稍后重试</p></div>';
                 }
             } catch (error) {
                 console.error('加载历史记录错误:', error);
-                historyList.innerHTML = '<p>加载失败，请稍后重试</p>';
+                historyList.innerHTML = '<div class="history-empty"><p>加载失败，请稍后重试</p></div>';
             }
         }
 
@@ -2901,72 +3153,182 @@
             historyList.innerHTML = '';
 
             if (results.length === 0) {
-                historyList.innerHTML = '<p>暂无历史记录</p>';
+                historyList.innerHTML = `
+                    <div class="history-empty">
+                        <div class="empty-icon">📜</div>
+                        <p>暂无历史记录</p>
+                        <span class="empty-tip">识别的植物会在这里显示</span>
+                    </div>
+                `;
                 return;
             }
 
-            results.forEach(item => {
-                const card = document.createElement('div');
-                card.style.cssText = 'border:1px solid #ddd;border-radius:10px;padding:15px;margin:10px 0;';
-                card.innerHTML = `
-                    <p><strong>识别结果:</strong> ${item.result}</p>
-                    <p><strong>置信度:</strong> ${(item.confidence * 100).toFixed(2)}%</p>
-                    <p><strong>时间:</strong> ${new Date(item.created_at * 1000).toLocaleString()}</p>
-                    <button class="btn-delete" data-id="${item.id}">删除</button>
-                    <button class="share-to-community-btn" data-id="${item.id}" data-result="${item.result}">分享到社区</button>
-                `;
-                
-                const deleteBtn = card.querySelector('.btn-delete');
-                deleteBtn.onclick = async function() {
-                    if (confirm('确定要删除这条记录吗？')) {
-                        await deleteHistoryItem(item.id);
-                    }
-                };
-                
-                const shareBtn = card.querySelector('.share-to-community-btn');
-                shareBtn.onclick = async function() {
-                    const currentToken = getToken();
-                    if (!currentToken) {
-                        alert('请先登录后再分享');
-                        return;
-                    }
-                    
-                    const content = `我识别了一种植物：${item.result}，置信度：${(item.confidence * 100).toFixed(2)}%`;
-                    const topics = '植物,识别,自然';
-                    const tags = item.result;
-                    
-                    try {
-                        const response = await fetch('/api/posts', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${currentToken}`
-                            },
-                            body: JSON.stringify({ 
-                                content, 
-                                topics, 
-                                tags,
-                                source_type: 'recognition',
-                                source_id: item.id
-                            })
-                        });
+            // 创建网格容器
+            const grid = document.createElement('div');
+            grid.className = 'history-grid';
 
-                        const responseText = await response.text();
-                        const data = JSON.parse(responseText);
-                        
-                        if (data.success) {
-                            alert('分享成功！');
-                        } else {
-                            alert('分享失败: ' + data.error);
-                        }
-                    } catch (error) {
-                        console.error('分享到社区错误:', error);
-                        alert('分享失败，请稍后重试');
-                    }
-                };
-                
-                historyList.appendChild(card);
+            results.forEach(item => {
+                const card = createHistoryCard(item);
+                grid.appendChild(card);
             });
+
+            historyList.appendChild(grid);
+        }
+
+        // 创建历史记录卡片
+        function createHistoryCard(item) {
+            const card = document.createElement('div');
+            card.className = 'history-card';
+
+            // 基本信息
+            const imagePath = item.image_path || '';
+            const result = item.result || '未知';
+            const confidence = item.confidence ? (item.confidence * 100).toFixed(1) + '%' : '-';
+            const createdAt = item.created_at ? new Date(item.created_at).toLocaleString() : '-';
+
+            // 拍摄信息
+            const shootTime = item.shoot_time || '-';
+            const shootMonth = item.shoot_month ? item.shoot_month + '月' : '-';
+            const shootSeason = item.shoot_season || '-';
+
+            // 位置信息
+            const locationText = item.location_text || '-';
+            const regionLabel = item.region_label || '-';
+
+            // 相机信息
+            const cameraMake = item.camera_make || '-';
+            const cameraModel = item.camera_model || '-';
+
+            // 图片尺寸
+            const imageWidth = item.image_width || '-';
+            const imageHeight = item.image_height || '-';
+            const imageSize = (item.image_width && item.image_height) ? `${item.image_width} × ${item.image_height}` : '-';
+
+            card.innerHTML = `
+                <div class="history-image-section">
+                    <div class="history-image" onclick="openImagePreview('${imagePath}')">
+                        <img src="${imagePath}" alt="${result}" onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
+                        <div class="image-overlay">
+                            <span class="preview-hint">🔍 查看大图</span>
+                        </div>
+                    </div>
+                    <div class="history-main-info">
+                        <div class="flower-result">${result}</div>
+                        <div class="confidence-badge">置信度 ${confidence}</div>
+                        <div class="recognize-time">识别时间: ${createdAt}</div>
+                    </div>
+                </div>
+
+                <div class="history-details">
+                    <div class="detail-section">
+                        <h4>📷 拍摄信息</h4>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="label">拍摄时间:</span>
+                                <span class="value">${shootTime}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">拍摄月份:</span>
+                                <span class="value">${shootMonth}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">拍摄季节:</span>
+                                <span class="value">${shootSeason}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>📍 位置信息</h4>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="label">拍摄地点:</span>
+                                <span class="value">${locationText}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">区域分类:</span>
+                                <span class="value">${regionLabel}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>📸 设备信息</h4>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="label">相机品牌:</span>
+                                <span class="value">${cameraMake}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">相机型号:</span>
+                                <span class="value">${cameraModel}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">图片尺寸:</span>
+                                <span class="value">${imageSize}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="history-actions">
+                    <button class="btn-share" data-id="${item.id}">📤 分享</button>
+                    <button class="btn-delete" data-id="${item.id}">🗑️ 删除</button>
+                </div>
+            `;
+
+            // 删除按钮事件
+            const deleteBtn = card.querySelector('.btn-delete');
+            deleteBtn.onclick = async function() {
+                if (confirm('确定要删除这条记录吗？')) {
+                    await deleteHistoryItem(item.id);
+                }
+            };
+
+            // 分享按钮事件
+            const shareBtn = card.querySelector('.btn-share');
+            shareBtn.onclick = async function() {
+                const currentToken = getToken();
+                if (!currentToken) {
+                    alert('请先登录后再分享');
+                    return;
+                }
+
+                const content = `我识别了一种植物：${result}，置信度：${confidence}。拍摄于${locationText}，使用${cameraMake} ${cameraModel}拍摄。`;
+                const topics = '植物,识别,自然';
+                const tags = result;
+
+                try {
+                    const response = await fetch('/api/posts', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${currentToken}`
+                        },
+                        body: JSON.stringify({
+                            content,
+                            topics,
+                            tags,
+                            source_type: 'recognition',
+                            source_id: item.id
+                        })
+                    });
+
+                    const responseText = await response.text();
+                    const data = JSON.parse(responseText);
+
+                    if (data.success) {
+                        alert('分享成功！');
+                    } else {
+                        alert('分享失败: ' + data.error);
+                    }
+                } catch (error) {
+                    console.error('分享到社区错误:', error);
+                    alert('分享失败，请稍后重试');
+                }
+            };
+
+            return card;
         }
 
         // 删除历史记录
@@ -3101,9 +3463,27 @@
 
             const itemData = item.item_data || {};
             const imagePath = itemData.image_path || '';
-            const flowerName = itemData.flower_name || '未知花卉';
+            const flowerName = itemData.result || itemData.flower_name || '未知花卉';
             const confidence = itemData.confidence ? (itemData.confidence * 100).toFixed(1) + '%' : '-';
             const deletedTime = item.deleted_at ? new Date(item.deleted_at * 1000).toLocaleString() : '-';
+
+            // 拍摄信息
+            const shootTime = itemData.shoot_time || '-';
+            const shootMonth = itemData.shoot_month ? itemData.shoot_month + '月' : '-';
+            const shootSeason = itemData.shoot_season || '-';
+
+            // 位置信息
+            const locationText = itemData.location_text || '-';
+            const regionLabel = itemData.region_label || '-';
+
+            // 相机信息
+            const cameraMake = itemData.camera_make || '-';
+            const cameraModel = itemData.camera_model || '-';
+
+            // 图片尺寸
+            const imageWidth = itemData.image_width || '-';
+            const imageHeight = itemData.image_height || '-';
+            const imageSize = (itemData.image_width && itemData.image_height) ? `${itemData.image_width} × ${itemData.image_height}` : '-';
 
             card.innerHTML = `
                 <div class="recycle-image-thumb" onclick="openImagePreview('${imagePath}')">
@@ -3115,8 +3495,62 @@
                 <div class="recycle-image-info">
                     <div class="flower-name">${flowerName}</div>
                     <div class="confidence">置信度: ${confidence}</div>
-                    <div class="deleted-time">删除: ${deletedTime}</div>
+                    <div class="deleted-time">删除时间: ${deletedTime}</div>
                 </div>
+
+                <!-- 详细识别信息 -->
+                <div class="recycle-details">
+                    <div class="recycle-detail-section">
+                        <h5>📷 拍摄信息</h5>
+                        <div class="recycle-detail-grid">
+                            <div class="recycle-detail-item">
+                                <span class="label">拍摄时间:</span>
+                                <span class="value">${shootTime}</span>
+                            </div>
+                            <div class="recycle-detail-item">
+                                <span class="label">拍摄月份:</span>
+                                <span class="value">${shootMonth}</span>
+                            </div>
+                            <div class="recycle-detail-item">
+                                <span class="label">拍摄季节:</span>
+                                <span class="value">${shootSeason}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="recycle-detail-section">
+                        <h5>📍 位置信息</h5>
+                        <div class="recycle-detail-grid">
+                            <div class="recycle-detail-item">
+                                <span class="label">拍摄地点:</span>
+                                <span class="value">${locationText}</span>
+                            </div>
+                            <div class="recycle-detail-item">
+                                <span class="label">区域分类:</span>
+                                <span class="value">${regionLabel}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="recycle-detail-section">
+                        <h5>📸 设备信息</h5>
+                        <div class="recycle-detail-grid">
+                            <div class="recycle-detail-item">
+                                <span class="label">相机品牌:</span>
+                                <span class="value">${cameraMake}</span>
+                            </div>
+                            <div class="recycle-detail-item">
+                                <span class="label">相机型号:</span>
+                                <span class="value">${cameraModel}</span>
+                            </div>
+                            <div class="recycle-detail-item">
+                                <span class="label">图片尺寸:</span>
+                                <span class="value">${imageSize}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="recycle-image-actions">
                     <button class="btn-restore" data-id="${item.id}">♻️ 恢复</button>
                     <button class="btn-permanent" data-id="${item.id}">🗑️ 彻底删除</button>
