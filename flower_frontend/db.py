@@ -1333,14 +1333,14 @@ class SQLDatabaseManager:
             conn.close()
     
     def get_user_albums(self, user_id, category=None):
-        """获取用户相册列表"""
+        """获取用户相册列表（排除已软删除的）"""
         conn = self.get_connection()
         cursor = conn.cursor(pymysql.cursors.DictCursor)
         
         try:
-            # 获取用户所有相册
+            # 获取用户所有未删除的相册
             cursor.execute(
-                "SELECT * FROM albums WHERE user_id = %s ORDER BY created_at DESC",
+                "SELECT * FROM albums WHERE user_id = %s AND deleted_at IS NULL ORDER BY created_at DESC",
                 (user_id,)
             )
             albums = cursor.fetchall()
@@ -1356,13 +1356,13 @@ class SQLDatabaseManager:
             conn.close()
     
     def get_album_by_id(self, album_id, user_id):
-        """获取相册详情"""
+        """获取相册详情（排除已软删除的）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
             cursor.execute(
-                "SELECT * FROM albums WHERE id = %s AND user_id = %s",
+                "SELECT * FROM albums WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
                 (album_id, user_id)
             )
             return cursor.fetchone()
@@ -1405,19 +1405,28 @@ class SQLDatabaseManager:
             conn.close()
     
     def delete_album(self, album_id, user_id):
-        """删除相册"""
+        """删除相册（软删除）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
+            # 软删除：更新 deleted_at 字段
+            now = int(time.time())
             cursor.execute(
-                "DELETE FROM albums WHERE id = %s AND user_id = %s",
-                (album_id, user_id)
+                "UPDATE albums SET deleted_at = %s, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
+                (now, now, album_id, user_id)
             )
             conn.commit()
-            return cursor.rowcount > 0
+            
+            if cursor.rowcount > 0:
+                print(f"[DB] 相册软删除成功: album_id={album_id}, user_id={user_id}")
+                return True
+            else:
+                print(f"[DB] 相册软删除失败: album_id={album_id} 不存在或已被删除")
+                return False
         except Exception as e:
             conn.rollback()
+            print(f"[DB] 删除相册失败: {str(e)}")
             raise Exception(f'删除相册失败: {str(e)}')
         finally:
             conn.close()

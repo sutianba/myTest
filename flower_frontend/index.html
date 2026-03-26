@@ -2208,8 +2208,15 @@
                 const updatedAt = new Date(album.updated_at).toLocaleString();
                 
                 albumCard.innerHTML = `
-                    <div style="height: 180px; overflow: hidden;">
+                    <div style="height: 180px; overflow: hidden; position: relative;">
                         <img src="${coverImage}" alt="${album.name}" class="album-thumb" style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px; transition: 0.2s;">
+                        <!-- 删除按钮 -->
+                        <button onclick="event.stopPropagation(); deleteAlbum(${album.id}, '${album.name}');" 
+                            style="position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border: none; border-radius: 50%; background-color: rgba(220, 53, 69, 0.9); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: background-color 0.2s;"
+                            onmouseover="this.style.backgroundColor='rgba(200, 35, 51, 0.95)';"
+                            onmouseout="this.style.backgroundColor='rgba(220, 53, 69, 0.9)';">
+                            ×
+                        </button>
                     </div>
                     <div style="padding: 15px;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
@@ -2399,6 +2406,36 @@
             loadAlbums();
         }
         
+        // 删除相册
+        async function deleteAlbum(albumId, albumName) {
+            if (!confirm(`确定要删除相册 "${albumName}" 吗？\n\n注意：删除相册将同时删除相册中的所有图片，此操作不可恢复！`)) {
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/albums/${albumId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('相册已删除');
+                    // 重新加载相册列表
+                    loadAlbums();
+                } else {
+                    alert('删除失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('删除相册失败:', error);
+                alert('删除失败: ' + error.message);
+            }
+        }
+        
         // 分享图片
         function shareImage(imagePath) {
             // 这里可以实现分享功能，例如生成分享链接或打开分享对话框
@@ -2412,10 +2449,40 @@
         }
         
         // 删除图片
-        function deleteImage(imageId) {
-            if (confirm('确定要删除这张图片吗？')) {
-                // 这里可以实现删除功能，例如调用删除接口
-                alert('删除功能暂未实现');
+        async function deleteImage(imageId) {
+            if (!confirm('确定要删除这张图片吗？')) {
+                return;
+            }
+            
+            const currentAlbumId = localStorage.getItem('currentAlbumId');
+            if (!currentAlbumId) {
+                alert('未找到当前相册信息');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/albums/${currentAlbumId}/images/${imageId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('图片已删除');
+                    // 重新加载相册图片
+                    loadAlbumImages(currentAlbumId);
+                    // 同时刷新相册列表以更新计数
+                    loadAlbums();
+                } else {
+                    alert('删除失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('删除图片失败:', error);
+                alert('删除失败: ' + error.message);
             }
         }
         

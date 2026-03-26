@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS albums (
     image_count INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
+    deleted_at INTEGER,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS album_images (
