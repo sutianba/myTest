@@ -2421,7 +2421,7 @@
             }
             
             try {
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem('auth_token');
                 const response = await fetch(`/api/albums/${albumId}`, {
                     method: 'DELETE',
                     headers: {
@@ -2472,7 +2472,7 @@
             }
             
             try {
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem('auth_token');
                 if (!token) {
                     alert('请先登录');
                     return;
@@ -2634,6 +2634,12 @@
                 
                 const shareBtn = card.querySelector('.share-to-community-btn');
                 shareBtn.onclick = async function() {
+                    const currentToken = getToken();
+                    if (!currentToken) {
+                        alert('请先登录后再分享');
+                        return;
+                    }
+                    
                     const content = `我识别了一种植物：${item.result}，置信度：${(item.confidence * 100).toFixed(2)}%`;
                     const topics = '植物,识别,自然';
                     const tags = item.result;
@@ -2643,7 +2649,7 @@
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
+                                'Authorization': `Bearer ${currentToken}`
                             },
                             body: JSON.stringify({ 
                                 content, 
@@ -2838,7 +2844,8 @@
 
         // 处理创建帖子
         async function handleCreatePost() {
-            if (!user || !token) {
+            const currentToken = getToken();
+            if (!currentToken) {
                 alert('请先登录');
                 return;
             }
@@ -2865,7 +2872,7 @@
                     const uploadResponse = await fetch('/api/upload/post-image', {
                         method: 'POST',
                         headers: {
-                            'Authorization': `Bearer ${token}`
+                            'Authorization': `Bearer ${currentToken}`
                         },
                         body: formData
                     });
@@ -2890,10 +2897,10 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${currentToken}`
                     },
-                    body: JSON.stringify({ 
-                        content, 
+                    body: JSON.stringify({
+                        content,
                         image_url: finalImageUrl,
                         topics: topics || null,
                         tags: tags || null
@@ -3050,7 +3057,8 @@
         // 处理点赞
         async function handleLike(button) {
             const postId = button.dataset.postId;
-            if (!user || !token) {
+            const currentToken = getToken();
+            if (!currentToken) {
                 alert('请先登录');
                 return;
             }
@@ -3059,7 +3067,7 @@
                 const response = await fetch(`/api/posts/${postId}/like`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${currentToken}`
                     }
                 });
 
@@ -3214,14 +3222,15 @@
 
         // 提交评论
         async function submitComment(button, postId) {
-            if (!user || !token) {
+            const currentToken = getToken();
+            if (!currentToken) {
                 alert('请先登录');
                 return;
             }
 
             const commentInput = button.parentElement.querySelector('.comment-input');
             const content = commentInput.value.trim();
-            
+
             if (!content) {
                 alert('请输入评论内容');
                 return;
@@ -3232,7 +3241,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${currentToken}`
                     },
                     body: JSON.stringify({ content })
                 });
@@ -3257,7 +3266,8 @@
 
         // 提交回复
         async function submitReply(postId, parentCommentId, button) {
-            if (!user || !token) {
+            const currentToken = getToken();
+            if (!currentToken) {
                 alert('请先登录');
                 return;
             }
@@ -3265,7 +3275,7 @@
             const replyForm = button.closest('.reply-form');
             const replyInput = replyForm.querySelector('.reply-input');
             const content = replyInput.value.trim();
-            
+
             if (!content) {
                 alert('请输入回复内容');
                 return;
@@ -3276,18 +3286,18 @@
                 const response = await fetch(`/api/comments/${parentCommentId}`);
                 const commentData = await response.json();
                 const replyToUserId = commentData.comment.user_id;
-                
+
                 const response2 = await fetch(`/api/comments`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${currentToken}`
                     },
-                    body: JSON.stringify({ 
-                        post_id: postId, 
-                        content: content, 
-                        parent_comment_id: parentCommentId, 
-                        reply_to_user_id: replyToUserId 
+                    body: JSON.stringify({
+                        post_id: postId,
+                        content: content,
+                        parent_comment_id: parentCommentId,
+                        reply_to_user_id: replyToUserId
                     })
                 });
 
@@ -3313,7 +3323,8 @@
 
         // 点赞评论
         async function likeComment(commentId, button) {
-            if (!user || !token) {
+            const currentToken = getToken();
+            if (!currentToken) {
                 alert('请先登录');
                 return;
             }
@@ -3322,7 +3333,7 @@
                 const response = await fetch(`/api/comments/${commentId}/like`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${currentToken}`
                     }
                 });
 

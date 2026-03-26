@@ -96,7 +96,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # JWT配置
 app.config['SECRET_KEY'] = 'flower_recognition_secret_key'
-app.config['JWT_EXPIRATION_DELTA'] = 3600  # JWT过期时间（秒）
+app.config['JWT_EXPIRATION_DELTA'] = 60 * 60 * 24 * 365  # JWT过期时间：365天（1年）
 
 # JWT相关导入
 import jwt
