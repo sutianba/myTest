@@ -1857,17 +1857,59 @@ def delete_album_image_api(album_id, image_id):
                 break
 
         if image_info:
-            move_to_recycle_bin(g.user_id, 'image', image_id, {
+            # 尝试获取完整的识别信息
+            recognition_result_id = image_info.get('recognition_result_id')
+            recognition_info = {}
+
+            if recognition_result_id:
+                try:
+                    result = get_recognition_result(recognition_result_id)
+                    if result:
+                        recognition_info = {
+                            'result': result.get('result'),
+                            'confidence': result.get('confidence'),
+                            'shoot_time': result.get('shoot_time'),
+                            'shoot_year': result.get('shoot_year'),
+                            'shoot_month': result.get('shoot_month'),
+                            'shoot_season': result.get('shoot_season'),
+                            'location_text': result.get('location_text'),
+                            'region_label': result.get('region_label'),
+                            'camera_make': result.get('camera_make'),
+                            'camera_model': result.get('camera_model'),
+                            'image_width': result.get('image_width'),
+                            'image_height': result.get('image_height'),
+                            'final_category': result.get('final_category')
+                        }
+                except Exception as e:
+                    print(f"获取识别结果信息失败: {e}")
+
+            # 构建回收站 item_data
+            recycle_item_data = {
                 'image_path': image_info.get('image_path'),
-                'flower_name': image_info.get('flower_name'),
-                'confidence': image_info.get('confidence'),
+                'flower_name': image_info.get('flower_name') or recognition_info.get('result', '未知花卉'),
+                'confidence': image_info.get('confidence') or recognition_info.get('confidence', 0),
                 'created_at': image_info.get('created_at'),
                 'album_id': album_id,
-                'album_name': image_info.get('album_name', '未分类')
-            })
-        
+                'album_name': image_info.get('album_name', '未分类'),
+                'recognition_result_id': recognition_result_id,
+                # 添加完整的识别信息
+                'shoot_time': recognition_info.get('shoot_time'),
+                'shoot_year': recognition_info.get('shoot_year'),
+                'shoot_month': recognition_info.get('shoot_month'),
+                'shoot_season': recognition_info.get('shoot_season'),
+                'location_text': recognition_info.get('location_text'),
+                'region_label': recognition_info.get('region_label'),
+                'camera_make': recognition_info.get('camera_make'),
+                'camera_model': recognition_info.get('camera_model'),
+                'image_width': recognition_info.get('image_width'),
+                'image_height': recognition_info.get('image_height'),
+                'final_category': recognition_info.get('final_category')
+            }
+
+            move_to_recycle_bin(g.user_id, 'image', image_id, recycle_item_data)
+
         success = delete_album_image(image_id, album_id, g.user_id)
-        
+
         if success:
             return jsonify({'success': True, 'message': '图片已移入回收站'})
         else:

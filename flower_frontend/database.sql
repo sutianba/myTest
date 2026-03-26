@@ -76,6 +76,10 @@ CREATE TABLE IF NOT EXISTS recognition_results (
     location_text TEXT,
     region_label VARCHAR(100),
     final_category VARCHAR(255),
+    camera_make VARCHAR(100),
+    camera_model VARCHAR(100),
+    image_width INT,
+    image_height INT,
     created_at INT NOT NULL,
     deleted_at INT,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

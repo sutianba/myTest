@@ -63,13 +63,13 @@ class SQLDatabaseManager:
         """从SQL文件初始化数据库"""
         if not os.path.exists(sql_file):
             raise FileNotFoundError(f"SQL文件不存在: {sql_file}")
-        
+
         with open(sql_file, 'r', encoding='utf-8') as f:
             sql_content = f.read()
-        
+
         conn = self.get_connection()
         cursor = conn.cursor()
-        
+
         try:
             # 执行SQL语句（MySQL不支持executescript，需要逐句执行）
             statements = sql_content.split(';')
@@ -92,6 +92,39 @@ class SQLDatabaseManager:
             conn.rollback()
             print(f"初始化数据库失败: {str(e)}")
             # 不抛出异常，允许应用继续启动
+        finally:
+            conn.close()
+
+        # 确保表结构包含所有必要字段
+        self._ensure_recognition_results_fields()
+
+    def _ensure_recognition_results_fields(self):
+        """确保recognition_results表包含所有必要字段"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # 检查并添加缺失的字段
+            fields_to_add = [
+                ('camera_make', 'VARCHAR(100)'),
+                ('camera_model', 'VARCHAR(100)'),
+                ('image_width', 'INT'),
+                ('image_height', 'INT')
+            ]
+
+            for field_name, field_type in fields_to_add:
+                try:
+                    cursor.execute(f"ALTER TABLE recognition_results ADD COLUMN {field_name} {field_type}")
+                    print(f"添加字段 {field_name} 到 recognition_results 表")
+                except pymysql.MySQLError as e:
+                    if "1060" in str(e):  # 字段已存在
+                        pass
+                    else:
+                        print(f"添加字段 {field_name} 失败: {e}")
+
+            conn.commit()
+        except Exception as e:
+            print(f"确保表字段失败: {e}")
         finally:
             conn.close()
     
