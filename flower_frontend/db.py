@@ -330,14 +330,18 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
+            print(f"[DB] 保存识别结果: user_id={user_id}, image_path={image_path}, result={result}, confidence={confidence}")
             cursor.execute('''
             INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category))
             conn.commit()
-            return cursor.lastrowid
+            result_id = cursor.lastrowid
+            print(f"[DB] 识别结果保存成功: result_id={result_id}")
+            return result_id
         except Exception as e:
             conn.rollback()
+            print(f"[DB] 保存识别结果失败: {str(e)}")
             raise Exception(f'保存识别结果失败: {str(e)}')
         finally:
             conn.close()
@@ -1424,6 +1428,8 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
+            print(f"[DB] 添加图片到相册: album_id={album_id}, user_id={user_id}, image_path={image_path}, flower_name={flower_name}, recognition_result_id={recognition_result_id}")
+            
             # 从image_path提取image_name
             import os
             image_name = os.path.basename(image_path)
@@ -1437,7 +1443,7 @@ class SQLDatabaseManager:
                 )
                 if cursor.fetchone():
                     # 已存在，避免重复插入
-                    print(f"识别结果 {recognition_result_id} 已存在于相册中，跳过重复插入")
+                    print(f"[DB] 识别结果 {recognition_result_id} 已存在于相册中，跳过重复插入")
                     return None
             
             # 2. 确保有相册ID，如果没有则创建默认相册
@@ -1451,27 +1457,36 @@ class SQLDatabaseManager:
                 
                 if not default_album:
                     # 创建默认相册
+                    now = int(time.time())
                     cursor.execute(
                         "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                         (user_id, '默认相册', '默认', None, '默认相册', 0, now, now)
                     )
                     album_id = cursor.lastrowid
-                    print(f"创建默认相册成功，album_id={album_id}")
+                    print(f"[DB] 创建默认相册成功，album_id={album_id}")
                 else:
                     album_id = default_album['id']
-                    print(f"使用现有默认相册，album_id={album_id}")
+                    print(f"[DB] 使用现有默认相册，album_id={album_id}")
+            
+            # 获取相册当前状态
+            cursor.execute("SELECT name, image_count, cover_image FROM albums WHERE id = %s", (album_id,))
+            album_before = cursor.fetchone()
+            print(f"[DB] 相册状态(更新前): name={album_before['name']}, image_count={album_before['image_count']}, cover_image={album_before['cover_image']}")
             
             # 3. 插入图片到相册
             cursor.execute(
-                "INSERT INTO album_images (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)",
-                (album_id, user_id, image_path, image_name, image_description, recognition_result_id)
+                "INSERT INTO album_images (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (album_id, user_id, image_path, image_name, image_description, recognition_result_id, int(time.time()))
             )
+            image_id = cursor.lastrowid
+            print(f"[DB] 图片插入成功: image_id={image_id}")
             
             # 4. 更新相册图片数量
             cursor.execute(
                 "UPDATE albums SET image_count = image_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                 (album_id,)
             )
+            print(f"[DB] 相册图片数量已更新: album_id={album_id}")
             
             # 5. 如果相册没有封面图，将当前图片设为封面
             cursor.execute(
@@ -1484,12 +1499,21 @@ class SQLDatabaseManager:
                     "UPDATE albums SET cover_image = %s WHERE id = %s",
                     (image_path, album_id)
                 )
-                print(f"更新相册封面: album_id={album_id}, cover_image={image_path}")
+                print(f"[DB] 更新相册封面: album_id={album_id}, cover_image={image_path}")
+            else:
+                print(f"[DB] 相册已有封面，不更新: cover_image={album['cover_image']}")
+            
+            # 获取相册更新后状态
+            cursor.execute("SELECT image_count, cover_image FROM albums WHERE id = %s", (album_id,))
+            album_after = cursor.fetchone()
+            print(f"[DB] 相册状态(更新后): image_count={album_after['image_count']}, cover_image={album_after['cover_image']}")
             
             conn.commit()
-            return cursor.lastrowid
+            print(f"[DB] 添加图片到相册成功: image_id={image_id}")
+            return image_id
         except Exception as e:
             conn.rollback()
+            print(f"[DB] 添加图片到相册失败: {str(e)}")
             raise Exception(f'添加图片到相册失败: {str(e)}')
         finally:
             conn.close()
