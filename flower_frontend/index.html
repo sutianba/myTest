@@ -3207,6 +3207,7 @@
 
         // 移动图片到其他相册
         async function moveImage(imageId) {
+            console.log('moveImage called:', imageId);
             currentMoveImageId = imageId;
             currentMoveFromAlbumId = window.currentAlbum ? window.currentAlbum.id : null;
 
@@ -3219,7 +3220,13 @@
             await loadAlbumListForMove();
 
             // 显示移动对话框
-            openModal('moveImageModal');
+            const modal = document.getElementById('moveImageModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                console.log('移动对话框已显示');
+            } else {
+                console.error('找不到移动对话框元素');
+            }
         }
 
         // 加载相册列表（用于移动选择）
@@ -3287,7 +3294,7 @@
 
                 if (data.success) {
                     alert('图片移动成功');
-                    closeModal('moveImageModal');
+                    closeMoveModal();
                     // 重新加载当前相册
                     await viewAlbumDetail(currentMoveFromAlbumId);
                     // 刷新相册列表
@@ -3298,6 +3305,14 @@
             } catch (error) {
                 console.error('移动图片失败:', error);
                 alert('移动失败，请稍后重试');
+            }
+        }
+
+        // 关闭移动对话框
+        function closeMoveModal() {
+            const modal = document.getElementById('moveImageModal');
+            if (modal) {
+                modal.style.display = 'none';
             }
         }
         
@@ -4605,22 +4620,22 @@
         </div>
 
         <!-- 移动图片对话框 -->
-        <div id="moveImageModal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-width: 450px;">
-                <div class="modal-header">
-                    <h3>📂 移动图片到其他相册</h3>
-                    <span class="close-btn" onclick="closeModal('moveImageModal')">&times;</span>
+        <div id="moveImageModal" class="modal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); justify-content: center; align-items: center; z-index: 9999;">
+            <div class="modal-content" style="max-width: 450px; background: white; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+                <div class="modal-header" style="padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 18px;">📂 移动图片到其他相册</h3>
+                    <span class="close-btn" onclick="closeMoveModal()" style="font-size: 24px; cursor: pointer; color: #999;">&times;</span>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body" style="padding: 20px;">
                     <p style="margin-bottom: 15px; color: #666;">请选择要将图片移动到的目标相册：</p>
-                    <select id="targetAlbumSelect" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; background: white;">
+                    <select id="targetAlbumSelect" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; background: white; cursor: pointer;">
                         <option value="">请选择目标相册...</option>
                     </select>
                     <p id="moveImageError" style="color: #e74c3c; margin-top: 10px; display: none;"></p>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn-secondary" onclick="closeModal('moveImageModal')">取消</button>
-                    <button class="btn-primary" onclick="confirmMoveImage()">确认移动</button>
+                <div class="modal-footer" style="padding: 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px;">
+                    <button class="btn-secondary" onclick="closeMoveModal()" style="padding: 10px 20px; border: 1px solid #ddd; background: #f5f5f5; border-radius: 6px; cursor: pointer;">取消</button>
+                    <button class="btn-primary" onclick="confirmMoveImage()" style="padding: 10px 20px; border: none; background: #667eea; color: white; border-radius: 6px; cursor: pointer;">确认移动</button>
                 </div>
             </div>
         </div>
