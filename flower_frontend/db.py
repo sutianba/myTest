@@ -1676,10 +1676,9 @@ class SQLDatabaseManager:
                 raise Exception('不能移动到同一个相册')
 
             # 4. 更新图片的相册ID
-            now = int(time.time())
             cursor.execute(
-                "UPDATE album_images SET album_id = %s, updated_at = %s WHERE id = %s",
-                (to_album_id, now, image_id)
+                "UPDATE album_images SET album_id = %s WHERE id = %s",
+                (to_album_id, image_id)
             )
 
             if cursor.rowcount > 0:
