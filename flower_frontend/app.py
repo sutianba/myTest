@@ -1918,6 +1918,27 @@ def delete_album_image_api(album_id, image_id):
         print(f"删除图片时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/albums/<int:album_id>/images/<int:image_id>/move', methods=['POST'])
+@auth_required
+def move_album_image_api(album_id, image_id):
+    """移动图片到另一个相册"""
+    try:
+        data = request.get_json()
+        target_album_id = data.get('target_album_id')
+
+        if not target_album_id:
+            return jsonify({'success': False, 'error': '请选择目标相册'}), 400
+
+        success = move_image_to_album(image_id, album_id, target_album_id, g.user_id)
+
+        if success:
+            return jsonify({'success': True, 'message': '图片移动成功'})
+        else:
+            return jsonify({'success': False, 'error': '移动失败'})
+    except Exception as e:
+        print(f"移动图片时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/albums/categories', methods=['GET'])
 @auth_required
 def get_album_categories_api():

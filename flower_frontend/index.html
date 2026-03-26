@@ -3201,10 +3201,104 @@
             alert('分享功能暂未实现');
         }
         
+        // 当前要移动的图片信息
+        let currentMoveImageId = null;
+        let currentMoveFromAlbumId = null;
+
         // 移动图片到其他相册
-        function moveImage(imageId) {
-            // 这里可以实现移动图片功能，例如打开移动对话框
-            alert('移动功能暂未实现');
+        async function moveImage(imageId) {
+            currentMoveImageId = imageId;
+            currentMoveFromAlbumId = window.currentAlbum ? window.currentAlbum.id : null;
+
+            if (!currentMoveFromAlbumId) {
+                alert('无法获取当前相册信息');
+                return;
+            }
+
+            // 加载用户相册列表
+            await loadAlbumListForMove();
+
+            // 显示移动对话框
+            openModal('moveImageModal');
+        }
+
+        // 加载相册列表（用于移动选择）
+        async function loadAlbumListForMove() {
+            const select = document.getElementById('targetAlbumSelect');
+            select.innerHTML = '<option value="">请选择目标相册...</option>';
+
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) return;
+
+                const response = await fetch('/api/albums', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+                if (data.success && data.albums) {
+                    data.albums.forEach(album => {
+                        // 排除当前相册
+                        if (album.id !== currentMoveFromAlbumId) {
+                            const option = document.createElement('option');
+                            option.value = album.id;
+                            option.textContent = `${album.name} (${album.category || '未分类'})`;
+                            select.appendChild(option);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('加载相册列表失败:', error);
+            }
+        }
+
+        // 确认移动图片
+        async function confirmMoveImage() {
+            const select = document.getElementById('targetAlbumSelect');
+            const targetAlbumId = select.value;
+
+            if (!targetAlbumId) {
+                alert('请选择目标相册');
+                return;
+            }
+
+            if (!currentMoveImageId || !currentMoveFromAlbumId) {
+                alert('移动信息不完整');
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) {
+                    alert('请先登录');
+                    return;
+                }
+
+                const response = await fetch(`/api/albums/${currentMoveFromAlbumId}/images/${currentMoveImageId}/move`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ target_album_id: parseInt(targetAlbumId) })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('图片移动成功');
+                    closeModal('moveImageModal');
+                    // 重新加载当前相册
+                    await viewAlbumDetail(currentMoveFromAlbumId);
+                    // 刷新相册列表
+                    loadAlbums();
+                } else {
+                    alert('移动失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('移动图片失败:', error);
+                alert('移动失败，请稍后重试');
+            }
         }
         
         // 删除相册图片（新函数，接收albumId和imageId）
@@ -4508,6 +4602,27 @@
             <button onclick="zoomOut()" style="position: absolute; bottom: 20px; left: 50px; background: rgba(0, 0, 0, 0.5); border: 1px solid white; color: white; font-size: 20px; cursor: pointer; padding: 10px 15px; border-radius: 5px; z-index: 10000;">－</button>
             <button onclick="zoomIn()" style="position: absolute; bottom: 20px; left: 120px; background: rgba(0, 0, 0, 0.5); border: 1px solid white; color: white; font-size: 20px; cursor: pointer; padding: 10px 15px; border-radius: 5px; z-index: 10000;">＋</button>
             <img id="previewImage" style="max-width: 85%; max-height: 85%; border-radius: 12px; transition: 0.2s;">
+        </div>
+
+        <!-- 移动图片对话框 -->
+        <div id="moveImageModal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 450px;">
+                <div class="modal-header">
+                    <h3>📂 移动图片到其他相册</h3>
+                    <span class="close-btn" onclick="closeModal('moveImageModal')">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 15px; color: #666;">请选择要将图片移动到的目标相册：</p>
+                    <select id="targetAlbumSelect" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; background: white;">
+                        <option value="">请选择目标相册...</option>
+                    </select>
+                    <p id="moveImageError" style="color: #e74c3c; margin-top: 10px; display: none;"></p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeModal('moveImageModal')">取消</button>
+                    <button class="btn-primary" onclick="confirmMoveImage()">确认移动</button>
+                </div>
+            </div>
         </div>
 
     </body>

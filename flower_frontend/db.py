@@ -1647,7 +1647,88 @@ class SQLDatabaseManager:
             raise Exception(f'删除图片失败: {str(e)}')
         finally:
             conn.close()
-    
+
+    def move_image_to_album(self, image_id, from_album_id, to_album_id, user_id):
+        """将图片从一个相册移动到另一个相册"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # 1. 检查图片是否存在于原相册
+            cursor.execute(
+                "SELECT * FROM album_images WHERE id = %s AND album_id = %s AND deleted_at IS NULL",
+                (image_id, from_album_id)
+            )
+            image = cursor.fetchone()
+            if not image:
+                raise Exception('图片不存在或已被删除')
+
+            # 2. 检查目标相册是否存在且属于当前用户
+            cursor.execute(
+                "SELECT id FROM albums WHERE id = %s AND user_id = %s",
+                (to_album_id, user_id)
+            )
+            if not cursor.fetchone():
+                raise Exception('目标相册不存在或无权限')
+
+            # 3. 检查是否移动到同一个相册
+            if from_album_id == to_album_id:
+                raise Exception('不能移动到同一个相册')
+
+            # 4. 更新图片的相册ID
+            now = int(time.time())
+            cursor.execute(
+                "UPDATE album_images SET album_id = %s, updated_at = %s WHERE id = %s",
+                (to_album_id, now, image_id)
+            )
+
+            if cursor.rowcount > 0:
+                # 5. 更新原相册图片数量
+                cursor.execute(
+                    "UPDATE albums SET image_count = image_count - 1 WHERE id = %s",
+                    (from_album_id,)
+                )
+
+                # 6. 更新目标相册图片数量
+                cursor.execute(
+                    "UPDATE albums SET image_count = image_count + 1 WHERE id = %s",
+                    (to_album_id,)
+                )
+
+                # 7. 检查原相册封面是否需要更新
+                cursor.execute(
+                    "SELECT cover_image FROM albums WHERE id = %s",
+                    (from_album_id,)
+                )
+                album = cursor.fetchone()
+                if album and album['cover_image'] == image['image_path']:
+                    # 查找原相册中最早的一张图片作为新封面
+                    cursor.execute(
+                        "SELECT image_path FROM album_images WHERE album_id = %s AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 1",
+                        (from_album_id,)
+                    )
+                    new_cover = cursor.fetchone()
+                    if new_cover:
+                        cursor.execute(
+                            "UPDATE albums SET cover_image = %s WHERE id = %s",
+                            (new_cover['image_path'], from_album_id)
+                        )
+                    else:
+                        cursor.execute(
+                            "UPDATE albums SET cover_image = NULL WHERE id = %s",
+                            (from_album_id,)
+                        )
+
+                conn.commit()
+                print(f"[DB] 移动图片成功: image_id={image_id}, from={from_album_id}, to={to_album_id}")
+                return True
+            return False
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f'移动图片失败: {str(e)}')
+        finally:
+            conn.close()
+
     def get_album_categories(self, user_id):
         """获取用户相册的所有分类"""
         conn = self.get_connection()
@@ -2442,6 +2523,11 @@ def delete_album_image(image_id, album_id, user_id):
     if db_manager is None:
         raise Exception("数据库未初始化")
     return db_manager.delete_album_image(image_id, album_id, user_id)
+
+def move_image_to_album(image_id, from_album_id, to_album_id, user_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.move_image_to_album(image_id, from_album_id, to_album_id, user_id)
 
 def get_album_categories(user_id):
     if db_manager is None:
