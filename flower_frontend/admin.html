@@ -672,8 +672,32 @@
         // 当前选中的用户ID
         let currentUserId = null;
 
+        // 检查登录状态
+        function checkAdminAuth() {
+            const token = localStorage.getItem('token');
+            const role = localStorage.getItem('role');
+            
+            if (!token) {
+                window.location.href = 'login.html';
+                return false;
+            }
+            
+            if (role !== 'admin' && role !== 'super_admin') {
+                alert('您没有管理员权限');
+                window.location.href = 'index.html';
+                return false;
+            }
+            
+            return true;
+        }
+
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
+            // 先检查登录状态
+            if (!checkAdminAuth()) {
+                return;
+            }
+            
             // 加载系统概要
             loadSystemSummary();
             

@@ -178,11 +178,12 @@ else:
     flower_model.iou = 0.5
 
 # JWT工具函数
-def generate_jwt(user_id, username):
+def generate_jwt(user_id, username, role='user'):
     """生成JWT令牌"""
     payload = {
         'user_id': user_id,
         'username': username,
+        'role': role,
         'exp': int(time.time()) + app.config['JWT_EXPIRATION_DELTA']
     }
     token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
@@ -223,6 +224,7 @@ def auth_required(f):
         # 将用户信息存储到g对象
         g.user_id = payload['user_id']
         g.username = payload['username']
+        g.role = payload.get('role', 'user')
         
         return f(*args, **kwargs)
     decorated_function.__name__ = f.__name__
@@ -993,8 +995,8 @@ def register():
         # 创建用户
         user_id = create_user(username, email, password, role)
         
-        # 生成JWT令牌
-        token = generate_jwt(user_id, username)
+        # 生成JWT令牌（包含角色信息）
+        token = generate_jwt(user_id, username, role)
         
         return jsonify({'success': True, 'user_id': user_id, 'username': username, 'role': role, 'token': token, 'message': f'{"管理员" if role == "admin" else "普通用户"}注册成功'})
     except ValueError as e:
@@ -1026,10 +1028,19 @@ def login():
         if not verify_password(user['password'], password):
             return jsonify({'success': False, 'error': '用户名或密码错误'}), 401
         
-        # 生成JWT令牌
-        token = generate_jwt(user['id'], user['username'])
+        # 获取用户角色
+        user_role = user.get('role', 'user')
         
-        return jsonify({'success': True, 'user_id': user['id'], 'username': user['username'], 'token': token})
+        # 生成JWT令牌（包含角色信息）
+        token = generate_jwt(user['id'], user['username'], user_role)
+        
+        return jsonify({
+            'success': True, 
+            'user_id': user['id'], 
+            'username': user['username'], 
+            'role': user_role,
+            'token': token
+        })
     except Exception as e:
         print(f"登录过程中发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
