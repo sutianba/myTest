@@ -2294,8 +2294,15 @@
                     }
                     albumCover.innerHTML = `<img src="${coverImage}" alt="${album.name}" style="width: 100%; height: 100%; object-fit: cover;">`;
                     
+                    // 保存当前相册信息到全局变量和 localStorage
+                    window.currentAlbum = album;
+                    window.currentAlbumId = album.id;
+                    localStorage.setItem('currentAlbum', JSON.stringify(album));
+                    localStorage.setItem('currentAlbumId', album.id);
+                    console.log('保存当前相册信息:', { albumId: album.id, albumName: album.name });
+                    
                     // 显示相册图片
-                    displayAlbumImages(data.images);
+                    displayAlbumImages(data.images, album.id);
                 } else {
                     console.log('加载相册详情失败:', data.error);
                     alert('加载相册详情失败');
@@ -2309,7 +2316,8 @@
         }
         
         // 显示相册图片
-        function displayAlbumImages(images) {
+        function displayAlbumImages(images, albumId) {
+            console.log('显示相册图片:', { albumId, imageCount: images ? images.length : 0 });
             const imagesGrid = document.getElementById('albumImagesGrid');
             imagesGrid.innerHTML = '';
             
@@ -2386,7 +2394,7 @@
                             <button onclick="event.stopPropagation(); moveImage(${img.id});" style="width: 30px; height: 30px; border: none; border-radius: 50%; background-color: rgba(255, 255, 255, 0.8); cursor: pointer; display: flex; align-items: center; justify-content: center;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="15 19 12 22 9 19"></polyline><polyline points="19 9 22 12 19 15"></polyline><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line></svg>
                             </button>
-                            <button onclick="event.stopPropagation(); deleteImage(${img.id});" style="width: 30px; height: 30px; border: none; border-radius: 50%; background-color: rgba(255, 255, 255, 0.8); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                            <button onclick="event.stopPropagation(); deleteAlbumImage(${albumId}, ${img.id});" style="width: 30px; height: 30px; border: none; border-radius: 50%; background-color: rgba(255, 255, 255, 0.8); cursor: pointer; display: flex; align-items: center; justify-content: center;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                             </button>
                         </div>
@@ -2448,21 +2456,31 @@
             alert('移动功能暂未实现');
         }
         
-        // 删除图片
-        async function deleteImage(imageId) {
-            if (!confirm('确定要删除这张图片吗？')) {
+        // 删除相册图片（新函数，接收albumId和imageId）
+        async function deleteAlbumImage(albumId, imageId) {
+            console.log('删除图片:', { albumId, imageId, currentAlbum: window.currentAlbum });
+            
+            // 校验参数
+            if (!albumId || !imageId) {
+                console.error('删除图片失败: 缺少必要参数', { albumId, imageId });
+                alert('删除失败: 缺少必要参数');
                 return;
             }
             
-            const currentAlbumId = localStorage.getItem('currentAlbumId');
-            if (!currentAlbumId) {
-                alert('未找到当前相册信息');
+            if (!confirm('确定要删除这张图片吗？')) {
                 return;
             }
             
             try {
                 const token = localStorage.getItem('token');
-                const response = await fetch(`/api/albums/${currentAlbumId}/images/${imageId}`, {
+                if (!token) {
+                    alert('请先登录');
+                    return;
+                }
+                
+                console.log('发送删除请求:', `/api/albums/${albumId}/images/${imageId}`);
+                
+                const response = await fetch(`/api/albums/${albumId}/images/${imageId}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -2470,12 +2488,13 @@
                 });
                 
                 const data = await response.json();
+                console.log('删除响应:', data);
                 
                 if (data.success) {
                     alert('图片已删除');
-                    // 重新加载相册图片
-                    loadAlbumImages(currentAlbumId);
-                    // 同时刷新相册列表以更新计数
+                    // 重新加载当前相册详情（获取最新数据，包括可能更新的封面）
+                    await viewAlbumDetail(albumId);
+                    // 同时刷新相册总览页，确保 image_count 和封面同步更新
                     loadAlbums();
                 } else {
                     alert('删除失败: ' + (data.error || '未知错误'));
@@ -2483,6 +2502,17 @@
             } catch (error) {
                 console.error('删除图片失败:', error);
                 alert('删除失败: ' + error.message);
+            }
+        }
+        
+        // 删除图片（旧函数，保留兼容）
+        async function deleteImage(imageId) {
+            console.log('deleteImage 被调用，重定向到 deleteAlbumImage');
+            const albumId = window.currentAlbumId || localStorage.getItem('currentAlbumId');
+            if (albumId) {
+                deleteAlbumImage(albumId, imageId);
+            } else {
+                alert('未找到当前相册信息');
             }
         }
         
