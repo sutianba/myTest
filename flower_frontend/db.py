@@ -1473,6 +1473,19 @@ class SQLDatabaseManager:
                 (album_id,)
             )
             
+            # 5. 如果相册没有封面图，将当前图片设为封面
+            cursor.execute(
+                "SELECT cover_image FROM albums WHERE id = %s",
+                (album_id,)
+            )
+            album = cursor.fetchone()
+            if album and not album['cover_image']:
+                cursor.execute(
+                    "UPDATE albums SET cover_image = %s WHERE id = %s",
+                    (image_path, album_id)
+                )
+                print(f"更新相册封面: album_id={album_id}, cover_image={image_path}")
+            
             conn.commit()
             return cursor.lastrowid
         except Exception as e:

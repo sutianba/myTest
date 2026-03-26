@@ -11,21 +11,21 @@ conn = pymysql.connect(
 )
 cursor = conn.cursor()
 
-print('=== recognition_results 表 ===')
-cursor.execute('SELECT id, user_id, image_path FROM recognition_results ORDER BY id DESC LIMIT 5')
+print('=== albums 表 ===')
+cursor.execute('SELECT id, name, category, image_count, cover_image FROM albums ORDER BY id DESC')
 results = cursor.fetchall()
 if results:
     for row in results:
-        print(f"ID: {row['id']}, User: {row['user_id']}, Path: {row['image_path']}")
+        print(f"ID: {row['id']}, Name: {row['name']}, Category: {row['category']}, Count: {row['image_count']}, Cover: {row['cover_image']}")
 else:
     print('无数据')
 
 print('\n=== album_images 表 ===')
-cursor.execute('SELECT id, album_id, image_path FROM album_images ORDER BY id DESC LIMIT 5')
+cursor.execute('SELECT id, album_id, image_path, image_name FROM album_images ORDER BY id DESC')
 results = cursor.fetchall()
 if results:
     for row in results:
-        print(f"ID: {row['id']}, Album: {row['album_id']}, Path: {row['image_path']}")
+        print(f"ID: {row['id']}, Album: {row['album_id']}, Path: {row['image_path']}, Name: {row['image_name']}")
 else:
     print('无数据')
 
