@@ -45,7 +45,7 @@ if not TEST_MODE:
             # 用户端新功能
             update_user_profile, get_user_recognition_history, delete_recognition_result, save_recognition_result,
             create_album, get_user_albums, get_album_by_id, update_album, delete_album,
-            add_image_to_album, get_album_images, delete_album_image, get_album_categories,
+            add_image_to_album, get_album_images, delete_album_image, move_image_to_album, get_album_categories,
             create_feedback, get_user_feedback, get_feedback_by_id, delete_feedback,
             get_all_feedback, respond_feedback,
             create_announcement, get_announcements, update_announcement, delete_announcement,
