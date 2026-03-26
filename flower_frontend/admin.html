@@ -1237,6 +1237,37 @@
         }
 
         // 加载帖子列表
+        // 格式化日期为年月日
+        function formatDate(dateValue) {
+            if (!dateValue) return '-';
+            
+            let date;
+            // 如果是数字（Unix时间戳）
+            if (typeof dateValue === 'number') {
+                // 判断是秒还是毫秒（Unix时间戳通常小于 2000000000000）
+                date = dateValue < 10000000000 ? new Date(dateValue * 1000) : new Date(dateValue);
+            } else if (typeof dateValue === 'string') {
+                // 尝试直接解析
+                date = new Date(dateValue);
+            } else {
+                return '-';
+            }
+            
+            // 检查日期是否有效
+            if (isNaN(date.getTime())) {
+                return '-';
+            }
+            
+            // 格式化为年月日
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            
+            return `${year}-${month}-${day} ${hours}:${minutes}`;
+        }
+
         function loadPosts() {
             const token = localStorage.getItem('token');
             document.getElementById('posts-body').innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
@@ -1257,7 +1288,7 @@
                     }
                     
                     posts.forEach(item => {
-                        const date = new Date(item.created_at * 1000).toLocaleString();
+                        const date = formatDate(item.created_at);
                         const content = item.content.length > 50 ? item.content.substring(0, 50) + '...' : item.content;
                         const row = document.createElement('tr');
                         row.innerHTML = `
