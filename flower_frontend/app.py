@@ -1834,12 +1834,15 @@ def delete_album_image_api(album_id, image_id):
             if img['id'] == image_id:
                 image_info = img
                 break
-        
+
         if image_info:
             move_to_recycle_bin(g.user_id, 'image', image_id, {
                 'image_path': image_info.get('image_path'),
                 'flower_name': image_info.get('flower_name'),
-                'confidence': image_info.get('confidence')
+                'confidence': image_info.get('confidence'),
+                'created_at': image_info.get('created_at'),
+                'album_id': album_id,
+                'album_name': image_info.get('album_name', '未分类')
             })
         
         success = delete_album_image(image_id, album_id, g.user_id)
