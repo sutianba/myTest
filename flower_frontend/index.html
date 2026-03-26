@@ -944,8 +944,207 @@
             margin: 15px 0;
         }
 
-        .albums-page, .history-page, .recycle-page {
+        .albums-page, .history-page, .recycle-page, .feedback-page {
             padding: 20px;
+        }
+
+        /* 反馈页面样式 */
+        .feedback-form-container {
+            background: #fff;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .feedback-form-container h3 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.2rem;
+        }
+
+        .feedback-form .form-group {
+            margin-bottom: 20px;
+        }
+
+        .feedback-form label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .feedback-form .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .feedback-form .form-control:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .feedback-form textarea.form-control {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .feedback-form .char-count {
+            text-align: right;
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .feedback-history-container {
+            background: #fff;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .feedback-history-container h3 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.2rem;
+        }
+
+        .feedback-list {
+            min-height: 200px;
+        }
+
+        .feedback-item {
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+
+        .feedback-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .feedback-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .feedback-type-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .feedback-type-badge.bug {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .feedback-type-badge.feature {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .feedback-type-badge.improvement {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .feedback-type-badge.other {
+            background: #f5f5f5;
+            color: #616161;
+        }
+
+        .feedback-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .feedback-status.pending {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .feedback-status.resolved {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .feedback-item-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .feedback-item-content {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .feedback-item-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: #999;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .feedback-response {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 12px;
+            border-left: 3px solid #4CAF50;
+        }
+
+        .feedback-response-title {
+            font-weight: 600;
+            color: #4CAF50;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .feedback-response-content {
+            color: #555;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        .feedback-pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .feedback-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .feedback-empty i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            display: block;
         }
 
         /* 回收站样式 */
@@ -1648,6 +1847,7 @@
                 <li class="nav-item"><a href="#" class="nav-link" data-page="albums">相册</a></li>
                 <li class="nav-item"><a href="#" class="nav-link" data-page="history">历史记录</a></li>
                 <li class="nav-item"><a href="#" class="nav-link" data-page="recycle-bin">回收站</a></li>
+                <li class="nav-item"><a href="#" class="nav-link" data-page="feedback">意见反馈</a></li>
                 <li class="nav-item"><a href="login.html" class="nav-link" target="_blank">管理员登录</a></li>
             </ul>
             <div class="auth-buttons" id="authButtons">
@@ -1851,6 +2051,52 @@
                 <div id="recycleList"></div>
             </div>
         </div>
+
+        <!-- 意见反馈页面 -->
+        <div class="page" id="feedback">
+            <div class="feedback-page">
+                <h2>💬 意见反馈</h2>
+                <p>遇到问题或有建议？请告诉我们</p>
+
+                <!-- 反馈表单 -->
+                <div class="feedback-form-container">
+                    <h3>提交反馈</h3>
+                    <form id="feedbackForm" class="feedback-form">
+                        <div class="form-group">
+                            <label>反馈类型：</label>
+                            <select id="feedbackType" class="form-control" required>
+                                <option value="">请选择反馈类型</option>
+                                <option value="bug">🐛 功能故障</option>
+                                <option value="feature">✨ 功能建议</option>
+                                <option value="improvement">🔧 改进建议</option>
+                                <option value="other">📝 其他</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>标题：</label>
+                            <input type="text" id="feedbackTitle" class="form-control" placeholder="请简要描述您的问题或建议" required maxlength="100">
+                        </div>
+                        <div class="form-group">
+                            <label>详细内容：</label>
+                            <textarea id="feedbackContent" class="form-control" rows="5" placeholder="请详细描述您遇到的问题或建议..." required maxlength="1000"></textarea>
+                            <div class="char-count"><span id="contentCount">0</span>/1000</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="submitFeedbackBtn">
+                            <i class="fa fa-paper-plane"></i> 提交反馈
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 我的反馈历史 -->
+                <div class="feedback-history-container">
+                    <h3>我的反馈历史</h3>
+                    <div id="feedbackList" class="feedback-list">
+                        <div class="loading">加载中...</div>
+                    </div>
+                    <div class="feedback-pagination" id="feedbackPagination"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 登录模态框 -->
@@ -1977,6 +2223,7 @@
             setupAuthModals();
             setupFileUpload();
             setupCommunity();
+            setupFeedback();
             updateAuthState();
             
             // 添加返回相册列表按钮的点击事件
@@ -2014,6 +2261,8 @@
                 loadHistory();
             } else if (pageId === 'recycle-bin') {
                 loadRecycleBin();
+            } else if (pageId === 'feedback') {
+                loadUserFeedback();
             }
         }
 
@@ -4608,6 +4857,302 @@
             zoom = Math.max(0.2, zoom - 0.2);
             const img = document.getElementById('previewImage');
             img.style.transform = `scale(${zoom})`;
+        }
+
+        // ==================== 反馈功能 ====================
+        
+        // 反馈类型映射
+        const feedbackTypeMap = {
+            'bug': { label: '功能故障', icon: '🐛', class: 'bug' },
+            'feature': { label: '功能建议', icon: '✨', class: 'feature' },
+            'improvement': { label: '改进建议', icon: '🔧', class: 'improvement' },
+            'other': { label: '其他', icon: '📝', class: 'other' }
+        };
+
+        // 反馈状态映射
+        const feedbackStatusMap = {
+            'pending': { label: '待处理', class: 'pending' },
+            'resolved': { label: '已解决', class: 'resolved' }
+        };
+
+        // 设置反馈功能
+        function setupFeedback() {
+            const feedbackForm = document.getElementById('feedbackForm');
+            const feedbackContent = document.getElementById('feedbackContent');
+            const contentCount = document.getElementById('contentCount');
+
+            if (feedbackForm) {
+                feedbackForm.addEventListener('submit', handleSubmitFeedback);
+            }
+
+            // 字符计数
+            if (feedbackContent && contentCount) {
+                feedbackContent.addEventListener('input', function() {
+                    contentCount.textContent = this.value.length;
+                });
+            }
+        }
+
+        // 提交反馈
+        async function handleSubmitFeedback(e) {
+            e.preventDefault();
+            
+            const currentToken = getToken();
+            if (!currentToken) {
+                alert('请先登录后再提交反馈');
+                openModal('loginModal');
+                return;
+            }
+
+            const type = document.getElementById('feedbackType').value;
+            const title = document.getElementById('feedbackTitle').value.trim();
+            const content = document.getElementById('feedbackContent').value.trim();
+
+            if (!type) {
+                alert('请选择反馈类型');
+                return;
+            }
+            if (!title) {
+                alert('请输入反馈标题');
+                return;
+            }
+            if (!content) {
+                alert('请输入反馈内容');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitFeedbackBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 提交中...';
+
+            try {
+                const response = await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + currentToken
+                    },
+                    body: JSON.stringify({
+                        feedback_type: type,
+                        title: title,
+                        content: content
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('反馈提交成功！感谢您的建议，我们会尽快处理。');
+                    // 清空表单
+                    document.getElementById('feedbackForm').reset();
+                    document.getElementById('contentCount').textContent = '0';
+                    // 刷新反馈列表
+                    loadUserFeedback();
+                } else {
+                    alert('提交失败：' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('提交反馈错误:', error);
+                alert('提交失败，请稍后重试');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa fa-paper-plane"></i> 提交反馈';
+            }
+        }
+
+        // 加载用户反馈列表
+        async function loadUserFeedback(page = 1) {
+            const currentToken = getToken();
+            const feedbackList = document.getElementById('feedbackList');
+            
+            if (!feedbackList) return;
+
+            if (!currentToken) {
+                feedbackList.innerHTML = `
+                    <div class="feedback-empty">
+                        <i>🔒</i>
+                        <p>请先登录后查看反馈历史</p>
+                        <button class="btn btn-primary" onclick="openModal('loginModal')" style="margin-top: 15px;">立即登录</button>
+                    </div>
+                `;
+                return;
+            }
+
+            feedbackList.innerHTML = '<div class="loading">加载中...</div>';
+
+            const limit = 10;
+            const offset = (page - 1) * limit;
+
+            try {
+                const response = await fetch(`/api/feedback?limit=${limit}&offset=${offset}`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + currentToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    renderFeedbackList(data.feedback || [], page, data.total || 0, limit);
+                } else {
+                    feedbackList.innerHTML = `<div class="feedback-empty"><p>加载失败：${data.error || '未知错误'}</p></div>`;
+                }
+            } catch (error) {
+                console.error('加载反馈列表错误:', error);
+                feedbackList.innerHTML = '<div class="feedback-empty"><p>加载失败，请稍后重试</p></div>';
+            }
+        }
+
+        // 渲染反馈列表
+        function renderFeedbackList(feedbackList, currentPage, total, limit) {
+            const container = document.getElementById('feedbackList');
+            const pagination = document.getElementById('feedbackPagination');
+
+            if (feedbackList.length === 0) {
+                container.innerHTML = `
+                    <div class="feedback-empty">
+                        <i>📭</i>
+                        <p>暂无反馈记录</p>
+                        <p style="font-size: 14px; margin-top: 10px;">有问题或建议？请在上方提交反馈</p>
+                    </div>
+                `;
+                pagination.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = feedbackList.map(item => {
+                const typeInfo = feedbackTypeMap[item.feedback_type] || feedbackTypeMap['other'];
+                const statusInfo = feedbackStatusMap[item.status] || feedbackStatusMap['pending'];
+                const createdDate = formatDate(item.created_at);
+
+                return `
+                    <div class="feedback-item" data-id="${item.id}">
+                        <div class="feedback-item-header">
+                            <span class="feedback-type-badge ${typeInfo.class}">
+                                ${typeInfo.icon} ${typeInfo.label}
+                            </span>
+                            <span class="feedback-status ${statusInfo.class}">${statusInfo.label}</span>
+                        </div>
+                        <div class="feedback-item-title">${escapeHtml(item.title)}</div>
+                        <div class="feedback-item-content">${escapeHtml(item.content)}</div>
+                        <div class="feedback-item-footer">
+                            <span>提交时间：${createdDate}</span>
+                            ${item.status === 'pending' ? 
+                                `<button class="btn btn-sm btn-danger" onclick="deleteFeedback(${item.id})">删除</button>` : 
+                                ''}
+                        </div>
+                        ${item.response ? `
+                            <div class="feedback-response">
+                                <div class="feedback-response-title">📢 管理员回复</div>
+                                <div class="feedback-response-content">${escapeHtml(item.response)}</div>
+                                <div style="font-size: 12px; color: #999; margin-top: 8px;">
+                                    回复时间：${formatDate(item.responded_at)}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            // 渲染分页
+            const totalPages = Math.ceil(total / limit);
+            if (totalPages > 1) {
+                pagination.innerHTML = renderPagination(currentPage, totalPages, 'loadUserFeedback');
+            } else {
+                pagination.innerHTML = '';
+            }
+        }
+
+        // 删除反馈
+        async function deleteFeedback(feedbackId) {
+            if (!confirm('确定要删除这条反馈吗？')) return;
+
+            const currentToken = getToken();
+            if (!currentToken) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/feedback/${feedbackId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Bearer ' + currentToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('删除成功');
+                    loadUserFeedback();
+                } else {
+                    alert('删除失败：' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('删除反馈错误:', error);
+                alert('删除失败，请稍后重试');
+            }
+        }
+
+        // 渲染分页
+        function renderPagination(currentPage, totalPages, callbackName) {
+            let html = '';
+            
+            // 上一页
+            if (currentPage > 1) {
+                html += `<button class="btn btn-secondary" onclick="${callbackName}(${currentPage - 1})">上一页</button>`;
+            }
+            
+            // 页码
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === currentPage) {
+                    html += `<button class="btn btn-primary" disabled>${i}</button>`;
+                } else {
+                    html += `<button class="btn btn-secondary" onclick="${callbackName}(${i})">${i}</button>`;
+                }
+            }
+            
+            // 下一页
+            if (currentPage < totalPages) {
+                html += `<button class="btn btn-secondary" onclick="${callbackName}(${currentPage + 1})">下一页</button>`;
+            }
+            
+            return html;
+        }
+
+        // HTML转义
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 格式化日期
+        function formatDate(dateValue) {
+            if (!dateValue) return '-';
+            
+            let date;
+            if (typeof dateValue === 'number') {
+                date = dateValue < 10000000000 ? new Date(dateValue * 1000) : new Date(dateValue);
+            } else if (typeof dateValue === 'string') {
+                date = new Date(dateValue);
+            } else {
+                return '-';
+            }
+            
+            if (isNaN(date.getTime())) {
+                return '-';
+            }
+            
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            
+            return `${year}-${month}-${day} ${hours}:${minutes}`;
         }
 
     </script>
