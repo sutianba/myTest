@@ -3312,7 +3312,6 @@
             // 注意：相册图片可能不包含完整的识别信息，需要后续通过 recognition_result_id 获取
             const shootTime = img.shoot_time || '-';
             const locationText = img.location_text || '-';
-            const regionLabel = img.region_label || '-';
             const cameraMake = img.camera_make || '-';
             const cameraModel = img.camera_model || '-';
             const imageWidth = img.image_width || '-';
@@ -3336,42 +3335,22 @@
 
                 <div class="album-card-details">
                     <div class="detail-section">
-                        <h4>📷 拍摄信息</h4>
+                        <h4>📷 图片信息</h4>
                         <div class="detail-grid">
                             <div class="detail-item">
                                 <span class="label">拍摄时间:</span>
                                 <span class="value">${shootTime}</span>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="detail-section">
-                        <h4>📍 位置信息</h4>
-                        <div class="detail-grid">
                             <div class="detail-item">
                                 <span class="label">拍摄地点:</span>
                                 <span class="value">${locationText}</span>
                             </div>
                             <div class="detail-item">
-                                <span class="label">区域分类:</span>
-                                <span class="value">${regionLabel}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="detail-section">
-                        <h4>📸 设备信息</h4>
-                        <div class="detail-grid">
-                            <div class="detail-item">
-                                <span class="label">相机品牌:</span>
-                                <span class="value">${cameraMake}</span>
+                                <span class="label">相机:</span>
+                                <span class="value">${cameraMake} ${cameraModel}</span>
                             </div>
                             <div class="detail-item">
-                                <span class="label">相机型号:</span>
-                                <span class="value">${cameraModel}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="label">图片尺寸:</span>
+                                <span class="label">尺寸:</span>
                                 <span class="value">${imageSize}</span>
                             </div>
                         </div>
