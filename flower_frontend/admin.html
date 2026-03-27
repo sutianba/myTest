@@ -1040,7 +1040,7 @@
                     
                     admins.forEach(admin => {
                         const row = document.createElement('tr');
-                        const date = new Date(admin.created_at * 1000).toLocaleString();
+                        const date = formatDate(admin.created_at);
                         row.innerHTML = `
                             <td>${admin.id}</td>
                             <td>${admin.username}</td>

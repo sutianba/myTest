@@ -131,6 +131,127 @@ def send_verification_email(email, code, purpose):
         print(f"详细异常信息: {traceback.format_exc()}")
         return False
 
+# 花卉名称中英文映射表
+FLOWER_NAME_MAP = {
+    'rose': '玫瑰',
+    'tulip': '郁金香',
+    'daisy': '雏菊',
+    'sunflower': '向日葵',
+    'dandelion': '蒲公英',
+    'lily': '百合',
+    'orchid': '兰花',
+    'lotus': '荷花',
+    'peony': '牡丹',
+    'chrysanthemum': '菊花',
+    'carnation': '康乃馨',
+    'iris': '鸢尾花',
+    'hydrangea': '绣球花',
+    'lavender': '薰衣草',
+    'jasmine': '茉莉花',
+    'hibiscus': '木槿花',
+    'magnolia': '玉兰花',
+    'cherry_blossom': '樱花',
+    'plum_blossom': '梅花',
+    'peach_blossom': '桃花',
+    'apple_blossom': '苹果花',
+    'pear_blossom': '梨花',
+    'apricot_blossom': '杏花',
+    'azalea': '杜鹃花',
+    'camellia': '山茶花',
+    'gardenia': '栀子花',
+    'osmanthus': '桂花',
+    'narcissus': '水仙花',
+    'begonia': '海棠花',
+    'morning_glory': '牵牛花',
+    'petunia': '矮牵牛',
+    'marigold': '万寿菊',
+    'pansy': '三色堇',
+    'violet': '紫罗兰',
+    'poppy': '罂粟花',
+    'foxglove': '毛地黄',
+    'lupine': '羽扇豆',
+    'delphinium': '飞燕草',
+    'snapdragon': '金鱼草',
+    'zinnia': '百日菊',
+    'cosmos': '波斯菊',
+    'aster': '翠菊',
+    'dahlia': '大丽花',
+    'gladiolus': '唐菖蒲',
+    'freesia': '小苍兰',
+    'ranunculus': '花毛茛',
+    'anemone': '银莲花',
+    'gerbera': '非洲菊',
+    'alstroemeria': '六出花',
+    'lisianthus': '洋桔梗',
+    'stock': '紫罗兰',
+    'sweet_pea': '香豌豆',
+    'clematis': '铁线莲',
+    'wisteria': '紫藤花',
+    'bougainvillea': '三角梅',
+    'frangipani': '鸡蛋花',
+    'bird_of_paradise': '鹤望兰',
+    'protea': '海神花',
+    'banksia': '班克木',
+    'waratah': '特洛皮',
+    'kangaroo_paw': '袋鼠爪花',
+    'grevillea': '银桦花',
+    'bottlebrush': '红千层',
+    'wattle': '金合欢',
+    'boronia': '波罗尼亚',
+    'flannel_flower': '绒花',
+    'rice_flower': '米花',
+    'waxflower': '蜡花',
+    'blushing_bride': '脸红新娘',
+    'thryptomene': '百里香',
+    'tea_tree': '茶树花',
+    'leptospermum': '薄子木',
+    'chamelaucium': '蜡花',
+    'verticordia': '羽毛花',
+    'eryngium': '刺芹',
+    'scabiosa': '蓝盆花',
+    'craspedia': '金槌花',
+    'billy_buttons': '金球菊',
+    'statice': '补血草',
+    'sea_holly': '海冬青',
+    'carnation_pink': '粉康乃馨',
+    'carnation_red': '红康乃馨',
+    'carnation_white': '白康乃馨',
+    'carnation_yellow': '黄康乃馨',
+    'rose_red': '红玫瑰',
+    'rose_pink': '粉玫瑰',
+    'rose_white': '白玫瑰',
+    'rose_yellow': '黄玫瑰',
+    'rose_orange': '橙玫瑰',
+    'rose_purple': '紫玫瑰',
+    'rose_black': '黑玫瑰',
+    'rose_blue': '蓝玫瑰',
+    'rose_green': '绿玫瑰',
+    'lily_white': '白百合',
+    'lily_pink': '粉百合',
+    'lily_orange': '橙百合',
+    'lily_yellow': '黄百合',
+    'lily_red': '红百合',
+    'tulip_red': '红郁金香',
+    'tulip_pink': '粉郁金香',
+    'tulip_yellow': '黄郁金香',
+    'tulip_purple': '紫郁金香',
+    'tulip_white': '白郁金香',
+    'tulip_orange': '橙郁金香',
+    'orchid_phal': '蝴蝶兰',
+    'orchid_cym': '大花蕙兰',
+    'orchid_dend': '石斛兰',
+    'orchid_onc': '文心兰',
+    'orchid_milton': '堇花兰',
+    'orchid_paph': '兜兰',
+    'orchid_catt': '卡特兰',
+}
+
+def get_flower_name_cn(english_name):
+    """获取花卉中文名称"""
+    if not english_name:
+        return '未知花卉'
+    return FLOWER_NAME_MAP.get(english_name.lower(), english_name)
+
 # 加载YOLOv5模型
 flower_model = None
 if USE_MODEL and not TEST_MODE:
@@ -664,8 +785,11 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
     # 解析识别结果
     results = []
     for result in model_results.pandas().xyxy[0].to_dict(orient='records'):
+        english_name = result['name']
+        chinese_name = get_flower_name_cn(english_name)
         results.append({
-            'name': result['name'],
+            'name': chinese_name,
+            'name_en': english_name,
             'confidence': round(result['confidence'], 4),
             'bbox': [
                 int(result['xmin']),
@@ -689,6 +813,7 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
         top_result = results[0]
         detection_results.append({
             'name': top_result['name'],
+            'name_en': top_result.get('name_en', ''),
             'confidence': float(top_result['confidence']),
             'bbox': top_result['bbox']
         })

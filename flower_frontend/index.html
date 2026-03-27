@@ -2883,14 +2883,10 @@
 
                 const exifContent = document.createElement('div');
                 const shootTime = item.shoot_time || item.exif_info.date_time || '未获取到';
-                const shootMonth = item.shoot_month || '未获取到';
-                const shootSeason = item.shoot_season || '未获取到';
                 const location = item.location_text || item.exif_info.location.formatted_address || '未获取到';
                 const regionLabel = item.region_label || '未获取到';
                 exifContent.innerHTML = `
                     <p><strong>拍摄时间:</strong> ${shootTime}</p>
-                    <p><strong>拍摄月份:</strong> ${shootMonth}</p>
-                    <p><strong>拍摄季节:</strong> ${shootSeason}</p>
                     <p><strong>拍摄地点:</strong> ${location}</p>
                     <p><strong>区域分类:</strong> ${regionLabel}</p>
                     <p><strong>相机:</strong> ${item.exif_info.camera_info.make} ${item.exif_info.camera_info.model}</p>
@@ -2971,15 +2967,11 @@
                         
                         if (exifDiv) {
                             const shootTime = newItem.shoot_time || newItem.exif_info.date_time || '未获取到';
-                            const shootMonth = newItem.shoot_month || '未获取到';
-                            const shootSeason = newItem.shoot_season || '未获取到';
                             const location = newItem.location_text || newItem.exif_info.location.formatted_address || '未获取到';
                             const regionLabel = newItem.region_label || '未获取到';
                             
                             exifDiv.innerHTML = `
                                 <p><strong>拍摄时间:</strong> ${shootTime}</p>
-                                <p><strong>拍摄月份:</strong> ${shootMonth}</p>
-                                <p><strong>拍摄季节:</strong> ${shootSeason}</p>
                                 <p><strong>拍摄地点:</strong> ${location}</p>
                                 <p><strong>区域分类:</strong> ${regionLabel}</p>
                                 <p><strong>相机:</strong> ${newItem.exif_info.camera_info.make} ${newItem.exif_info.camera_info.model}</p>
@@ -3319,8 +3311,6 @@
             // 从 image_description 或关联数据获取更多信息
             // 注意：相册图片可能不包含完整的识别信息，需要后续通过 recognition_result_id 获取
             const shootTime = img.shoot_time || '-';
-            const shootMonth = img.shoot_month ? img.shoot_month + '月' : '-';
-            const shootSeason = img.shoot_season || '-';
             const locationText = img.location_text || '-';
             const regionLabel = img.region_label || '-';
             const cameraMake = img.camera_make || '-';
@@ -3351,14 +3341,6 @@
                             <div class="detail-item">
                                 <span class="label">拍摄时间:</span>
                                 <span class="value">${shootTime}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="label">拍摄月份:</span>
-                                <span class="value">${shootMonth}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="label">拍摄季节:</span>
-                                <span class="value">${shootSeason}</span>
                             </div>
                         </div>
                     </div>
@@ -3755,12 +3737,9 @@
 
             // 拍摄信息
             const shootTime = item.shoot_time || '-';
-            const shootMonth = item.shoot_month ? item.shoot_month + '月' : '-';
-            const shootSeason = item.shoot_season || '-';
 
             // 位置信息
             const locationText = item.location_text || '-';
-            const regionLabel = item.region_label || '-';
 
             // 相机信息
             const cameraMake = item.camera_make || '-';
@@ -3788,50 +3767,22 @@
 
                 <div class="history-details">
                     <div class="detail-section">
-                        <h4>📷 拍摄信息</h4>
+                        <h4>📷 图片信息</h4>
                         <div class="detail-grid">
                             <div class="detail-item">
                                 <span class="label">拍摄时间:</span>
                                 <span class="value">${shootTime}</span>
                             </div>
                             <div class="detail-item">
-                                <span class="label">拍摄月份:</span>
-                                <span class="value">${shootMonth}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="label">拍摄季节:</span>
-                                <span class="value">${shootSeason}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="detail-section">
-                        <h4>📍 位置信息</h4>
-                        <div class="detail-grid">
-                            <div class="detail-item">
                                 <span class="label">拍摄地点:</span>
                                 <span class="value">${locationText}</span>
                             </div>
                             <div class="detail-item">
-                                <span class="label">区域分类:</span>
-                                <span class="value">${regionLabel}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="detail-section">
-                        <h4>📸 设备信息</h4>
-                        <div class="detail-grid">
-                            <div class="detail-item">
-                                <span class="label">相机品牌:</span>
-                                <span class="value">${cameraMake}</span>
+                                <span class="label">相机:</span>
+                                <span class="value">${cameraMake} ${cameraModel}</span>
                             </div>
                             <div class="detail-item">
-                                <span class="label">相机型号:</span>
-                                <span class="value">${cameraModel}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="label">图片尺寸:</span>
+                                <span class="label">尺寸:</span>
                                 <span class="value">${imageSize}</span>
                             </div>
                         </div>
@@ -4036,12 +3987,9 @@
 
             // 拍摄信息
             const shootTime = itemData.shoot_time || '-';
-            const shootMonth = itemData.shoot_month ? itemData.shoot_month + '月' : '-';
-            const shootSeason = itemData.shoot_season || '-';
 
             // 位置信息
             const locationText = itemData.location_text || '-';
-            const regionLabel = itemData.region_label || '-';
 
             // 相机信息
             const cameraMake = itemData.camera_make || '-';
@@ -4072,50 +4020,22 @@
                 <!-- 详细识别信息 -->
                 <div class="recycle-details">
                     <div class="recycle-detail-section">
-                        <h5>📷 拍摄信息</h5>
+                        <h5>📷 图片信息</h5>
                         <div class="recycle-detail-grid">
                             <div class="recycle-detail-item">
                                 <span class="label">拍摄时间:</span>
                                 <span class="value">${shootTime}</span>
                             </div>
                             <div class="recycle-detail-item">
-                                <span class="label">拍摄月份:</span>
-                                <span class="value">${shootMonth}</span>
-                            </div>
-                            <div class="recycle-detail-item">
-                                <span class="label">拍摄季节:</span>
-                                <span class="value">${shootSeason}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="recycle-detail-section">
-                        <h5>📍 位置信息</h5>
-                        <div class="recycle-detail-grid">
-                            <div class="recycle-detail-item">
                                 <span class="label">拍摄地点:</span>
                                 <span class="value">${locationText}</span>
                             </div>
                             <div class="recycle-detail-item">
-                                <span class="label">区域分类:</span>
-                                <span class="value">${regionLabel}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="recycle-detail-section">
-                        <h5>📸 设备信息</h5>
-                        <div class="recycle-detail-grid">
-                            <div class="recycle-detail-item">
-                                <span class="label">相机品牌:</span>
-                                <span class="value">${cameraMake}</span>
+                                <span class="label">相机:</span>
+                                <span class="value">${cameraMake} ${cameraModel}</span>
                             </div>
                             <div class="recycle-detail-item">
-                                <span class="label">相机型号:</span>
-                                <span class="value">${cameraModel}</span>
-                            </div>
-                            <div class="recycle-detail-item">
-                                <span class="label">图片尺寸:</span>
+                                <span class="label">尺寸:</span>
                                 <span class="value">${imageSize}</span>
                             </div>
                         </div>
