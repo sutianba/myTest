@@ -1692,11 +1692,58 @@ def get_server_status_api():
 
 @app.route('/api/admin/server/metrics', methods=['GET'])
 @auth_required
-@permission_required('monitor_server')
+@permission_required('view_server_status')
 def get_latest_server_metrics_api():
-    """获取最新服务器指标"""
+    """获取最新服务器指标（实时获取）"""
     try:
-        metrics = get_latest_server_metrics()
+        import psutil
+        import time
+        
+        metrics = []
+        current_time = int(time.time())
+        
+        # CPU使用率
+        cpu_percent = psutil.cpu_percent(interval=1)
+        metrics.append({
+            'metric_name': 'cpu_usage',
+            'metric_value': round(cpu_percent, 1),
+            'unit': '%',
+            'status': 'warning' if cpu_percent > 80 else 'normal',
+            'created_at': current_time
+        })
+        
+        # 内存使用率
+        memory = psutil.virtual_memory()
+        metrics.append({
+            'metric_name': 'memory_usage',
+            'metric_value': round(memory.percent, 1),
+            'unit': '%',
+            'status': 'warning' if memory.percent > 80 else 'normal',
+            'created_at': current_time
+        })
+        
+        # 磁盘使用率
+        disk = psutil.disk_usage('/')
+        disk_percent = (disk.used / disk.total) * 100
+        metrics.append({
+            'metric_name': 'disk_usage',
+            'metric_value': round(disk_percent, 1),
+            'unit': '%',
+            'status': 'warning' if disk_percent > 80 else 'normal',
+            'created_at': current_time
+        })
+        
+        # 网络流量（发送+接收 MB）
+        net_io = psutil.net_io_counters()
+        network_mb = (net_io.bytes_sent + net_io.bytes_recv) / (1024 * 1024)
+        metrics.append({
+            'metric_name': 'network_traffic',
+            'metric_value': round(network_mb, 2),
+            'unit': 'MB',
+            'status': 'normal',
+            'created_at': current_time
+        })
+        
         return jsonify({'success': True, 'metrics': metrics})
     except Exception as e:
         print(f"获取最新服务器指标时发生错误: {str(e)}")
