@@ -118,9 +118,8 @@
         .announcement-section {
             background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
             border-left: 4px solid #f39c12;
-            padding: 15px 20px;
-            margin: 20px 30px;
-            border-radius: 8px;
+            padding: 12px 20px;
+            margin: 0;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
@@ -1915,22 +1914,22 @@
             </div>
         </nav>
 
+        <!-- 公告栏 - 全局显示 -->
+        <div class="announcement-section" id="announcementSection" style="display: none;">
+            <div class="announcement-header">
+                <i class="fa fa-bullhorn"></i>
+                <span>系统公告</span>
+            </div>
+            <div class="announcement-list" id="announcementList">
+                <!-- 公告内容将在这里动态加载 -->
+            </div>
+        </div>
+
         <!-- 首页 -->
         <div class="page active" id="home">
             <div class="header">
                 <h1>🌸 植物花卉识别工具</h1>
                 <p>上传图片，智能识别花卉种类</p>
-            </div>
-
-            <!-- 公告栏 -->
-            <div class="announcement-section" id="announcementSection" style="display: none;">
-                <div class="announcement-header">
-                    <i class="fa fa-bullhorn"></i>
-                    <span>系统公告</span>
-                </div>
-                <div class="announcement-list" id="announcementList">
-                    <!-- 公告内容将在这里动态加载 -->
-                </div>
             </div>
 
             <div class="main-content">
