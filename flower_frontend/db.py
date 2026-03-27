@@ -1665,15 +1665,36 @@ class SQLDatabaseManager:
             conn.close()
     
     def get_album_images(self, album_id, user_id, limit=50, offset=0):
-        """获取相册中的图片（排除已删除的）"""
+        """获取相册中的图片（排除已删除的），关联识别结果获取完整信息"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            cursor.execute(
-                "SELECT * FROM album_images WHERE album_id = %s AND deleted_at IS NULL ORDER BY created_at DESC LIMIT %s OFFSET %s",
-                (album_id, limit, offset)
-            )
+            # 关联识别结果表获取完整信息
+            cursor.execute("""
+                SELECT 
+                    ai.*,
+                    rr.result as flower_name,
+                    rr.confidence,
+                    rr.shoot_time,
+                    rr.shoot_year,
+                    rr.shoot_month,
+                    rr.shoot_season,
+                    rr.latitude,
+                    rr.longitude,
+                    rr.location_text,
+                    rr.region_label,
+                    rr.camera_make,
+                    rr.camera_model,
+                    rr.image_width,
+                    rr.image_height,
+                    rr.final_category
+                FROM album_images ai
+                LEFT JOIN recognition_results rr ON ai.recognition_result_id = rr.id
+                WHERE ai.album_id = %s AND ai.deleted_at IS NULL
+                ORDER BY ai.created_at DESC
+                LIMIT %s OFFSET %s
+            """, (album_id, limit, offset))
             images = cursor.fetchall()
             
             cursor.execute(
