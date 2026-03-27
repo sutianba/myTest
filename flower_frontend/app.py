@@ -242,10 +242,13 @@ def permission_required(permission):
                 return jsonify({'success': False, 'error': '未认证'}), 401
             
             try:
-                if not check_user_permission(g.user_id, permission):
+                print(f"检查权限: user_id={g.user_id}, permission={permission}")
+                has_permission = check_user_permission(g.user_id, permission)
+                print(f"权限检查结果: {has_permission}")
+                if not has_permission:
                     return jsonify({'success': False, 'error': '权限不足'}), 403
             except Exception as e:
-                print(f"检查权限时发生错误: {str(e)}")
+                print(f"检查权限时发生错误: user_id={g.user_id}, permission={permission}, error={str(e)}")
                 # 权限检查失败时返回错误，不允许继续执行
                 return jsonify({'success': False, 'error': '权限检查失败'}), 500
             

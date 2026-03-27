@@ -1128,10 +1128,13 @@
 
         // 加载用户列表
         function loadUsers(page = 1) {
+            console.log('loadUsers called, page:', page);
             currentUserPage = page;
             const token = localStorage.getItem('token');
             const search = document.getElementById('userSearchInput').value.trim();
             const roleFilter = document.getElementById('userRoleFilter').value;
+            
+            console.log('token:', token ? '存在' : '不存在');
             
             document.getElementById('users-body').innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
             
@@ -1139,11 +1142,17 @@
             if (search) url += `&search=${encodeURIComponent(search)}`;
             if (roleFilter) url += `&role=${roleFilter}`;
             
+            console.log('请求URL:', url);
+            
             fetch(url, {
                 headers: { 'Authorization': 'Bearer ' + token }
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('响应状态:', response.status);
+                return response.json();
+            })
             .then(data => {
+                console.log('响应数据:', data);
                 if (data.success) {
                     renderUsers(data.users, data.total, page);
                 } else {
@@ -1152,7 +1161,7 @@
             })
             .catch(error => {
                 console.error('加载用户列表失败:', error);
-                document.getElementById('users-body').innerHTML = '<tr><td colspan="6" class="error">加载失败</td></tr>';
+                document.getElementById('users-body').innerHTML = '<tr><td colspan="6" class="error">加载失败: ' + error.message + '</td></tr>';
             });
         }
 

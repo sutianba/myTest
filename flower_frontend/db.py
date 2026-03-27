@@ -342,16 +342,21 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
+            print(f"[DB] 检查权限: user_id={user_id}, permission={permission_name}")
             cursor.execute('''
-            SELECT COUNT(*) FROM permissions p
+            SELECT COUNT(*) as count FROM permissions p
             JOIN role_permissions rp ON p.id = rp.permission_id
             JOIN user_roles ur ON rp.role_id = ur.role_id
             WHERE ur.user_id = %s AND p.name = %s
             ''', (user_id, permission_name))
             result = cursor.fetchone()
-            count = result[0] if result else 0
+            count = result['count'] if result else 0
+            print(f"[DB] 权限检查结果: count={count}")
             return count > 0
         except Exception as e:
+            print(f"[DB] 检查权限异常: {str(e)}")
+            import traceback
+            traceback.print_exc()
             raise Exception(f'检查用户权限失败: {str(e)}')
         finally:
             conn.close()
