@@ -114,6 +114,61 @@
             opacity: 0.9;
         }
 
+        /* 公告栏样式 */
+        .announcement-section {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border-left: 4px solid #f39c12;
+            padding: 15px 20px;
+            margin: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .announcement-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .announcement-header i {
+            color: #f39c12;
+        }
+
+        .announcement-item {
+            background: white;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #4a90e2;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .announcement-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .announcement-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .announcement-content {
+            color: #666;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        .announcement-time {
+            color: #999;
+            font-size: 0.85em;
+            margin-top: 5px;
+        }
+
         .main-content {
             padding: 30px;
         }
@@ -1867,6 +1922,17 @@
                 <p>上传图片，智能识别花卉种类</p>
             </div>
 
+            <!-- 公告栏 -->
+            <div class="announcement-section" id="announcementSection" style="display: none;">
+                <div class="announcement-header">
+                    <i class="fa fa-bullhorn"></i>
+                    <span>系统公告</span>
+                </div>
+                <div class="announcement-list" id="announcementList">
+                    <!-- 公告内容将在这里动态加载 -->
+                </div>
+            </div>
+
             <div class="main-content">
                 <div class="upload-section">
                     <div class="drop-zone" id="dropZone">
@@ -2225,12 +2291,43 @@
             setupCommunity();
             setupFeedback();
             updateAuthState();
+            loadAnnouncements();
             
             // 添加返回相册列表按钮的点击事件
             const backToAlbumsBtn = document.getElementById('backToAlbums');
             if (backToAlbumsBtn) {
                 backToAlbumsBtn.addEventListener('click', backToAlbums);
             }
+        }
+
+        // 加载公告
+        function loadAnnouncements() {
+            fetch('/api/announcements?limit=5')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.announcements && data.announcements.length > 0) {
+                        const announcementSection = document.getElementById('announcementSection');
+                        const announcementList = document.getElementById('announcementList');
+                        
+                        announcementList.innerHTML = '';
+                        data.announcements.forEach(announcement => {
+                            const item = document.createElement('div');
+                            item.className = 'announcement-item';
+                            const date = new Date(announcement.created_at * 1000).toLocaleString();
+                            item.innerHTML = `
+                                <div class="announcement-title">${announcement.title}</div>
+                                <div class="announcement-content">${announcement.content}</div>
+                                <div class="announcement-time">发布时间: ${date}</div>
+                            `;
+                            announcementList.appendChild(item);
+                        });
+                        
+                        announcementSection.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('加载公告失败:', error);
+                });
         }
 
         // 设置导航
