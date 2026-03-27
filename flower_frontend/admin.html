@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>超级管理员控制台</title>
+    <title>管理员控制台</title>
     <style>
         * {
             margin: 0;
@@ -260,7 +260,7 @@
         <!-- 侧边栏 -->
         <div class="sidebar">
             <div class="sidebar-header">
-                <h2>超级管理员</h2>
+                <h2>管理员</h2>
             </div>
             <ul class="sidebar-menu">
                 <li><a href="#dashboard" class="active" data-section="dashboard">仪表盘</a></li>
@@ -496,7 +496,6 @@
                             <option value="">全部角色</option>
                             <option value="user">普通用户</option>
                             <option value="admin">管理员</option>
-                            <option value="super_admin">超级管理员</option>
                         </select>
                         <button class="btn btn-primary" onclick="loadUsers()">搜索</button>
                         <button class="btn btn-secondary" onclick="resetUserFilter()">重置</button>
@@ -702,7 +701,6 @@
                 <select id="new-role">
                     <option value="user">普通用户</option>
                     <option value="admin">管理员</option>
-                    <option value="super_admin">超级管理员</option>
                 </select>
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
