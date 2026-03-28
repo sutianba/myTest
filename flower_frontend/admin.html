@@ -910,6 +910,7 @@
                         loadAdmins();
                     } else if (sectionId === 'announcement-management') {
                         loadAnnouncementsManagement();
+                        setTimeout(bindCreateAnnouncementEvent, 100);
                     } else if (sectionId === 'feedback-management') {
                         loadFeedback();
                     } else if (sectionId === 'post-management') {
@@ -1521,32 +1522,41 @@
         }
 
         // 创建公告
-        document.getElementById('create-announcement-btn')?.addEventListener('click', function() {
-            const title = prompt('请输入公告标题:');
-            if (!title) return;
-            const content = prompt('请输入公告内容:');
-            if (!content) return;
-            const announcement_type = prompt('请输入公告类型 (general/maintenance/update):', 'general');
+        let announcementEventBound = false;
+        function bindCreateAnnouncementEvent() {
+            if (announcementEventBound) return;
             
-            const token = localStorage.getItem('token');
-            fetch('/api/admin/announcements', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                },
-                body: JSON.stringify({ title, content, announcement_type })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('公告创建成功');
-                    loadAnnouncementsManagement();
-                } else {
-                    alert('创建失败: ' + data.error);
-                }
-            });
-        });
+            const btn = document.getElementById('create-announcement-btn');
+            if (btn) {
+                btn.addEventListener('click', function() {
+                    const title = prompt('请输入公告标题:');
+                    if (!title) return;
+                    const content = prompt('请输入公告内容:');
+                    if (!content) return;
+                    const announcement_type = prompt('请输入公告类型 (general/maintenance/update):', 'general');
+                    
+                    const token = localStorage.getItem('token');
+                    fetch('/api/admin/announcements', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({ title, content, announcement_type })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('公告创建成功');
+                            loadAnnouncementsManagement();
+                        } else {
+                            alert('创建失败: ' + data.error);
+                        }
+                    });
+                });
+                announcementEventBound = true;
+            }
+        }
 
         // 编辑公告
         function editAnnouncement(id, title, content, type) {

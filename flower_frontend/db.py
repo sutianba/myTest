@@ -140,6 +140,11 @@ class SQLDatabaseManager:
             # 检查并添加缺失的字段
             fields_to_add = [
                 ('announcement_type', 'VARCHAR(50) DEFAULT \'general\''),
+                ('is_active', 'TINYINT(1) DEFAULT 1'),
+                ('admin_id', 'INT NOT NULL'),
+                ('admin_username', 'VARCHAR(50)'),
+                ('created_at', 'INT NOT NULL'),
+                ('updated_at', 'INT NOT NULL'),
             ]
 
             for field_name, field_type in fields_to_add:
