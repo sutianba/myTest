@@ -1,3 +1,6 @@
+-- 未使用的旧版本数据库文件（SQLite格式）
+-- 当前系统使用的是 database.sql（MySQL格式）
+-- 此文件为备份，请勿删除
 PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
 CREATE TABLE users (

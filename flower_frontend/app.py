@@ -779,6 +779,17 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
     except Exception as e:
         print(f"提取图片EXIF信息失败: {e}")
 
+    # 优化：降低图片分辨率以提升识别速度
+    # 将图片缩放到最大640px，保持宽高比
+    max_size = 640
+    original_width, original_height = image.size
+    if max(original_width, original_height) > max_size:
+        ratio = max_size / max(original_width, original_height)
+        new_width = int(original_width * ratio)
+        new_height = int(original_height * ratio)
+        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        print(f"图片已缩放: {original_width}x{original_height} -> {new_width}x{new_height}")
+    
     # 使用YOLOv5模型进行植物花卉识别
     model_results = flower_model(image)
     
