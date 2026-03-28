@@ -909,7 +909,7 @@
                     } else if (sectionId === 'admin-management') {
                         loadAdmins();
                     } else if (sectionId === 'announcement-management') {
-                        loadAnnouncements();
+                        loadAnnouncementsManagement();
                     } else if (sectionId === 'feedback-management') {
                         loadFeedback();
                     } else if (sectionId === 'post-management') {
@@ -1474,8 +1474,8 @@
             return `${year}-${month}-${day} ${hours}:${minutes}`;
         }
 
-        // 加载公告列表
-        function loadAnnouncements() {
+        // 加载公告管理列表
+        function loadAnnouncementsManagement() {
             const token = localStorage.getItem('token');
             document.getElementById('announcements-body').innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
             
@@ -1541,7 +1541,7 @@
             .then(data => {
                 if (data.success) {
                     alert('公告创建成功');
-                    loadAnnouncements();
+                    loadAnnouncementsManagement();
                 } else {
                     alert('创建失败: ' + data.error);
                 }
@@ -1569,7 +1569,7 @@
             .then(data => {
                 if (data.success) {
                     alert('公告更新成功');
-                    loadAnnouncements();
+                    loadAnnouncementsManagement();
                 } else {
                     alert('更新失败: ' + data.error);
                 }
@@ -1589,7 +1589,7 @@
             .then(data => {
                 if (data.success) {
                     alert('公告已删除');
-                    loadAnnouncements();
+                    loadAnnouncementsManagement();
                 } else {
                     alert('删除失败: ' + data.error);
                 }
