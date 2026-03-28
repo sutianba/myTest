@@ -127,6 +127,36 @@ class SQLDatabaseManager:
             print(f"确保表字段失败: {e}")
         finally:
             conn.close()
+        
+        # 确保announcements表包含所有必要字段
+        self._ensure_announcements_fields()
+    
+    def _ensure_announcements_fields(self):
+        """确保announcements表包含所有必要字段"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # 检查并添加缺失的字段
+            fields_to_add = [
+                ('announcement_type', 'VARCHAR(50) DEFAULT \'general\''),
+            ]
+
+            for field_name, field_type in fields_to_add:
+                try:
+                    cursor.execute(f"ALTER TABLE announcements ADD COLUMN {field_name} {field_type}")
+                    print(f"添加字段 {field_name} 到 announcements 表")
+                except pymysql.MySQLError as e:
+                    if "1060" in str(e):  # 字段已存在
+                        pass
+                    else:
+                        print(f"添加字段 {field_name} 失败: {e}")
+
+            conn.commit()
+        except Exception as e:
+            print(f"确保announcements表字段失败: {e}")
+        finally:
+            conn.close()
     
     def delete_database(self):
         """删除数据库"""
