@@ -397,20 +397,25 @@ class SQLDatabaseManager:
             conn.close()
     
     # 植物花卉识别结果相关操作
-    def save_recognition_result(self, user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None):
+    def save_recognition_result(self, user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None, created_at=None):
         """保存植物花卉识别结果"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         try:
-            print(f"[DB] 保存识别结果: user_id={user_id}, image_path={image_path}, result={result}, confidence={confidence}")
+            print(f"[DB] 保存识别结果: user_id={user_id}, image_path={image_path}, result={result}, confidence={confidence}, created_at={created_at}")
+            
+            # 如果没有提供created_at，使用当前时间
+            if created_at is None:
+                created_at = int(time.time())
+            
             cursor.execute('''
             INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height, created_at))
             conn.commit()
             result_id = cursor.lastrowid
-            print(f"[DB] 识别结果保存成功: result_id={result_id}")
+            print(f"[DB] 识别结果保存成功: result_id={result_id}, created_at={created_at}")
             return result_id
         except Exception as e:
             conn.rollback()
@@ -461,10 +466,11 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
+            now = int(time.time())
             cursor.execute('''
             INSERT INTO posts (user_id, content, image_url, topics, tags, source_type, source_id, likes_count, comments_count, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ''', (user_id, content, image_url, topics, tags, source_type, source_id, 0, 0))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (user_id, content, image_url, topics, tags, source_type, source_id, 0, 0, now, now))
             
             post_id = cursor.lastrowid
             conn.commit()
@@ -520,9 +526,9 @@ class SQLDatabaseManager:
         try:
             cursor.execute('''
             UPDATE posts
-            SET content = %s, image_url = %s, updated_at = CURRENT_TIMESTAMP
+            SET content = %s, image_url = %s, updated_at = %s
             WHERE id = %s
-            ''', (content, image_url, post_id))
+            ''', (content, image_url, int(time.time()), post_id))
             
             conn.commit()
             return cursor.rowcount > 0
@@ -604,10 +610,11 @@ class SQLDatabaseManager:
                 floor_number = count + 1
             
             # 创建评论
+            now = int(time.time())
             cursor.execute('''
             INSERT INTO comments (post_id, user_id, content, parent_comment_id, reply_to_user_id, floor_number, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ''', (post_id, user_id, content, parent_comment_id, reply_to_user_id, floor_number))
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ''', (post_id, user_id, content, parent_comment_id, reply_to_user_id, floor_number, now))
             
             # 增加帖子评论数
             cursor.execute('''
@@ -690,10 +697,11 @@ class SQLDatabaseManager:
                 return False  # 已经点赞过
             
             # 创建点赞记录
+            now = int(time.time())
             cursor.execute('''
             INSERT INTO comment_likes (comment_id, user_id, created_at)
-            VALUES (%s, %s, CURRENT_TIMESTAMP)
-            ''', (comment_id, user_id))
+            VALUES (%s, %s, %s)
+            ''', (comment_id, user_id, now))
             
             conn.commit()
             return True
@@ -781,10 +789,11 @@ class SQLDatabaseManager:
                 return False  # 已经点赞过
             
             # 创建点赞记录
+            now = int(time.time())
             cursor.execute('''
             INSERT INTO likes (post_id, user_id, created_at)
-            VALUES (%s, %s, CURRENT_TIMESTAMP)
-            ''', (post_id, user_id))
+            VALUES (%s, %s, %s)
+            ''', (post_id, user_id, now))
             
             # 增加帖子点赞数
             cursor.execute('''
@@ -857,10 +866,11 @@ class SQLDatabaseManager:
                 return False  # 已经关注过
             
             # 创建关注记录
+            now = int(time.time())
             cursor.execute('''
             INSERT INTO follows (follower_id, following_id, created_at)
-            VALUES (%s, %s, CURRENT_TIMESTAMP)
-            ''', (follower_id, following_id))
+            VALUES (%s, %s, %s)
+            ''', (follower_id, following_id, now))
             
             conn.commit()
             return True
@@ -1429,8 +1439,6 @@ class SQLDatabaseManager:
                 params.append(password_hash)
             
             if updates:
-                # 使用当前时间的标准格式，而不是 Unix 时间戳
-                updates.append("updated_at = CURRENT_TIMESTAMP")
                 params.append(user_id)
                 
                 sql = f"UPDATE users SET {', '.join(updates)} WHERE id = %s"
@@ -1492,9 +1500,10 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
+            now = int(time.time())
             cursor.execute(
-                "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-                (user_id, name, category, cover_image, description, 0)
+                "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (user_id, name, category, cover_image, description, 0, now, now)
             )
             conn.commit()
             return cursor.lastrowid
@@ -1584,10 +1593,11 @@ class SQLDatabaseManager:
         try:
             # 软删除：更新 deleted_at 字段
             now = int(time.time())
-            cursor.execute(
-                "UPDATE albums SET deleted_at = %s, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
-                (now, now, album_id, user_id)
-            )
+            print(f"[DEBUG] delete_album: now={now}, type={type(now)}, album_id={album_id}, user_id={user_id}")
+            sql = "UPDATE albums SET deleted_at = %s, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL"
+            print(f"[DEBUG] SQL: {sql}")
+            print(f"[DEBUG] Params: {(now, now, album_id, user_id)}")
+            cursor.execute(sql, (now, now, album_id, user_id))
             conn.commit()
             
             if cursor.rowcount > 0:
@@ -1664,8 +1674,8 @@ class SQLDatabaseManager:
             
             # 4. 更新相册图片数量
             cursor.execute(
-                "UPDATE albums SET image_count = image_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                (album_id,)
+                "UPDATE albums SET image_count = image_count + 1, updated_at = %s WHERE id = %s",
+                (int(time.time()), album_id)
             )
             print(f"[DB] 相册图片数量已更新: album_id={album_id}")
             

@@ -394,6 +394,35 @@
             text-align: center;
         }
 
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4a90e2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-status {
+            font-size: 1.1em;
+            color: #333;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+
+        .loading-detail {
+            font-size: 0.85em;
+            color: #888;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
         /* 社区页面 */
         .community-page {
             padding: 20px;
@@ -1949,11 +1978,13 @@
                 </div>
 
                 <div class="loading" id="loading">
-                    <p>识别中，请稍候...</p>
+                    <div class="loading-spinner"></div>
+                    <p class="loading-status" id="loadingStatus">正在准备识别...</p>
                     <div class="progress-container">
                         <div class="progress-bar" id="progressBar"></div>
                         <p class="progress-text" id="progressText">0%</p>
                     </div>
+                    <p class="loading-detail" id="loadingDetail"></p>
                 </div>
 
                 <div class="results-section" id="resultsSection">
@@ -2805,6 +2836,14 @@
             });
         }
 
+        // 更新加载状态
+        function updateLoadingStatus(status, detail = '') {
+            const loadingStatus = document.getElementById('loadingStatus');
+            const loadingDetail = document.getElementById('loadingDetail');
+            if (loadingStatus) loadingStatus.textContent = status;
+            if (loadingDetail) loadingDetail.textContent = detail;
+        }
+
         // 处理多个文件上传
         async function handleMultipleFiles(files) {
             const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
@@ -2821,6 +2860,9 @@
 
             loading.classList.add('active');
             resultsSection.classList.remove('active');
+            updateLoadingStatus('正在准备图片...', `共 ${imageFiles.length} 张图片`);
+
+            const startTime = Date.now();
 
             try {
                 const allResults = [];
@@ -2830,20 +2872,33 @@
                 const imageDataList = [];
                 for (let i = 0; i < totalFiles; i++) {
                     const file = imageFiles[i];
+                    updateLoadingStatus(`正在读取图片 ${i + 1}/${totalFiles}...`, file.name);
                     const imageData = await readFileAsDataURL(file);
                     imageDataList.push({
                         file: file,
                         imageData: imageData
                     });
+                    const progress = ((i + 1) / totalFiles) * 20; // 读取阶段占20%
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `${Math.round(progress)}%`;
                 }
                 
                 // 调用多图识别API
+                updateLoadingStatus('正在识别中...', '这可能需要几秒钟，请耐心等待');
+                progressBar.style.width = '30%';
+                progressText.textContent = '30%';
+                
                 const results = await callRecognitionAPI(imageDataList.map(item => item.imageData));
                 
                 // 处理识别结果
                 for (let i = 0; i < totalFiles; i++) {
                     const item = imageDataList[i];
                     const result = results[i].results;
+                    
+                    updateLoadingStatus(`正在处理结果 ${i + 1}/${totalFiles}...`, 
+                        result.detections && result.detections.length > 0 
+                            ? `识别到: ${result.detections[0].name}` 
+                            : '未识别到花卉');
                     
                     allResults.push({
                         file: item.file,
@@ -2853,10 +2908,13 @@
                         saved_to_album: result.saved_to_album
                     });
                     
-                    const progress = ((i + 1) / totalFiles) * 100;
+                    const progress = 30 + ((i + 1) / totalFiles) * 70; // 处理阶段占70%
                     progressBar.style.width = `${progress}%`;
                     progressText.textContent = `${Math.round(progress)}% (${i + 1}/${totalFiles})`;
                 }
+                
+                const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                updateLoadingStatus('识别完成！', `耗时 ${elapsedTime} 秒`);
 
                 displayAllResults(allResults);
                 resultsSection.classList.add('active');
@@ -3477,8 +3535,12 @@
                 return;
             }
             
+            console.log(`[DEBUG] 开始删除相册: albumId=${albumId}, albumName=${albumName}`);
+            
             try {
                 const token = localStorage.getItem('auth_token');
+                console.log(`[DEBUG] 使用token: ${token ? token.substring(0, 20) + '...' : 'null'}`);
+                
                 const response = await fetch(`/api/albums/${albumId}`, {
                     method: 'DELETE',
                     headers: {
@@ -3486,17 +3548,20 @@
                     }
                 });
                 
+                console.log(`[DEBUG] 删除响应状态: ${response.status}`);
                 const data = await response.json();
+                console.log(`[DEBUG] 删除响应数据:`, data);
                 
                 if (data.success) {
                     alert('相册已删除');
                     // 重新加载相册列表
+                    console.log('[DEBUG] 重新加载相册列表');
                     loadAlbums();
                 } else {
                     alert('删除失败: ' + (data.error || '未知错误'));
                 }
             } catch (error) {
-                console.error('删除相册失败:', error);
+                console.error('[DEBUG] 删除相册失败:', error);
                 alert('删除失败: ' + error.message);
             }
         }

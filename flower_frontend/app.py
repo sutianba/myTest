@@ -16,6 +16,9 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
 
+# 地址缓存，用于加速地理编码查询
+address_cache = {}
+
 # 导入配置
 from config import (
     TEST_MODE, USE_MODEL,
@@ -506,7 +509,18 @@ def get_address_from_coordinates(lat, lon, max_retries=3):
     """
     通过经纬度获取地址信息
     使用geopy和Nominatim服务进行逆地理编码
+    添加了缓存机制以加速重复查询
     """
+    global address_cache
+    
+    # 使用精度为2位小数的坐标作为缓存键（约1公里精度）
+    cache_key = f"{round(lat, 2)},{round(lon, 2)}"
+    
+    # 检查缓存
+    if cache_key in address_cache:
+        print(f"使用缓存的地址信息: {cache_key}")
+        return address_cache[cache_key]
+    
     geolocator = Nominatim(user_agent="flower_recognition_app", timeout=10)
     
     # 重试机制
@@ -514,7 +528,11 @@ def get_address_from_coordinates(lat, lon, max_retries=3):
         try:
             location = geolocator.reverse((lat, lon), language='zh-CN')
             if location:
-                return location.raw.get('address', {})
+                address = location.raw.get('address', {})
+                # 存入缓存
+                address_cache[cache_key] = address
+                print(f"地址信息已缓存: {cache_key}")
+                return address
             return None
         except GeocoderTimedOut:
             print(f"地理编码请求超时，第 {attempt + 1} 次尝试...")
@@ -570,6 +588,8 @@ def get_season(month):
 def process_single_image(image_data, user_id=None, save_to_album=False):
     """处理单个图片的识别"""
     print(f"process_single_image called with save_to_album={save_to_album}, user_id={user_id}")
+    # 记录识别开始时间
+    recognition_start_time = time.time()
     # 测试模式下的处理
     if TEST_MODE:
         # 移除base64头部
@@ -862,6 +882,8 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
         'final_category': final_category
     }
     
+    print(f"[DEBUG] 保存检查: save_to_album={save_to_album}, user_id={user_id}, 条件满足={save_to_album and user_id}")
+    
     if save_to_album and user_id:
         print(f"开始保存到相册: save_to_album={save_to_album}, user_id={user_id}, detection_results={detection_results}")
         try:
@@ -890,7 +912,11 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
             relative_path = f"/static/uploads/recognition/{image_filename}"
             print(f"保存图片成功, relative_path={relative_path}")
             
-            # 3. 保存识别结果
+            # 3. 保存识别结果（使用识别完成时的系统时间）
+            recognition_end_time = time.time()
+            recognition_timestamp = int(recognition_end_time)
+            recognition_duration = recognition_end_time - recognition_start_time
+            print(f"识别完成，耗时: {recognition_duration:.2f}秒, 时间戳: {recognition_timestamp}")
             print(f"保存识别结果: user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}")
 
             # 获取相机信息和图片尺寸
@@ -916,7 +942,8 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
                 camera_make=camera_make,
                 camera_model=camera_model,
                 image_width=image_width,
-                image_height=image_height
+                image_height=image_height,
+                created_at=recognition_timestamp
             )
             print(f"保存识别结果成功, result_id={result_id}")
             
