@@ -2097,10 +2097,10 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            now = int(time.time())
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute(
-                "INSERT INTO announcements (title, content, announcement_type, is_active, admin_id, admin_username, created_at, updated_at) VALUES (%s, %s, %s, 1, %s, %s, %s, %s)",
-                (title, content, announcement_type, admin_id, admin_username, now, now)
+                "INSERT INTO announcements (title, content, announcement_type, is_active, admin_id, admin_username, created_by, created_at, updated_at) VALUES (%s, %s, %s, 1, %s, %s, %s, %s, %s)",
+                (title, content, announcement_type, admin_id, admin_username, admin_id, now, now)
             )
             conn.commit()
             return cursor.lastrowid
@@ -2128,6 +2128,29 @@ class SQLDatabaseManager:
                 )
             results = cursor.fetchall()
             
+            # 将日期时间字符串转换为Unix时间戳
+            for result in results:
+                if 'created_at' in result:
+                    try:
+                        # 处理datetime对象或字符串
+                        if isinstance(result['created_at'], datetime):
+                            result['created_at'] = int(result['created_at'].timestamp())
+                        else:
+                            # 处理字符串格式的日期时间
+                            dt = datetime.strptime(result['created_at'], '%Y-%m-%d %H:%M:%S')
+                            result['created_at'] = int(dt.timestamp())
+                    except:
+                        pass
+                if 'updated_at' in result:
+                    try:
+                        if isinstance(result['updated_at'], datetime):
+                            result['updated_at'] = int(result['updated_at'].timestamp())
+                        else:
+                            dt = datetime.strptime(result['updated_at'], '%Y-%m-%d %H:%M:%S')
+                            result['updated_at'] = int(dt.timestamp())
+                    except:
+                        pass
+            
             cursor.execute("SELECT COUNT(*) as count FROM announcements")
             total = cursor.fetchone()['count']
             
@@ -2143,7 +2166,7 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            now = int(time.time())
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute(
                 "UPDATE announcements SET title = %s, content = %s, announcement_type = %s, updated_at = %s WHERE id = %s AND admin_id = %s",
                 (title, content, announcement_type, now, announcement_id, admin_id)
