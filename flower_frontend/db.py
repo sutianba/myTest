@@ -405,14 +405,22 @@ class SQLDatabaseManager:
         try:
             print(f"[DB] 保存识别结果: user_id={user_id}, image_path={image_path}, result={result}, confidence={confidence}, created_at={created_at}")
             
-            # 如果没有提供created_at，使用当前时间
+            # 处理 created_at 参数，转换为正确的时间格式
+            from datetime import datetime
             if created_at is None:
-                created_at = int(time.time())
+                # 没有提供，使用当前时间
+                created_at_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elif isinstance(created_at, int):
+                # 是 Unix 时间戳，转换为时间字符串
+                created_at_str = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                # 已经是字符串，直接使用
+                created_at_str = created_at
             
             cursor.execute('''
             INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height, created_at))
+            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height, created_at_str))
             conn.commit()
             result_id = cursor.lastrowid
             print(f"[DB] 识别结果保存成功: result_id={result_id}, created_at={created_at}")
