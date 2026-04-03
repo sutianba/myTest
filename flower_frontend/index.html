@@ -114,13 +114,25 @@
             opacity: 0.9;
         }
 
-        /* 公告栏样式 */
+        /* 公告栏样式 - 滚动特效 */
         .announcement-section {
             background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
             border-left: 4px solid #f39c12;
-            padding: 12px 20px;
+            padding: 15px 20px;
             margin: 0;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 100;
+            animation: scrollAnnouncement 30s linear infinite;
+        }
+
+        @keyframes scrollAnnouncement {
+            0% {
+                transform: translateX(100%);
+            }
+            100% {
+                transform: translateX(-100%);
+            }
         }
 
         .announcement-header {
@@ -129,43 +141,59 @@
             gap: 8px;
             font-weight: bold;
             color: #856404;
-            margin-bottom: 10px;
             font-size: 1.1em;
+            position: relative;
         }
 
         .announcement-header i {
             color: #f39c12;
         }
 
-        .announcement-item {
-            background: white;
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            border-radius: 6px;
-            border-left: 3px solid #4a90e2;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        .announcement-close {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #856404;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
         }
 
-        .announcement-item:last-child {
-            margin-bottom: 0;
-        }
-
-        .announcement-title {
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 5px;
+        .announcement-close:hover {
+            background: rgba(133, 100, 4, 0.1);
         }
 
         .announcement-content {
             color: #666;
             font-size: 0.95em;
             line-height: 1.5;
+            margin: 10px 0;
         }
 
-        .announcement-time {
-            color: #999;
-            font-size: 0.85em;
-            margin-top: 5px;
+        .announcement-actions {
+            margin-top: 10px;
+            text-align: right;
+        }
+
+        .announcement-btn {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .announcement-btn:hover {
+            background: #357abd;
+            transform: translateY(-2px);
         }
 
         .main-content {
@@ -1966,13 +1994,17 @@
         </nav>
 
         <!-- 公告栏 - 全局显示 -->
-        <div class="announcement-section" id="announcementSection" style="display: none;">
+        <div class="announcement-section" id="announcementSection" style="display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; animation: scrollAnnouncement 30s linear infinite;">
             <div class="announcement-header">
                 <i class="fa fa-bullhorn"></i>
                 <span>系统公告</span>
+                <button class="announcement-close" id="announcementClose">×</button>
             </div>
-            <div class="announcement-list" id="announcementList">
+            <div class="announcement-content" id="announcementContent">
                 <!-- 公告内容将在这里动态加载 -->
+            </div>
+            <div class="announcement-actions">
+                <button class="announcement-btn" id="announcementBtn">知道了</button>
             </div>
         </div>
 
@@ -2358,6 +2390,7 @@
             setupCommunity();
             setupFeedback();
             updateAuthState();
+            initAnnouncementEvents();
             loadAnnouncements();
             
             // 添加返回相册列表按钮的点击事件
@@ -2369,25 +2402,26 @@
 
         // 加载公告
         function loadAnnouncements() {
-            fetch('/api/announcements?limit=5')
+            // 检查用户是否已登录
+            const token = localStorage.getItem('token');
+            if (!token) {
+                return; // 未登录，不显示公告
+            }
+            
+            fetch('/api/announcements?limit=1') // 只获取最新的公告
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.announcements && data.announcements.length > 0) {
+                        const announcement = data.announcements[0];
                         const announcementSection = document.getElementById('announcementSection');
-                        const announcementList = document.getElementById('announcementList');
+                        const announcementContent = document.getElementById('announcementContent');
                         
-                        announcementList.innerHTML = '';
-                        data.announcements.forEach(announcement => {
-                            const item = document.createElement('div');
-                            item.className = 'announcement-item';
-                            const date = new Date(announcement.created_at * 1000).toLocaleString();
-                            item.innerHTML = `
-                                <div class="announcement-title">${announcement.title}</div>
-                                <div class="announcement-content">${announcement.content}</div>
-                                <div class="announcement-time">发布时间: ${date}</div>
-                            `;
-                            announcementList.appendChild(item);
-                        });
+                        const date = new Date(announcement.created_at * 1000).toLocaleString();
+                        announcementContent.innerHTML = `
+                            <h4 style="margin-bottom: 8px; color: #333;">${announcement.title}</h4>
+                            <p>${announcement.content}</p>
+                            <p style="font-size: 0.85em; color: #999; margin-top: 8px;">发布时间: ${date}</p>
+                        `;
                         
                         announcementSection.style.display = 'block';
                     }
@@ -2395,6 +2429,24 @@
                 .catch(error => {
                     console.error('加载公告失败:', error);
                 });
+        }
+
+        // 初始化公告事件
+        function initAnnouncementEvents() {
+            const closeBtn = document.getElementById('announcementClose');
+            const knowBtn = document.getElementById('announcementBtn');
+            
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    document.getElementById('announcementSection').style.display = 'none';
+                });
+            }
+            
+            if (knowBtn) {
+                knowBtn.addEventListener('click', function() {
+                    document.getElementById('announcementSection').style.display = 'none';
+                });
+            }
         }
 
         // 设置导航
@@ -2689,6 +2741,8 @@
                     closeModal('loginModal');
                     // 显示成功消息
                     alert('登录成功！');
+                    // 登录成功后加载公告
+                    loadAnnouncements();
                     // 登录成功后加载相册
                     loadAlbums();
                 } else {
@@ -4975,8 +5029,11 @@
             const postsList = document.getElementById('postsList');
             postsList.innerHTML = '';
 
+            // 首先加载并显示公告
+            loadCommunityAnnouncement(postsList);
+
             if (posts.length === 0) {
-                postsList.innerHTML = '<p>暂无帖子，快来发布第一条吧！</p>';
+                postsList.innerHTML += '<p>暂无帖子，快来发布第一条吧！</p>';
                 return;
             }
 
@@ -5022,6 +5079,37 @@
 
                 postsList.appendChild(postCard);
             });
+        }
+
+        // 加载社区公告
+        function loadCommunityAnnouncement(postsList) {
+            fetch('/api/announcements?limit=1')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.announcements && data.announcements.length > 0) {
+                        const announcement = data.announcements[0];
+                        const announcementCard = document.createElement('div');
+                        announcementCard.className = 'post-card';
+                        announcementCard.style.backgroundColor = '#fff3cd';
+                        announcementCard.style.borderLeft = '4px solid #f39c12';
+
+                        const date = new Date(announcement.created_at * 1000).toLocaleString();
+                        announcementCard.innerHTML = `
+                            <div class="post-header">
+                                <span class="post-author" style="color: #856404; font-weight: bold;">系统管理员</span>
+                                <span class="post-time">${date}</span>
+                                <span style="background: #f39c12; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; font-weight: bold;">最新公告</span>
+                            </div>
+                            <div class="post-content" style="font-weight: 500;">${announcement.title}</div>
+                            <div class="post-content">${announcement.content}</div>
+                        `;
+
+                        postsList.insertBefore(announcementCard, postsList.firstChild);
+                    }
+                })
+                .catch(error => {
+                    console.error('加载公告失败:', error);
+                });
         }
 
         // 格式化帖子时间
