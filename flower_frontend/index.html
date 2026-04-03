@@ -122,8 +122,14 @@
             margin: 0;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             position: relative;
-            z-index: 100;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .announcement-content-scroll {
             animation: scrollAnnouncement 30s linear infinite;
+            white-space: nowrap;
+            display: inline-block;
         }
 
         @keyframes scrollAnnouncement {
@@ -1994,14 +2000,16 @@
         </nav>
 
         <!-- 公告栏 - 全局显示 -->
-        <div class="announcement-section" id="announcementSection" style="display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; animation: scrollAnnouncement 30s linear infinite;">
+        <div class="announcement-section" id="announcementSection" style="display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 1000;">
             <div class="announcement-header">
                 <i class="fa fa-bullhorn"></i>
                 <span>系统公告</span>
                 <button class="announcement-close" id="announcementClose">×</button>
             </div>
-            <div class="announcement-content" id="announcementContent">
-                <!-- 公告内容将在这里动态加载 -->
+            <div class="announcement-content">
+                <div class="announcement-content-scroll" id="announcementContent">
+                    <!-- 公告内容将在这里动态加载 -->
+                </div>
             </div>
             <div class="announcement-actions">
                 <button class="announcement-btn" id="announcementBtn">知道了</button>
@@ -2418,9 +2426,11 @@
                         
                         const date = new Date(announcement.created_at * 1000).toLocaleString();
                         announcementContent.innerHTML = `
-                            <h4 style="margin-bottom: 8px; color: #333;">${announcement.title}</h4>
-                            <p>${announcement.content}</p>
-                            <p style="font-size: 0.85em; color: #999; margin-top: 8px;">发布时间: ${date}</p>
+                            <h4 style="margin-bottom: 8px; color: #333; display: inline-block;">${announcement.title}</h4>
+                            <span style="margin: 0 10px; color: #999;">|</span>
+                            <span style="color: #666; display: inline-block;">${announcement.content}</span>
+                            <span style="margin: 0 10px; color: #999;">|</span>
+                            <span style="font-size: 0.85em; color: #999; display: inline-block;">发布时间: ${date}</span>
                         `;
                         
                         announcementSection.style.display = 'block';
