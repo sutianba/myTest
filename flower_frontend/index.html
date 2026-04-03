@@ -422,6 +422,27 @@
             margin-top: 10px;
             font-style: italic;
         }
+        
+        .btn-cancel {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-cancel:hover {
+            background-color: #ee5a52;
+            transform: translateY(-2px);
+        }
+        
+        .btn-cancel:active {
+            transform: translateY(0);
+        }
 
         /* 社区页面 */
         .community-page {
@@ -1986,6 +2007,7 @@
                         <p class="progress-text" id="progressText">0%</p>
                     </div>
                     <p class="loading-detail" id="loadingDetail"></p>
+                    <button class="btn-cancel" id="cancelBtn">取消识别</button>
                 </div>
 
                 <div class="results-section" id="resultsSection">
@@ -2872,10 +2894,21 @@
             const progressBar = document.getElementById('progressBar');
             const progressText = document.getElementById('progressText');
             const resultsSection = document.getElementById('resultsSection');
+            const cancelBtn = document.getElementById('cancelBtn');
 
             loading.classList.add('active');
             resultsSection.classList.remove('active');
             updateLoadingStatus('正在准备图片...', `共 ${imageFiles.length} 张图片`);
+
+            let cancelled = false;
+            
+            // 取消按钮点击事件
+            const handleCancel = function() {
+                cancelled = true;
+                updateLoadingStatus('正在取消...', '请稍候');
+            };
+            
+            cancelBtn.addEventListener('click', handleCancel);
 
             const startTime = Date.now();
 
@@ -2886,6 +2919,10 @@
                 // 读取所有图片文件
                 const imageDataList = [];
                 for (let i = 0; i < totalFiles; i++) {
+                    if (cancelled) {
+                        throw new Error('识别已取消');
+                    }
+                    
                     const file = imageFiles[i];
                     updateLoadingStatus(`正在读取图片 ${i + 1}/${totalFiles}...`, file.name);
                     const imageData = await readFileAsDataURL(file);
@@ -2898,15 +2935,48 @@
                     progressText.textContent = `${Math.round(progress)}%`;
                 }
                 
+                if (cancelled) {
+                    throw new Error('识别已取消');
+                }
+                
                 // 调用多图识别API
                 updateLoadingStatus('正在识别中...', '这可能需要几秒钟，请耐心等待');
                 progressBar.style.width = '30%';
                 progressText.textContent = '30%';
                 
-                const results = await callRecognitionAPI(imageDataList.map(item => item.imageData));
+                // 创建AbortController用于取消fetch请求
+                const controller = new AbortController();
+                const signal = controller.signal;
+                
+                // 重写callRecognitionAPI函数以支持取消
+                const results = await new Promise((resolve, reject) => {
+                    // 监听取消事件
+                    const cancelListener = function() {
+                        controller.abort();
+                        reject(new Error('识别已取消'));
+                    };
+                    
+                    cancelBtn.addEventListener('click', cancelListener);
+                    
+                    // 调用识别API
+                    callRecognitionAPI(imageDataList.map(item => item.imageData), signal)
+                        .then(resolve)
+                        .catch(reject)
+                        .finally(() => {
+                            cancelBtn.removeEventListener('click', cancelListener);
+                        });
+                });
+                
+                if (cancelled) {
+                    throw new Error('识别已取消');
+                }
                 
                 // 处理识别结果
                 for (let i = 0; i < totalFiles; i++) {
+                    if (cancelled) {
+                        throw new Error('识别已取消');
+                    }
+                    
                     const item = imageDataList[i];
                     const result = results[i].results;
                     
@@ -2928,15 +2998,25 @@
                     progressText.textContent = `${Math.round(progress)}% (${i + 1}/${totalFiles})`;
                 }
                 
+                if (cancelled) {
+                    throw new Error('识别已取消');
+                }
+                
                 const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
                 updateLoadingStatus('识别完成！', `耗时 ${elapsedTime} 秒`);
 
                 displayAllResults(allResults);
                 resultsSection.classList.add('active');
             } catch (error) {
-                console.error('处理图片时发生错误:', error);
-                alert('处理图片时发生错误: ' + error.message);
+                if (error.message === '识别已取消') {
+                    console.log('识别已取消');
+                } else {
+                    console.error('处理图片时发生错误:', error);
+                    alert('处理图片时发生错误: ' + error.message);
+                }
             } finally {
+                // 移除取消按钮事件监听器
+                cancelBtn.removeEventListener('click', handleCancel);
                 loading.classList.remove('active');
             }
         }
@@ -2956,7 +3036,7 @@
         }
 
         // 调用识别API
-        async function callRecognitionAPI(imageData) {
+        async function callRecognitionAPI(imageData, signal) {
             const saveToAlbumElement = document.getElementById('saveToAlbum');
             const saveToAlbum = saveToAlbumElement ? saveToAlbumElement.checked : false;
             
@@ -2964,6 +3044,7 @@
             console.log('saveToAlbum 元素存在:', !!saveToAlbumElement);
             console.log('saveToAlbum.checked =', saveToAlbum);
             console.log('token =', getToken());
+            console.log('signal =', signal);
             console.log('===================================');
             
             let body;
@@ -2997,7 +3078,8 @@
             const response = await fetch('/api/detect', {
                 method: 'POST',
                 headers: headers,
-                body: body
+                body: body,
+                signal: signal // 传递signal参数用于取消请求
             });
 
             console.log('响应状态码:', response.status);
