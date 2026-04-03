@@ -1309,6 +1309,7 @@
             overflow: hidden;
             box-shadow: 0 4px 16px rgba(0,0,0,0.08);
             transition: all 0.3s ease;
+            position: relative;
         }
 
         .recycle-image-card:hover {
@@ -2129,6 +2130,7 @@
                         <select id="recycleFilterType" class="filter-select">
                             <option value="">全部</option>
                             <option value="image">图片</option>
+                            <option value="album">相册</option>
                             <option value="recognition">识别记录</option>
                             <option value="post">帖子</option>
                             <option value="feedback">反馈</option>
@@ -2137,6 +2139,19 @@
                     <div class="filter-actions">
                         <button class="btn btn-secondary" id="refreshRecycleBtn">刷新</button>
                         <button class="btn btn-danger" id="emptyRecycleBtn">清空回收站</button>
+                    </div>
+                </div>
+
+                <!-- 批量操作栏 -->
+                <div class="recycle-batch-bar" id="recycleBatchBar" style="display: none; background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                    <div class="batch-info">
+                        <input type="checkbox" id="selectAllRecycle" style="margin-right: 8px;">
+                        <label for="selectAllRecycle" style="cursor: pointer;">全选</label>
+                        <span id="selectedCount" style="margin-left: 15px; color: #666;">已选择 0 项</span>
+                    </div>
+                    <div class="batch-actions">
+                        <button class="btn btn-success" id="batchRestoreBtn" style="margin-right: 10px;">♻️ 批量恢复</button>
+                        <button class="btn btn-danger" id="batchDeleteBtn">🗑️ 批量删除</button>
                     </div>
                 </div>
 
@@ -4073,9 +4088,10 @@
                 return;
             }
 
-            // 分离图片类和非图片类
+            // 分离图片类、相册类和其他类
             const imageItems = items.filter(item => item.item_type === 'image' || item.item_type === 'recognition');
-            const otherItems = items.filter(item => item.item_type !== 'image' && item.item_type !== 'recognition');
+            const albumItems = items.filter(item => item.item_type === 'album');
+            const otherItems = items.filter(item => item.item_type !== 'image' && item.item_type !== 'recognition' && item.item_type !== 'album');
 
             // 渲染图片类项目
             if (imageItems.length > 0) {
@@ -4095,7 +4111,25 @@
                 recycleList.appendChild(imageSection);
             }
 
-            // 渲染非图片类项目
+            // 渲染相册类项目
+            if (albumItems.length > 0) {
+                const albumSection = document.createElement('div');
+                albumSection.className = 'recycle-section';
+                albumSection.innerHTML = '<h3 class="section-title">📁 相册类</h3>';
+
+                const albumGrid = document.createElement('div');
+                albumGrid.className = 'recycle-images-grid';
+
+                albumItems.forEach(item => {
+                    const card = createRecycleAlbumCard(item);
+                    albumGrid.appendChild(card);
+                });
+
+                albumSection.appendChild(albumGrid);
+                recycleList.appendChild(albumSection);
+            }
+
+            // 渲染其他类项目
             if (otherItems.length > 0) {
                 const otherSection = document.createElement('div');
                 otherSection.className = 'recycle-section';
@@ -4146,7 +4180,12 @@
                 ? `<img src="${imagePath}" alt="${flowerName}" onerror="this.parentElement.innerHTML='<div class=\\'no-image-placeholder\\'>📷<br>暂无图片</div>'">`
                 : `<div class="no-image-placeholder">📷<br>暂无图片</div>`;
 
+            const isSelected = selectedRecycleItems.has(item.id);
+
             card.innerHTML = `
+                <div class="recycle-checkbox-wrapper" style="position: absolute; top: 10px; left: 10px; z-index: 10;">
+                    <input type="checkbox" class="recycle-item-checkbox" data-id="${item.id}" ${isSelected ? 'checked' : ''} style="width: 20px; height: 20px; cursor: pointer;">
+                </div>
                 <div class="recycle-image-thumb" onclick="${hasImage ? `openImagePreview('${imagePath}')` : ''}">
                     ${imageHtml}
                     ${hasImage ? `<div class="image-overlay"><span class="preview-hint">🔍 点击查看大图</span></div>` : ''}
@@ -4188,6 +4227,13 @@
                 </div>
             `;
 
+            // 复选框事件
+            const checkbox = card.querySelector('.recycle-item-checkbox');
+            checkbox.addEventListener('change', function(e) {
+                e.stopPropagation();
+                toggleRecycleSelection(item.id, this.checked);
+            });
+
             const restoreBtn = card.querySelector('.btn-restore');
             restoreBtn.onclick = async function(e) {
                 e.stopPropagation();
@@ -4205,10 +4251,247 @@
             return card;
         }
 
+        // 创建相册类回收站卡片
+        function createRecycleAlbumCard(item) {
+            const card = document.createElement('div');
+            card.className = 'recycle-image-card';
+
+            const itemData = item.item_data || {};
+            const albumName = itemData.name || '未命名相册';
+            const category = itemData.category || '默认';
+            const imageCount = itemData.image_count || 0;
+            const coverImage = itemData.cover_image || '';
+            const description = itemData.description || '';
+            const deletedTime = item.deleted_at ? new Date(item.deleted_at * 1000).toLocaleString() : '-';
+
+            // 处理封面图片显示
+            const hasCover = coverImage && coverImage.trim() !== '';
+            const imageHtml = hasCover
+                ? `<img src="${coverImage}" alt="${albumName}" onerror="this.parentElement.innerHTML='<div class=\'no-image-placeholder\'>📁<br>相册封面</div>'">`
+                : `<div class="no-image-placeholder">📁<br>相册封面</div>`;
+
+            const isSelected = selectedRecycleItems.has(item.id);
+
+            card.innerHTML = `
+                <div class="recycle-checkbox-wrapper" style="position: absolute; top: 10px; left: 10px; z-index: 10;">
+                    <input type="checkbox" class="recycle-item-checkbox" data-id="${item.id}" ${isSelected ? 'checked' : ''} style="width: 20px; height: 20px; cursor: pointer;">
+                </div>
+                <div class="recycle-image-thumb" onclick="${hasCover ? `openImagePreview('${coverImage}')` : ''}">
+                    ${imageHtml}
+                    ${hasCover ? `<div class="image-overlay"><span class="preview-hint">🔍 点击查看大图</span></div>` : ''}
+                </div>
+                <div class="recycle-image-info">
+                    <div class="flower-name">${albumName}</div>
+                    <div class="confidence">分类: ${category} · ${imageCount} 张图片</div>
+                    <div class="deleted-time">删除时间: ${deletedTime}</div>
+                </div>
+
+                <!-- 相册详情 -->
+                <div class="recycle-details">
+                    <div class="recycle-detail-section">
+                        <h5>📁 相册信息</h5>
+                        <div class="recycle-detail-grid">
+                            <div class="recycle-detail-item">
+                                <span class="label">相册名称:</span>
+                                <span class="value">${albumName}</span>
+                            </div>
+                            <div class="recycle-detail-item">
+                                <span class="label">分类:</span>
+                                <span class="value">${category}</span>
+                            </div>
+                            <div class="recycle-detail-item">
+                                <span class="label">图片数量:</span>
+                                <span class="value">${imageCount} 张</span>
+                            </div>
+                            ${description ? `
+                            <div class="recycle-detail-item" style="grid-column: 1 / -1;">
+                                <span class="label">描述:</span>
+                                <span class="value">${description}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="recycle-image-actions">
+                    <button class="btn-restore" data-id="${item.id}">♻️ 恢复</button>
+                    <button class="btn-permanent" data-id="${item.id}">🗑️ 彻底删除</button>
+                </div>
+            `;
+
+            // 复选框事件
+            const checkbox = card.querySelector('.recycle-item-checkbox');
+            checkbox.addEventListener('change', function(e) {
+                e.stopPropagation();
+                toggleRecycleSelection(item.id, this.checked);
+            });
+
+            // 点击查看相册详情
+            const thumbDiv = card.querySelector('.recycle-image-thumb');
+            thumbDiv.onclick = async function(e) {
+                e.stopPropagation();
+                await viewRecycleAlbumDetail(item);
+            };
+
+            const restoreBtn = card.querySelector('.btn-restore');
+            restoreBtn.onclick = async function(e) {
+                e.stopPropagation();
+                await restoreRecycleItem(item.id);
+            };
+
+            const permanentBtn = card.querySelector('.btn-permanent');
+            permanentBtn.onclick = async function(e) {
+                e.stopPropagation();
+                if (confirm('确定要永久删除吗？此操作不可恢复！')) {
+                    await permanentDeleteItem(item.id);
+                }
+            };
+
+            return card;
+        }
+
+        // 查看回收站相册详情
+        async function viewRecycleAlbumDetail(item) {
+            const itemData = item.item_data || {};
+            const albumId = item.original_id;
+            const albumName = itemData.name || '未命名相册';
+            const category = itemData.category || '默认';
+            const imageCount = itemData.image_count || 0;
+            const coverImage = itemData.cover_image || '';
+            const description = itemData.description || '';
+            const deletedTime = item.deleted_at ? new Date(item.deleted_at * 1000).toLocaleString() : '-';
+
+            // 创建模态框显示相册详情
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.id = 'recycleAlbumModal';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
+                    <div class="modal-header">
+                        <h2>📁 ${albumName} <span style="color: #e74c3c; font-size: 14px;">(已删除)</span></h2>
+                        <button class="close-btn" onclick="closeRecycleAlbumModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="album-info-bar" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 20px; flex-wrap: wrap;">
+                            <span><strong>分类:</strong> ${category}</span>
+                            <span><strong>图片数:</strong> ${imageCount} 张</span>
+                            <span><strong>删除时间:</strong> ${deletedTime}</span>
+                            ${description ? `<span style="width: 100%;"><strong>描述:</strong> ${description}</span>` : ''}
+                        </div>
+                        <div id="recycleAlbumImagesGrid" class="album-images-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+                            <div class="loading" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                                <div class="loading-spinner"></div>
+                                <p>加载图片中...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 15px; border-top: 1px solid #eee;">
+                        <button class="btn btn-secondary" onclick="closeRecycleAlbumModal()">关闭</button>
+                        <button class="btn btn-success" onclick="restoreRecycleItem(${item.id}); closeRecycleAlbumModal();">♻️ 恢复相册</button>
+                        <button class="btn btn-danger" onclick="if(confirm('确定要永久删除吗？此操作不可恢复！')) { permanentDeleteItem(${item.id}); closeRecycleAlbumModal(); }">🗑️ 彻底删除</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.style.display = 'block';
+
+            // 加载相册中的图片
+            await loadRecycleAlbumImages(albumId);
+        }
+
+        // 关闭回收站相册模态框
+        function closeRecycleAlbumModal() {
+            const modal = document.getElementById('recycleAlbumModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // 加载回收站相册中的图片
+        async function loadRecycleAlbumImages(albumId) {
+            const grid = document.getElementById('recycleAlbumImagesGrid');
+            if (!grid) return;
+
+            try {
+                const headers = getAuthHeaders();
+                if (!headers) {
+                    grid.innerHTML = '<p style="text-align: center; grid-column: 1 / -1;">请先登录</p>';
+                    return;
+                }
+
+                // 使用特殊API获取已删除相册的图片
+                const response = await fetch(`/api/albums/${albumId}/deleted-images`, {
+                    headers: headers
+                });
+
+                if (response.status === 401) {
+                    grid.innerHTML = '<p style="text-align: center; grid-column: 1 / -1;">登录已失效</p>';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.images && data.images.length > 0) {
+                    grid.innerHTML = '';
+                    data.images.forEach(img => {
+                        const card = createRecycleAlbumImageCard(img);
+                        grid.appendChild(card);
+                    });
+                } else {
+                    grid.innerHTML = `
+                        <div class="album-empty" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                            <div style="font-size: 48px; margin-bottom: 10px;">📷</div>
+                            <p>相册中没有图片</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('加载相册图片失败:', error);
+                grid.innerHTML = '<p style="text-align: center; grid-column: 1 / -1; color: #e74c3c;">加载失败</p>';
+            }
+        }
+
+        // 创建回收站相册图片卡片
+        function createRecycleAlbumImageCard(img) {
+            const card = document.createElement('div');
+            card.className = 'album-detail-card';
+            card.style.cssText = 'background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);';
+
+            const imagePath = img.image_path || '';
+            const flowerName = img.flower_name || img.result || '未知花卉';
+            const confidence = img.confidence ? (img.confidence * 100).toFixed(1) + '%' : '-';
+            const shootTime = img.shoot_time || '-';
+            const locationText = img.location_text || '-';
+
+            card.innerHTML = `
+                <div class="album-image-wrapper" style="position: relative; padding-top: 100%; overflow: hidden; cursor: pointer;" onclick="openImagePreview('${imagePath}')">
+                    <img src="${imagePath}" alt="${flowerName}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://via.placeholder.com/200x200?text=No+Image'">
+                    <div class="image-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s;">
+                        <span style="color: white; font-size: 24px;">🔍</span>
+                    </div>
+                </div>
+                <div class="album-image-info" style="padding: 12px;">
+                    <div style="font-weight: 600; color: #2c3e50; margin-bottom: 5px;">${flowerName}</div>
+                    <div style="font-size: 12px; color: #7f8c8d; margin-bottom: 3px;">置信度: ${confidence}</div>
+                    <div style="font-size: 11px; color: #95a5a6;">拍摄: ${shootTime}</div>
+                    <div style="font-size: 11px; color: #95a5a6;">地点: ${locationText}</div>
+                </div>
+            `;
+
+            // 添加悬停效果
+            const wrapper = card.querySelector('.album-image-wrapper');
+            const overlay = wrapper.querySelector('.image-overlay');
+            wrapper.onmouseenter = () => overlay.style.opacity = '1';
+            wrapper.onmouseleave = () => overlay.style.opacity = '0';
+
+            return card;
+        }
+
         // 创建非图片类回收站卡片
         function createRecycleOtherCard(item) {
             const card = document.createElement('div');
             card.className = 'recycle-other-card';
+            card.style.position = 'relative';
 
             const itemTypeNames = {
                 'post': '帖子',
@@ -4218,6 +4501,7 @@
 
             const itemData = item.item_data || {};
             const deletedTime = item.deleted_at ? new Date(item.deleted_at * 1000).toLocaleString() : '-';
+            const isSelected = selectedRecycleItems.has(item.id);
 
             let contentPreview = '';
             if (item.item_type === 'post') {
@@ -4229,6 +4513,9 @@
             }
 
             card.innerHTML = `
+                <div class="recycle-checkbox-wrapper" style="position: absolute; top: 10px; left: 10px; z-index: 10;">
+                    <input type="checkbox" class="recycle-item-checkbox" data-id="${item.id}" ${isSelected ? 'checked' : ''} style="width: 20px; height: 20px; cursor: pointer;">
+                </div>
                 <div class="other-card-header">
                     <span class="item-type-badge">${itemTypeNames[item.item_type] || item.item_type}</span>
                     <span class="deleted-time">${deletedTime}</span>
@@ -4240,13 +4527,22 @@
                 </div>
             `;
 
+            // 复选框事件
+            const checkbox = card.querySelector('.recycle-item-checkbox');
+            checkbox.addEventListener('change', function(e) {
+                e.stopPropagation();
+                toggleRecycleSelection(item.id, this.checked);
+            });
+
             const restoreBtn = card.querySelector('.btn-restore');
-            restoreBtn.onclick = async function() {
+            restoreBtn.onclick = async function(e) {
+                e.stopPropagation();
                 await restoreRecycleItem(item.id);
             };
 
             const permanentBtn = card.querySelector('.btn-permanent');
-            permanentBtn.onclick = async function() {
+            permanentBtn.onclick = async function(e) {
+                e.stopPropagation();
                 if (confirm('确定要永久删除吗？此操作不可恢复！')) {
                     await permanentDeleteItem(item.id);
                 }
@@ -4293,14 +4589,149 @@
             }
         }
 
+        // 回收站批量选择相关变量
+        let selectedRecycleItems = new Set();
+
+        // 更新批量操作栏显示
+        function updateBatchBar() {
+            const batchBar = document.getElementById('recycleBatchBar');
+            const selectedCount = document.getElementById('selectedCount');
+            const selectAllCheckbox = document.getElementById('selectAllRecycle');
+            
+            if (selectedRecycleItems.size > 0) {
+                batchBar.style.display = 'flex';
+                selectedCount.textContent = `已选择 ${selectedRecycleItems.size} 项`;
+            } else {
+                batchBar.style.display = 'none';
+                selectedCount.textContent = '已选择 0 项';
+            }
+            
+            // 更新全选框状态
+            const allCheckboxes = document.querySelectorAll('.recycle-item-checkbox');
+            const checkedCount = document.querySelectorAll('.recycle-item-checkbox:checked').length;
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = checkedCount > 0 && checkedCount === allCheckboxes.length;
+                selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < allCheckboxes.length;
+            }
+        }
+
+        // 切换选择项
+        function toggleRecycleSelection(itemId, checked) {
+            if (checked) {
+                selectedRecycleItems.add(itemId);
+            } else {
+                selectedRecycleItems.delete(itemId);
+            }
+            updateBatchBar();
+        }
+
+        // 全选/取消全选
+        document.getElementById('selectAllRecycle')?.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.recycle-item-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = this.checked;
+                const itemId = parseInt(cb.dataset.id);
+                if (this.checked) {
+                    selectedRecycleItems.add(itemId);
+                } else {
+                    selectedRecycleItems.delete(itemId);
+                }
+            });
+            updateBatchBar();
+        });
+
+        // 批量恢复
+        document.getElementById('batchRestoreBtn')?.addEventListener('click', async function() {
+            if (selectedRecycleItems.size === 0) {
+                alert('请先选择要恢复的项目');
+                return;
+            }
+            if (!confirm(`确定要恢复选中的 ${selectedRecycleItems.size} 个项目吗？`)) {
+                return;
+            }
+            
+            const currentToken = getToken();
+            if (!currentToken) {
+                alert('请先登录');
+                return;
+            }
+            
+            let successCount = 0;
+            let failCount = 0;
+            
+            for (const itemId of selectedRecycleItems) {
+                try {
+                    const response = await fetch(`/api/recycle-bin/${itemId}/restore`, {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + currentToken }
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (error) {
+                    failCount++;
+                }
+            }
+            
+            alert(`恢复完成：成功 ${successCount} 个，失败 ${failCount} 个`);
+            selectedRecycleItems.clear();
+            loadRecycleBin(currentRecycleFilter);
+        });
+
+        // 批量删除
+        document.getElementById('batchDeleteBtn')?.addEventListener('click', async function() {
+            if (selectedRecycleItems.size === 0) {
+                alert('请先选择要删除的项目');
+                return;
+            }
+            if (!confirm(`确定要永久删除选中的 ${selectedRecycleItems.size} 个项目吗？此操作不可恢复！`)) {
+                return;
+            }
+            
+            const currentToken = getToken();
+            if (!currentToken) {
+                alert('请先登录');
+                return;
+            }
+            
+            let successCount = 0;
+            let failCount = 0;
+            
+            for (const itemId of selectedRecycleItems) {
+                try {
+                    const response = await fetch(`/api/recycle-bin/${itemId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + currentToken }
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (error) {
+                    failCount++;
+                }
+            }
+            
+            alert(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`);
+            selectedRecycleItems.clear();
+            loadRecycleBin(currentRecycleFilter);
+        });
+
         // 回收站筛选功能
         document.getElementById('recycleFilterType')?.addEventListener('change', function() {
             currentRecycleFilter = this.value;
+            selectedRecycleItems.clear();
             loadRecycleBin(currentRecycleFilter);
         });
 
         // 刷新回收站
         document.getElementById('refreshRecycleBtn')?.addEventListener('click', function() {
+            selectedRecycleItems.clear();
             loadRecycleBin(currentRecycleFilter);
         });
 
@@ -4320,6 +4751,7 @@
                     const data = await response.json();
                     if (data.success) {
                         alert(data.message);
+                        selectedRecycleItems.clear();
                         loadRecycleBin(currentRecycleFilter);
                     } else {
                         alert('清空失败');

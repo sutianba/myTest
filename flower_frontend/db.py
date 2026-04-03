@@ -1500,7 +1500,9 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            now = int(time.time())
+            # 使用 datetime 格式适配 timestamp 类型的 created_at 和 updated_at
+            from datetime import datetime
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute(
                 "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                 (user_id, name, category, cover_image, description, 0, now, now)
@@ -1569,8 +1571,10 @@ class SQLDatabaseManager:
                 params.append(description)
             
             if updates:
+                # 使用 datetime 格式适配 timestamp 类型的 updated_at
+                from datetime import datetime
                 updates.append("updated_at = %s")
-                params.append(int(time.time()))
+                params.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 params.append(album_id)
                 params.append(user_id)
                 
@@ -1586,26 +1590,65 @@ class SQLDatabaseManager:
             conn.close()
     
     def delete_album(self, album_id, user_id):
-        """删除相册（软删除）"""
+        """删除相册（软删除并移入回收站）"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            # 软删除：更新 deleted_at 字段
-            now = int(time.time())
-            print(f"[DEBUG] delete_album: now={now}, type={type(now)}, album_id={album_id}, user_id={user_id}")
-            sql = "UPDATE albums SET deleted_at = %s, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL"
-            print(f"[DEBUG] SQL: {sql}")
-            print(f"[DEBUG] Params: {(now, now, album_id, user_id)}")
-            cursor.execute(sql, (now, now, album_id, user_id))
-            conn.commit()
+            # 1. 获取相册信息
+            cursor.execute(
+                "SELECT * FROM albums WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
+                (album_id, user_id)
+            )
+            album = cursor.fetchone()
             
-            if cursor.rowcount > 0:
-                print(f"[DB] 相册软删除成功: album_id={album_id}, user_id={user_id}")
-                return True
-            else:
-                print(f"[DB] 相册软删除失败: album_id={album_id} 不存在或已被删除")
+            if not album:
+                print(f"[DB] 相册不存在或已被删除: album_id={album_id}")
                 return False
+            
+            # 2. 获取相册中的图片数量
+            cursor.execute(
+                "SELECT COUNT(*) as count FROM album_images WHERE album_id = %s AND deleted_at IS NULL",
+                (album_id,)
+            )
+            image_count = cursor.fetchone()['count']
+            
+            # 3. 将相册信息保存到回收站
+            import json
+            from datetime import datetime
+            album_data = {
+                'name': album['name'],
+                'category': album.get('category', ''),
+                'description': album.get('description', ''),
+                'cover_image': album.get('cover_image', ''),
+                'image_count': image_count
+            }
+            now = int(time.time())
+            cursor.execute(
+                "INSERT INTO recycle_bin (user_id, item_type, original_id, item_data, deleted_at) VALUES (%s, %s, %s, %s, %s)",
+                (user_id, 'album', album_id, json.dumps(album_data), now)
+            )
+            recycle_id = cursor.lastrowid
+            print(f"[DB] 相册已移入回收站: album_id={album_id}, recycle_id={recycle_id}")
+            
+            # 4. 软删除相册（更新 deleted_at 字段）
+            now_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            cursor.execute(
+                "UPDATE albums SET deleted_at = %s, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
+                (now, now_datetime, album_id, user_id)
+            )
+            
+            # 5. 同时软删除相册中的所有图片
+            cursor.execute(
+                "UPDATE album_images SET deleted_at = %s WHERE album_id = %s AND deleted_at IS NULL",
+                (now, album_id)
+            )
+            deleted_images = cursor.rowcount
+            print(f"[DB] 相册中的图片已软删除: {deleted_images} 张")
+            
+            conn.commit()
+            print(f"[DB] 相册删除成功并已移入回收站: album_id={album_id}, user_id={user_id}")
+            return True
         except Exception as e:
             conn.rollback()
             print(f"[DB] 删除相册失败: {str(e)}")
@@ -1648,7 +1691,8 @@ class SQLDatabaseManager:
                 
                 if not default_album:
                     # 创建默认相册
-                    now = int(time.time())
+                    from datetime import datetime
+                    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     cursor.execute(
                         "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                         (user_id, '默认相册', '默认', None, '默认相册', 0, now, now)
@@ -1673,9 +1717,10 @@ class SQLDatabaseManager:
             print(f"[DB] 图片插入成功: image_id={image_id}")
             
             # 4. 更新相册图片数量
+            from datetime import datetime
             cursor.execute(
                 "UPDATE albums SET image_count = image_count + 1, updated_at = %s WHERE id = %s",
-                (int(time.time()), album_id)
+                (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), album_id)
             )
             print(f"[DB] 相册图片数量已更新: album_id={album_id}")
             
@@ -2197,9 +2242,20 @@ class SQLDatabaseManager:
             item_data = item.get('item_data')
             
             if item_type == 'image':
-                # 只有相册图片可以恢复，因为它有 deleted_at 字段
+                # 恢复相册图片
                 cursor.execute(
                     "UPDATE album_images SET deleted_at = NULL WHERE id = %s",
+                    (original_id,)
+                )
+            elif item_type == 'album':
+                # 恢复相册
+                cursor.execute(
+                    "UPDATE albums SET deleted_at = NULL WHERE id = %s",
+                    (original_id,)
+                )
+                # 同时恢复相册中的所有图片
+                cursor.execute(
+                    "UPDATE album_images SET deleted_at = NULL WHERE album_id = %s",
                     (original_id,)
                 )
             # 帖子和识别结果无法从回收站恢复，因为它们没有 deleted_at 字段
@@ -2241,6 +2297,11 @@ class SQLDatabaseManager:
                 cursor.execute("DELETE FROM album_images WHERE id = %s", (original_id,))
             elif item_type == 'recognition':
                 cursor.execute("DELETE FROM recognition_results WHERE id = %s", (original_id,))
+            elif item_type == 'album':
+                # 先删除相册中的所有图片
+                cursor.execute("DELETE FROM album_images WHERE album_id = %s", (original_id,))
+                # 再删除相册
+                cursor.execute("DELETE FROM albums WHERE id = %s", (original_id,))
             
             cursor.execute(
                 "DELETE FROM recycle_bin WHERE id = %s",
@@ -2277,6 +2338,11 @@ class SQLDatabaseManager:
                     cursor.execute("DELETE FROM album_images WHERE id = %s", (original_id,))
                 elif item_type == 'recognition':
                     cursor.execute("DELETE FROM recognition_results WHERE id = %s", (original_id,))
+                elif item_type == 'album':
+                    # 先删除相册中的所有图片
+                    cursor.execute("DELETE FROM album_images WHERE album_id = %s", (original_id,))
+                    # 再删除相册
+                    cursor.execute("DELETE FROM albums WHERE id = %s", (original_id,))
             
             cursor.execute("DELETE FROM recycle_bin WHERE user_id = %s", (user_id,))
             
@@ -2433,10 +2499,10 @@ def check_user_permission(user_id, permission_name):
         raise Exception("数据库未初始化")
     return db_manager.check_user_permission(user_id, permission_name)
 
-def save_recognition_result(user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None):
+def save_recognition_result(user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None, created_at=None):
     if db_manager is None:
         raise Exception("数据库未初始化")
-    return db_manager.save_recognition_result(user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height)
+    return db_manager.save_recognition_result(user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height, created_at)
 
 def get_user_recognition_results(user_id):
     if db_manager is None:

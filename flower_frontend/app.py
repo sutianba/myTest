@@ -2256,6 +2256,69 @@ def get_album_categories_api():
         print(f"获取相册分类时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/albums/<int:album_id>/deleted-images', methods=['GET'])
+@auth_required
+def get_deleted_album_images(album_id):
+    """获取已删除相册中的图片（用于回收站查看）"""
+    try:
+        # 验证用户是否有权限访问此相册（通过回收站记录验证）
+        from db import db_manager
+        conn = db_manager.get_connection()
+        cursor = conn.cursor()
+        
+        # 检查回收站中是否有该相册记录
+        cursor.execute(
+            "SELECT * FROM recycle_bin WHERE original_id = %s AND user_id = %s AND item_type = 'album'",
+            (album_id, g.user_id)
+        )
+        recycle_record = cursor.fetchone()
+        
+        if not recycle_record:
+            conn.close()
+            return jsonify({'success': False, 'error': '无权访问此相册'}), 403
+        
+        # 获取已删除的图片（包括已软删除的）
+        cursor.execute(
+            """
+            SELECT ai.*, rr.result, rr.confidence, rr.shoot_time, rr.location_text, 
+                   rr.camera_make, rr.camera_model, rr.image_width, rr.image_height
+            FROM album_images ai
+            LEFT JOIN recognition_results rr ON ai.recognition_result_id = rr.id
+            WHERE ai.album_id = %s AND ai.deleted_at IS NOT NULL
+            ORDER BY ai.created_at DESC
+            """,
+            (album_id,)
+        )
+        images = cursor.fetchall()
+        conn.close()
+        
+        # 格式化图片数据
+        formatted_images = []
+        for img in images:
+            formatted_images.append({
+                'id': img['id'],
+                'image_path': img['image_path'],
+                'image_name': img['image_name'],
+                'flower_name': img.get('result') or img.get('flower_name', '未知花卉'),
+                'confidence': float(img['confidence']) if img.get('confidence') else None,
+                'shoot_time': img.get('shoot_time', '-'),
+                'location_text': img.get('location_text', '-'),
+                'camera_make': img.get('camera_make', '-'),
+                'camera_model': img.get('camera_model', '-'),
+                'image_width': img.get('image_width'),
+                'image_height': img.get('image_height'),
+                'created_at': img['created_at']
+            })
+        
+        return jsonify({
+            'success': True,
+            'images': formatted_images,
+            'total': len(formatted_images)
+        })
+    except Exception as e:
+        print(f"获取已删除相册图片时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/feedback', methods=['POST'])
 @auth_required
 def create_feedback_api():
