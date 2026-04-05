@@ -5241,7 +5241,7 @@
                         commentElement.dataset.commentId = comment.id;
                         commentElement.innerHTML = `
                             <div class="comment-meta">
-                                <span class="comment-floor">${comment.floor_number}楼</span>
+                                ${comment.floor_number ? `<span class="comment-floor">${comment.floor_number}楼</span>` : ''}
                                 <span class="comment-author">${comment.username}</span>
                                 <span class="comment-time">${formatPostTime(comment.created_at)}</span>
                             </div>
@@ -5255,13 +5255,13 @@
                                 </button>
                             </div>
                             <div class="replies-list" id="replies-${comment.id}">
-                                ${renderReplies(comment.replies)}
+                                ${renderReplies(comment.replies, postId)}
                             </div>
                             <div class="reply-form" id="reply-form-${comment.id}" style="display: none;">
                                 <textarea class="reply-input" placeholder="写下你的回复..."></textarea>
                                 <div class="reply-actions">
-                                    <button class="cancel-reply-btn" onclick="hideReplyForm(${comment.id})"></button>
-                                    <button class="submit-reply-btn" onclick="submitReply(${postId}, ${comment.id}, this)"></button>
+                                    <button class="cancel-reply-btn" onclick="hideReplyForm(${comment.id})"><i class="fa fa-times"></i> 取消</button>
+                                    <button class="submit-reply-btn" onclick="submitReply(${postId}, ${comment.id}, this)"><i class="fa fa-paper-plane"></i> 发送</button>
                                 </div>
                             </div>
                         `;
@@ -5279,7 +5279,7 @@
         }
 
         // 渲染回复评论
-        function renderReplies(replies) {
+        function renderReplies(replies, postId) {
             if (!replies || replies.length === 0) {
                 return '';
             }
@@ -5296,9 +5296,16 @@
                         <button class="like-btn" onclick="likeComment(${reply.id}, this)">
                             <i class="fa fa-thumbs-up"></i> <span>${reply.likes_count}</span>
                         </button>
-                        <button class="reply-btn" onclick="showReplyForm(${reply.post_id}, ${reply.id}, '${reply.username}', ${reply.user_id})">
+                        <button class="reply-btn" onclick="showReplyForm(${postId}, ${reply.id}, '${reply.username}', ${reply.user_id})">
                             <i class="fa fa-reply"></i> 回复
                         </button>
+                    </div>
+                    <div class="reply-form" id="reply-form-${reply.id}" style="display: none;">
+                        <textarea class="reply-input" placeholder="写下你的回复..."></textarea>
+                        <div class="reply-actions">
+                            <button class="cancel-reply-btn" onclick="hideReplyForm(${reply.id})"><i class="fa fa-times"></i> 取消</button>
+                            <button class="submit-reply-btn" onclick="submitReply(${postId}, ${reply.id}, this)"><i class="fa fa-paper-plane"></i> 发送</button>
+                        </div>
                     </div>
                 </div>
             `).join('');
