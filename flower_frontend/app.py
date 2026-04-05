@@ -1652,7 +1652,7 @@ def get_user_followers_api(user_id):
 
 @app.route('/api/admin/system/summary', methods=['GET'])
 @auth_required
-@permission_required('admin')
+@permission_required('view_operations')
 def get_system_summary_api():
     """获取系统概要统计"""
     try:

@@ -216,6 +216,54 @@
             color: #3498db;
         }
 
+        /* 端点控制区域样式 */
+        .endpoints-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 5px;
+        }
+
+        .search-box input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+
+        .filter-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .filter-box select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .endpoints-controls button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .endpoints-controls button:hover {
+            background-color: #45a049;
+        }
+
         /* 表格样式 */
         .table-container {
             background: white;
@@ -491,11 +539,29 @@
                     </div>
                     
                     <h3>热门端点</h3>
+                    <div class="endpoints-controls">
+                        <div class="search-box">
+                            <input type="text" id="endpoint-search" placeholder="搜索端点...">
+                            <button onclick="searchEndpoints()">搜索</button>
+                        </div>
+                        <div class="filter-box">
+                            <label>分类：</label>
+                            <select id="endpoint-category" onchange="filterEndpoints()">
+                                <option value="all">全部</option>
+                                <option value="user">用户相关</option>
+                                <option value="system">系统相关</option>
+                                <option value="recognition">识别相关</option>
+                                <option value="community">社区相关</option>
+                                <option value="admin">管理员相关</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="table-container">
                         <table id="endpoints-table">
                             <thead>
                                 <tr>
                                     <th>端点</th>
+                                    <th>功能描述</th>
                                     <th>方法</th>
                                     <th>请求数</th>
                                     <th>平均响应时间(ms)</th>
@@ -503,7 +569,7 @@
                                 </tr>
                             </thead>
                             <tbody id="endpoints-body">
-                                <tr><td colspan="5" class="loading">加载中...</td></tr>
+                                <tr><td colspan="6" class="loading">加载中...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1033,8 +1099,71 @@
                 document.getElementById('traffic-body').innerHTML = '<tr><td colspan="5" class="error">加载失败</td></tr>';
             });
             
+            // 端点功能描述映射
+            const endpointDescriptions = {
+                'get_latest_server_metrics_api': '获取最新服务器指标',
+                'static': '静态文件服务',
+                'get_albums': '获取用户相册列表',
+                'index': '首页',
+                'serve_file': '文件服务',
+                'login': '用户登录',
+                'detect_flower': '花卉识别',
+                'get_public_announcements': '获取公开公告',
+                'get_posts_api': '获取帖子列表',
+                'get_album_detail': '获取相册详情',
+                'get_recognition_history': '获取识别历史',
+                'get_recycle_bin': '获取回收站',
+                'get_user_profile': '获取用户资料',
+                'get_comments_by_post_id': '获取帖子评论',
+                'like_post': '点赞帖子',
+                'create_post': '创建帖子',
+                'create_comment': '创建评论',
+                'like_comment': '点赞评论',
+                'get_system_summary_api': '获取系统概要统计',
+                'get_announcements_api': '获取公告',
+                'get_users_api': '获取用户列表',
+                'register': '用户注册',
+                'send_verification_code': '发送验证码',
+                'get_comments_api': '获取评论',
+                'get_all_admins_api': '获取所有管理员',
+                'get_system_logs_api': '获取系统日志'
+            };
+            
+            // 端点分类映射
+            const endpointCategories = {
+                'login': 'user',
+                'register': 'user',
+                'send_verification_code': 'user',
+                'get_user_profile': 'user',
+                'get_users_api': 'user',
+                'detect_flower': 'recognition',
+                'get_recognition_history': 'recognition',
+                'get_posts_api': 'community',
+                'get_comments_api': 'community',
+                'get_comments_by_post_id': 'community',
+                'create_post': 'community',
+                'create_comment': 'community',
+                'like_post': 'community',
+                'like_comment': 'community',
+                'get_public_announcements': 'community',
+                'get_announcements_api': 'community',
+                'get_latest_server_metrics_api': 'system',
+                'static': 'system',
+                'serve_file': 'system',
+                'index': 'system',
+                'get_albums': 'system',
+                'get_album_detail': 'system',
+                'get_recycle_bin': 'system',
+                'get_system_summary_api': 'admin',
+                'get_all_admins_api': 'admin',
+                'get_system_logs_api': 'admin'
+            };
+            
+            // 存储原始端点数据
+            let allEndpoints = [];
+            
             // 加载热门端点
-            document.getElementById('endpoints-body').innerHTML = '<tr><td colspan="5" class="loading">加载中...</td></tr>';
+            document.getElementById('endpoints-body').innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
             
             fetch('/api/admin/system/traffic/endpoints', {
                 headers: {
@@ -1044,27 +1173,70 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const endpoints = data.stats;
-                    const endpointsBody = document.getElementById('endpoints-body');
-                    endpointsBody.innerHTML = '';
-                    
-                    endpoints.forEach(endpoint => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${endpoint.endpoint}</td>
-                            <td>${endpoint.method}</td>
-                            <td>${endpoint.request_count}</td>
-                            <td>${endpoint.avg_response_time ? endpoint.avg_response_time.toFixed(2) : 0}</td>
-                            <td>${endpoint.error_count}</td>
-                        `;
-                        endpointsBody.appendChild(row);
-                    });
+                    allEndpoints = data.stats;
+                    renderEndpoints(allEndpoints);
                 }
             })
             .catch(error => {
                 console.error('加载热门端点失败:', error);
-                document.getElementById('endpoints-body').innerHTML = '<tr><td colspan="5" class="error">加载失败</td></tr>';
+                document.getElementById('endpoints-body').innerHTML = '<tr><td colspan="6" class="error">加载失败</td></tr>';
             });
+            
+            // 渲染端点列表
+            function renderEndpoints(endpoints) {
+                const endpointsBody = document.getElementById('endpoints-body');
+                endpointsBody.innerHTML = '';
+                
+                if (endpoints.length === 0) {
+                    endpointsBody.innerHTML = '<tr><td colspan="6" class="error">没有匹配的端点</td></tr>';
+                    return;
+                }
+                
+                endpoints.forEach(endpoint => {
+                    const description = endpointDescriptions[endpoint.endpoint] || '未知功能';
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${endpoint.endpoint}</td>
+                        <td>${description}</td>
+                        <td>${endpoint.method}</td>
+                        <td>${endpoint.request_count}</td>
+                        <td>${endpoint.avg_response_time ? endpoint.avg_response_time.toFixed(2) : 0}</td>
+                        <td>${endpoint.error_count}</td>
+                    `;
+                    endpointsBody.appendChild(row);
+                });
+            }
+            
+            // 搜索端点
+            function searchEndpoints() {
+                const searchTerm = document.getElementById('endpoint-search').value.toLowerCase();
+                const category = document.getElementById('endpoint-category').value;
+                
+                let filteredEndpoints = allEndpoints;
+                
+                // 按分类过滤
+                if (category !== 'all') {
+                    filteredEndpoints = filteredEndpoints.filter(endpoint => {
+                        return endpointCategories[endpoint.endpoint] === category;
+                    });
+                }
+                
+                // 按搜索词过滤
+                if (searchTerm) {
+                    filteredEndpoints = filteredEndpoints.filter(endpoint => {
+                        const description = endpointDescriptions[endpoint.endpoint] || '';
+                        return endpoint.endpoint.toLowerCase().includes(searchTerm) || 
+                               description.toLowerCase().includes(searchTerm);
+                    });
+                }
+                
+                renderEndpoints(filteredEndpoints);
+            }
+            
+            // 过滤端点
+            function filterEndpoints() {
+                searchEndpoints();
+            }
         }
 
         // 加载服务器指标
