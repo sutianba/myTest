@@ -5250,7 +5250,7 @@
                                 <button class="like-btn" onclick="likeComment(${comment.id}, this)">
                                     <i class="fa fa-thumbs-up"></i> <span>${comment.likes_count}</span>
                                 </button>
-                                <button class="reply-btn" onclick="showReplyForm(${postId}, ${comment.id}, '${comment.username}')">
+                                <button class="reply-btn" onclick="showReplyForm(${postId}, ${comment.id}, '${comment.username}', ${comment.user_id})">
                                     <i class="fa fa-reply"></i> 回复
                                 </button>
                             </div>
@@ -5296,7 +5296,7 @@
                         <button class="like-btn" onclick="likeComment(${reply.id}, this)">
                             <i class="fa fa-thumbs-up"></i> <span>${reply.likes_count}</span>
                         </button>
-                        <button class="reply-btn" onclick="showReplyForm(${reply.post_id}, ${reply.id}, '${reply.username}')">
+                        <button class="reply-btn" onclick="showReplyForm(${reply.post_id}, ${reply.id}, '${reply.username}', ${reply.user_id})">
                             <i class="fa fa-reply"></i> 回复
                         </button>
                     </div>
@@ -5305,7 +5305,7 @@
         }
 
         // 显示回复表单
-        function showReplyForm(postId, commentId, username) {
+        function showReplyForm(postId, commentId, username, userId) {
             if (!user || !token) {
                 alert('请先登录');
                 return;
@@ -5320,6 +5320,8 @@
             if (replyForm) {
                 replyForm.style.display = 'block';
                 replyForm.querySelector('.reply-input').focus();
+                // 存储被回复用户的ID
+                replyForm.dataset.replyToUserId = userId;
             }
         }
 
@@ -5393,12 +5395,10 @@
             }
 
             try {
-                // 获取被回复的用户ID
-                const response = await fetch(`/api/comments/${parentCommentId}`);
-                const commentData = await response.json();
-                const replyToUserId = commentData.comment.user_id;
+                // 从回复表单获取被回复用户的ID
+                const replyToUserId = replyForm.dataset.replyToUserId || null;
 
-                const response2 = await fetch(`/api/comments`, {
+                const response = await fetch(`/api/comments`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -5412,7 +5412,7 @@
                     })
                 });
 
-                const data = await response2.json();
+                const data = await response.json();
                 if (data.success) {
                     // 清空输入框
                     replyInput.value = '';
