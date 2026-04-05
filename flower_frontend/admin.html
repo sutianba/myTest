@@ -2074,6 +2074,10 @@
                         const date = formatDate(item.created_at);
                         const content = item.content.length > 50 ? item.content.substring(0, 50) + '...' : item.content;
                         const row = document.createElement('tr');
+                        
+                        // 检查帖子是否被删除
+                        const isDeleted = item.deleted_at !== null && item.deleted_at !== undefined;
+                        
                         row.innerHTML = `
                             <td>${item.id}</td>
                             <td>${item.username}</td>
@@ -2082,7 +2086,10 @@
                             <td>${item.comments_count}</td>
                             <td>${date}</td>
                             <td>
-                                <button class="btn btn-sm btn-danger" onclick="deletePost(${item.id})">删除</button>
+                                ${isDeleted ? 
+                                    `<button class="btn btn-sm btn-success" onclick="restorePost(${item.id})">恢复</button>` : 
+                                    `<button class="btn btn-sm btn-danger" onclick="deletePost(${item.id})">删除</button>`
+                                }
                             </td>
                         `;
                         tbody.appendChild(row);
@@ -2111,6 +2118,29 @@
                     loadPosts();
                 } else {
                     alert('删除失败: ' + data.error);
+                }
+            });
+        }
+
+        // 恢复帖子
+        function restorePost(id) {
+            if (!confirm('确定要恢复此帖子吗?')) return;
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/posts/${id}/restore`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('帖子已恢复');
+                    loadPosts();
+                } else {
+                    alert('恢复失败: ' + data.error);
                 }
             });
         }

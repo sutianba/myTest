@@ -648,8 +648,9 @@ class SQLDatabaseManager:
         try:
             # 先查询一级评论
             cursor.execute('''
-            SELECT c.*, u.username FROM comments c
+            SELECT c.*, u.username, r.name as role FROM comments c
             JOIN users u ON c.user_id = u.id
+            LEFT JOIN roles r ON u.role_id = r.id
             WHERE c.post_id = %s AND c.parent_comment_id IS NULL
             ORDER BY c.floor_number ASC
             ''', (post_id,))
@@ -660,8 +661,9 @@ class SQLDatabaseManager:
                 comment_dict = dict(comment)
                 # 查询该评论的回复
                 cursor.execute('''
-                SELECT c.*, u.username, ru.username as reply_to_username FROM comments c
+                SELECT c.*, u.username, r.name as role, ru.username as reply_to_username FROM comments c
                 JOIN users u ON c.user_id = u.id
+                LEFT JOIN roles r ON u.role_id = r.id
                 LEFT JOIN users ru ON c.reply_to_user_id = ru.id
                 WHERE c.parent_comment_id = %s
                 ORDER BY c.created_at ASC
@@ -2303,12 +2305,12 @@ class SQLDatabaseManager:
                     "UPDATE albums SET deleted_at = NULL WHERE id = %s",
                     (original_id,)
                 )
-                # 同时恢复相册中的所有图片
+            elif item_type == 'post':
+                # 恢复帖子
                 cursor.execute(
-                    "UPDATE album_images SET deleted_at = NULL WHERE album_id = %s",
+                    "UPDATE posts SET deleted_at = NULL WHERE id = %s",
                     (original_id,)
                 )
-            # 帖子和识别结果无法从回收站恢复，因为它们没有 deleted_at 字段
             
             cursor.execute(
                 "DELETE FROM recycle_bin WHERE id = %s",

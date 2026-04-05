@@ -1379,6 +1379,35 @@ def delete_post_api(post_id):
         print(f"删除帖子时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/posts/<int:post_id>/restore', methods=['POST'])
+@auth_required
+@permission_required('manage_posts')
+def restore_post_api(post_id):
+    """恢复帖子"""
+    if TEST_MODE:
+        return jsonify({'success': False, 'error': '测试模式下不支持恢复帖子功能'}), 503
+    
+    try:
+        # 检查回收站中是否有此帖子
+        from db import get_recycle_bin_items
+        recycle_items = get_recycle_bin_items(None, 'post', post_id)
+        if not recycle_items:
+            return jsonify({'success': False, 'error': '回收站中不存在此帖子'}), 404
+        
+        # 恢复帖子
+        success, message = restore_from_recycle_bin(recycle_items[0]['user_id'], recycle_items[0]['id'])
+        if not success:
+            return jsonify({'success': False, 'error': message}), 400
+        
+        # 记录管理员操作
+        ip_address = request.remote_addr
+        record_admin_operation(g.user_id, g.username, 'restore_post', 'post', post_id, '恢复用户帖子', ip_address)
+        
+        return jsonify({'success': True, 'message': '帖子已恢复'})
+    except Exception as e:
+        print(f"恢复帖子时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # 评论相关API
 @app.route('/api/posts/<int:post_id>/comments', methods=['GET'])
 def get_comments_api(post_id):

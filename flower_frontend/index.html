@@ -663,6 +663,23 @@
             color: #333;
         }
 
+        .admin-badge {
+            display: inline-block;
+            background-color: #4a90e2;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 6px;
+            font-weight: 500;
+        }
+
+        .reply-author {
+            font-weight: 600;
+            font-size: 13px;
+            color: #333;
+        }
+
         .comment-time {
             font-size: 12px;
             color: #999;
@@ -5239,10 +5256,15 @@
                         const commentElement = document.createElement('div');
                         commentElement.className = 'comment-item';
                         commentElement.dataset.commentId = comment.id;
+                        
+                        // 检查是否是管理员回复
+                        const isAdmin = comment.role && (comment.role === 'admin' || comment.role === 'super_admin');
+                        const adminBadge = isAdmin ? '<span class="admin-badge">管理员</span>' : '';
+                        
                         commentElement.innerHTML = `
                             <div class="comment-meta">
                                 ${comment.floor_number ? `<span class="comment-floor">${comment.floor_number}楼</span>` : ''}
-                                <span class="comment-author">${comment.username}</span>
+                                <span class="comment-author">${comment.username} ${adminBadge}</span>
                                 <span class="comment-time">${formatPostTime(comment.created_at)}</span>
                             </div>
                             <div class="comment-content">${comment.content}</div>
@@ -5284,10 +5306,15 @@
                 return '';
             }
             
-            return replies.map(reply => `
+            return replies.map(reply => {
+                // 检查是否是管理员回复
+                const isAdmin = reply.role && (reply.role === 'admin' || reply.role === 'super_admin');
+                const adminBadge = isAdmin ? '<span class="admin-badge">管理员</span>' : '';
+                
+                return `
                 <div class="reply-item" data-comment-id="${reply.id}">
                     <div class="reply-meta">
-                        <span class="reply-author">${reply.username}</span>
+                        <span class="reply-author">${reply.username} ${adminBadge}</span>
                         <span class="reply-to">回复 ${reply.reply_to_username || '楼主'}</span>
                         <span class="reply-time">${formatPostTime(reply.created_at)}</span>
                     </div>
@@ -5308,7 +5335,8 @@
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         // 显示回复表单
