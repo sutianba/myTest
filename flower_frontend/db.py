@@ -618,7 +618,7 @@ class SQLDatabaseManager:
                 floor_number = count + 1
             
             # 创建评论
-            now = int(time.time())
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute('''
             INSERT INTO comments (post_id, user_id, content, parent_comment_id, reply_to_user_id, floor_number, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -693,6 +693,25 @@ class SQLDatabaseManager:
         finally:
             conn.close()
     
+    def get_comment_by_id(self, comment_id):
+        """根据ID获取评论"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+            SELECT c.*, u.username FROM comments c
+            JOIN users u ON c.user_id = u.id
+            WHERE c.id = %s
+            ''', (comment_id,))
+            
+            comment = cursor.fetchone()
+            return comment
+        except Exception as e:
+            raise Exception(f'获取评论失败: {str(e)}')
+        finally:
+            conn.close()
+    
     def like_comment(self, comment_id, user_id):
         """点赞评论"""
         conn = self.get_connection()
@@ -705,7 +724,7 @@ class SQLDatabaseManager:
                 return False  # 已经点赞过
             
             # 创建点赞记录
-            now = int(time.time())
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute('''
             INSERT INTO comment_likes (comment_id, user_id, created_at)
             VALUES (%s, %s, %s)
@@ -797,7 +816,7 @@ class SQLDatabaseManager:
                 return False  # 已经点赞过
             
             # 创建点赞记录
-            now = int(time.time())
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute('''
             INSERT INTO likes (post_id, user_id, created_at)
             VALUES (%s, %s, %s)
@@ -2602,6 +2621,11 @@ def delete_comment(comment_id):
     if db_manager is None:
         raise Exception("数据库未初始化")
     return db_manager.delete_comment(comment_id)
+
+def get_comment_by_id(comment_id):
+    if db_manager is None:
+        raise Exception("数据库未初始化")
+    return db_manager.get_comment_by_id(comment_id)
 
 # 点赞相关便捷函数
 def like_post(post_id, user_id):

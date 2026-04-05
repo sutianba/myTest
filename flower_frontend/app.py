@@ -35,7 +35,7 @@ if not TEST_MODE:
         from db import (
             create_user, get_user_by_username, get_user_by_id, get_user_by_email, verify_password,
             create_post, get_posts, get_post_by_id, update_post, delete_post,
-            create_comment, get_comments_by_post_id, delete_comment,
+            create_comment, get_comments_by_post_id, delete_comment, get_comment_by_id,
             like_post, unlike_post, is_post_liked_by_user,
             like_comment, unlike_comment, is_comment_liked,
             follow_user, unfollow_user, is_following, get_user_following, get_user_followers,
