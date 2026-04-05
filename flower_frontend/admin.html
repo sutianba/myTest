@@ -167,6 +167,70 @@
             cursor: pointer;
         }
 
+        /* 公告类型标签样式 */
+        .announcement-type-tag {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+
+        /* 不同类型公告的样式 */
+        .announcement-type-general {
+            border-left: 3px solid #6c757d;
+        }
+
+        .announcement-type-general .announcement-type-tag {
+            background: #6c757d;
+            color: white;
+        }
+
+        .announcement-type-system {
+            border-left: 3px solid #2196f3;
+        }
+
+        .announcement-type-system .announcement-type-tag {
+            background: #2196f3;
+            color: white;
+        }
+
+        .announcement-type-emergency {
+            border-left: 3px solid #f44336;
+        }
+
+        .announcement-type-emergency .announcement-type-tag {
+            background: #f44336;
+            color: white;
+        }
+
+        .announcement-type-activity {
+            border-left: 3px solid #4caf50;
+        }
+
+        .announcement-type-activity .announcement-type-tag {
+            background: #4caf50;
+            color: white;
+        }
+
+        .announcement-type-maintenance {
+            border-left: 3px solid #ff9800;
+        }
+
+        .announcement-type-maintenance .announcement-type-tag {
+            background: #ff9800;
+            color: white;
+        }
+
+        .announcement-type-update {
+            border-left: 3px solid #9c27b0;
+        }
+
+        .announcement-type-update .announcement-type-tag {
+            background: #9c27b0;
+            color: white;
+        }
+
         /* 内容区域 */
         .content {
             flex: 1;
@@ -909,10 +973,35 @@
                     announcementList.innerHTML = '';
                     data.announcements.forEach(announcement => {
                         const item = document.createElement('div');
-                        item.className = 'announcement-item';
+                        
+                        // 根据公告类型设置不同的样式
+                        let typeClass = 'announcement-type-general';
+                        let typeText = '通用公告';
+                        
+                        if (announcement.announcement_type === 'system') {
+                            typeClass = 'announcement-type-system';
+                            typeText = '系统公告';
+                        } else if (announcement.announcement_type === 'emergency') {
+                            typeClass = 'announcement-type-emergency';
+                            typeText = '紧急通知';
+                        } else if (announcement.announcement_type === 'activity') {
+                            typeClass = 'announcement-type-activity';
+                            typeText = '活动公告';
+                        } else if (announcement.announcement_type === 'maintenance') {
+                            typeClass = 'announcement-type-maintenance';
+                            typeText = '维护公告';
+                        } else if (announcement.announcement_type === 'update') {
+                            typeClass = 'announcement-type-update';
+                            typeText = '更新公告';
+                        }
+                        
+                        item.className = `announcement-item ${typeClass}`;
                         const date = new Date(announcement.created_at * 1000).toLocaleString();
                         item.innerHTML = `
-                            <div class="announcement-title">${announcement.title}</div>
+                            <div class="announcement-header">
+                                <div class="announcement-title">${announcement.title}</div>
+                                <div class="announcement-type-tag">${typeText}</div>
+                            </div>
                             <div class="announcement-content">${announcement.content}</div>
                             <div class="announcement-time">发布时间: ${date}</div>
                         `;
@@ -1675,11 +1764,12 @@
                     announcements.forEach(item => {
                         const date = new Date(item.created_at * 1000).toLocaleString();
                         const statusText = item.is_active ? '正常' : '已删除';
+                        const typeText = announcementTypes[item.announcement_type] || item.announcement_type;
                         const row = document.createElement('tr');
                         row.innerHTML = `
                             <td>${item.id}</td>
                             <td>${item.title}</td>
-                            <td>${item.announcement_type}</td>
+                            <td>${typeText}</td>
                             <td>${statusText}</td>
                             <td>${item.admin_username}</td>
                             <td>${date}</td>
@@ -1698,6 +1788,16 @@
             });
         }
 
+        // 公告类型映射
+        const announcementTypes = {
+            'general': '通用公告',
+            'system': '系统公告',
+            'activity': '活动公告',
+            'emergency': '紧急通知',
+            'maintenance': '维护公告',
+            'update': '更新公告'
+        };
+        
         // 创建公告
         let announcementEventBound = false;
         function bindCreateAnnouncementEvent() {
@@ -1710,26 +1810,55 @@
                     if (!title) return;
                     const content = prompt('请输入公告内容:');
                     if (!content) return;
-                    const announcement_type = prompt('请输入公告类型 (general/maintenance/update):', 'general');
                     
-                    const token = localStorage.getItem('token');
-                    fetch('/api/admin/announcements', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + token
-                        },
-                        body: JSON.stringify({ title, content, announcement_type })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('公告创建成功');
-                            loadAnnouncementsManagement();
-                        } else {
-                            alert('创建失败: ' + data.error);
-                        }
-                    });
+                    // 使用下拉菜单选择公告类型
+                    let typeOptions = '';
+                    for (const [key, value] of Object.entries(announcementTypes)) {
+                        typeOptions += `<option value="${key}">${value}</option>`;
+                    }
+                    
+                    const typeHtml = `
+                        <div style="padding: 10px;">
+                            <label style="display: block; margin-bottom: 5px;">公告类型:</label>
+                            <select id="announcement-type-select" style="width: 100%; padding: 5px;">
+                                ${typeOptions}
+                            </select>
+                        </div>
+                    `;
+                    
+                    // 创建临时容器
+                    const container = document.createElement('div');
+                    container.innerHTML = typeHtml;
+                    document.body.appendChild(container);
+                    
+                    const select = document.getElementById('announcement-type-select');
+                    select.value = 'general'; // 默认选择通用公告
+                    
+                    if (confirm('请选择公告类型，然后点击确定')) {
+                        const announcement_type = select.value;
+                        document.body.removeChild(container);
+                        
+                        const token = localStorage.getItem('token');
+                        fetch('/api/admin/announcements', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + token
+                            },
+                            body: JSON.stringify({ title, content, announcement_type })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert('公告创建成功');
+                                loadAnnouncementsManagement();
+                            } else {
+                                alert('创建失败: ' + data.error);
+                            }
+                        });
+                    } else {
+                        document.body.removeChild(container);
+                    }
                 });
                 announcementEventBound = true;
             }
@@ -1741,26 +1870,53 @@
             if (!newTitle) return;
             const newContent = prompt('编辑公告内容:', content);
             if (!newContent) return;
-            const newType = prompt('编辑公告类型:', type);
             
-            const token = localStorage.getItem('token');
-            fetch(`/api/admin/announcements/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                },
-                body: JSON.stringify({ title: newTitle, content: newContent, announcement_type: newType })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('公告更新成功');
-                    loadAnnouncementsManagement();
-                } else {
-                    alert('更新失败: ' + data.error);
-                }
-            });
+            // 使用下拉菜单选择公告类型
+            let typeOptions = '';
+            for (const [key, value] of Object.entries(announcementTypes)) {
+                const selected = key === type ? 'selected' : '';
+                typeOptions += `<option value="${key}" ${selected}>${value}</option>`;
+            }
+            
+            const typeHtml = `
+                <div style="padding: 10px;">
+                    <label style="display: block; margin-bottom: 5px;">公告类型:</label>
+                    <select id="edit-announcement-type-select" style="width: 100%; padding: 5px;">
+                        ${typeOptions}
+                    </select>
+                </div>
+            `;
+            
+            // 创建临时容器
+            const container = document.createElement('div');
+            container.innerHTML = typeHtml;
+            document.body.appendChild(container);
+            
+            if (confirm('请选择公告类型，然后点击确定')) {
+                const newType = document.getElementById('edit-announcement-type-select').value;
+                document.body.removeChild(container);
+                
+                const token = localStorage.getItem('token');
+                fetch(`/api/admin/announcements/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ title: newTitle, content: newContent, announcement_type: newType })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('公告更新成功');
+                        loadAnnouncementsManagement();
+                    } else {
+                        alert('更新失败: ' + data.error);
+                    }
+                });
+            } else {
+                document.body.removeChild(container);
+            }
         }
 
         // 删除公告
