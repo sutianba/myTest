@@ -1100,7 +1100,7 @@
             });
             
             // 端点功能描述映射
-            const endpointDescriptions = {
+            window.endpointDescriptions = {
                 'get_latest_server_metrics_api': '获取最新服务器指标',
                 'static': '静态文件服务',
                 'get_albums': '获取用户相册列表',
@@ -1130,7 +1130,7 @@
             };
             
             // 端点分类映射
-            const endpointCategories = {
+            window.endpointCategories = {
                 'login': 'user',
                 'register': 'user',
                 'send_verification_code': 'user',
@@ -1160,7 +1160,7 @@
             };
             
             // 存储原始端点数据
-            let allEndpoints = [];
+            window.allEndpoints = [];
             
             // 加载热门端点
             document.getElementById('endpoints-body').innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
@@ -1173,8 +1173,8 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    allEndpoints = data.stats;
-                    renderEndpoints(allEndpoints);
+                    window.allEndpoints = data.stats;
+                    window.renderEndpoints(window.allEndpoints);
                 }
             })
             .catch(error => {
@@ -1183,7 +1183,7 @@
             });
             
             // 渲染端点列表
-            function renderEndpoints(endpoints) {
+            window.renderEndpoints = function(endpoints) {
                 const endpointsBody = document.getElementById('endpoints-body');
                 endpointsBody.innerHTML = '';
                 
@@ -1193,7 +1193,7 @@
                 }
                 
                 endpoints.forEach(endpoint => {
-                    const description = endpointDescriptions[endpoint.endpoint] || '未知功能';
+                    const description = window.endpointDescriptions[endpoint.endpoint] || '未知功能';
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td>${endpoint.endpoint}</td>
@@ -1208,35 +1208,40 @@
             }
             
             // 搜索端点
-            function searchEndpoints() {
+            window.searchEndpoints = function() {
                 const searchTerm = document.getElementById('endpoint-search').value.toLowerCase();
-                const category = document.getElementById('endpoint-category').value;
                 
-                let filteredEndpoints = allEndpoints;
+                let filteredEndpoints = window.allEndpoints;
                 
-                // 按分类过滤
-                if (category !== 'all') {
-                    filteredEndpoints = filteredEndpoints.filter(endpoint => {
-                        return endpointCategories[endpoint.endpoint] === category;
-                    });
-                }
-                
-                // 按搜索词过滤
+                // 按搜索词过滤（全局搜索）
                 if (searchTerm) {
                     filteredEndpoints = filteredEndpoints.filter(endpoint => {
-                        const description = endpointDescriptions[endpoint.endpoint] || '';
+                        const description = window.endpointDescriptions[endpoint.endpoint] || '';
                         return endpoint.endpoint.toLowerCase().includes(searchTerm) || 
                                description.toLowerCase().includes(searchTerm);
                     });
                 }
                 
-                renderEndpoints(filteredEndpoints);
+                window.renderEndpoints(filteredEndpoints);
             }
             
             // 过滤端点
-            function filterEndpoints() {
-                searchEndpoints();
+            window.filterEndpoints = function() {
+                const category = document.getElementById('endpoint-category').value;
+                
+                let filteredEndpoints = window.allEndpoints;
+                
+                // 按分类过滤
+                if (category !== 'all') {
+                    filteredEndpoints = filteredEndpoints.filter(endpoint => {
+                        return window.endpointCategories[endpoint.endpoint] === category;
+                    });
+                }
+                
+                window.renderEndpoints(filteredEndpoints);
             }
+            
+
         }
 
         // 加载服务器指标
