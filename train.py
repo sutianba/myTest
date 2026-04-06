@@ -1,6 +1,6 @@
 # Ultralytics 🚀 AGPL-3.0 许可证 - https://ultralytics.com/license
 """
-在自定义数据集上训练YOLOv5模型。模型和数据集会自动从最新的YOLOv5发布版本下载。
+在自定义数据集上训练YOLOv5模型。模型和数据集会自动从最新的YOLOv5发布版本下载。.
 
 使用方法 - 单GPU训练：
     $ python train.py --data coco128.yaml --weights yolov5s.pt --img 640  # 从预训练模型开始（推荐）
@@ -21,8 +21,7 @@ import random
 import subprocess
 import sys
 import time
-from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 try:
@@ -83,7 +82,6 @@ from utils.general import (
 from utils.loggers import LOGGERS, Loggers
 from utils.loggers.comet.comet_utils import check_comet_resume
 from utils.loss import ComputeLoss
-from utils.metrics import fitness
 from utils.plots import plot_evolve
 from utils.torch_utils import (
     EarlyStopping,
@@ -103,8 +101,7 @@ GIT_INFO = check_git_info()
 
 
 def train(hyp, opt, device, callbacks):
-    """在自定义数据集上使用指定的超参数、选项和设备训练YOLOv5模型，管理数据集、
-    模型架构、损失计算和优化器步骤。
+    """在自定义数据集上使用指定的超参数、选项和设备训练YOLOv5模型，管理数据集、 模型架构、损失计算和优化器步骤。.
 
     参数：
         hyp (str | dict)：超参数YAML文件的路径或超参数字典。
@@ -136,7 +133,7 @@ def train(hyp, opt, device, callbacks):
     注意：
         模型和数据集会自动从最新的YOLOv5发布版本下载。
     """
-    save_dir, epochs, batch_size, weights, single_cls, evolve, data, cfg, resume, noval, nosave, workers, freeze = (
+    save_dir, epochs, batch_size, weights, single_cls, evolve, data, cfg, resume, noval, _nosave, workers, freeze = (
         Path(opt.save_dir),
         opt.epochs,
         opt.batch_size,
@@ -254,7 +251,7 @@ def train(hyp, opt, device, callbacks):
     else:
 
         def lf(x):
-            """线性学习率调度函数，根据 epoch 比例计算衰减。"""
+            """线性学习率调度函数，根据 epoch 比例计算衰减。."""
             return (1 - x / epochs) * (1.0 - hyp["lrf"]) + hyp["lrf"]  # 线性
 
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)  # plot_lr_scheduler(optimizer, scheduler, epochs)
@@ -349,12 +346,11 @@ def train(hyp, opt, device, callbacks):
     nb = len(train_loader)  # 批次数量
     nw = max(round(hyp["warmup_epochs"] * nb), 100)  # 预热迭代次数，最大（3 个 epoch，100 次迭代）
     # nw = min(nw, (epochs - start_epoch) / 2 * nb)  # 将预热限制在训练的一半以内
-    last_opt_step = -1
     maps = np.zeros(nc)  # 每个类别的 mAP
     results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
     scheduler.last_epoch = start_epoch - 1  # 不要移动
-    scaler = torch.cuda.amp.GradScaler(enabled=amp)
-    stopper, stop = EarlyStopping(patience=opt.patience), False
+    torch.cuda.amp.GradScaler(enabled=amp)
+    _stopper, _stop = EarlyStopping(patience=opt.patience), False
     compute_loss = ComputeLoss(model)  # 初始化损失类
     callbacks.run("on_train_start")
     LOGGER.info(
@@ -406,7 +402,7 @@ def train(hyp, opt, device, callbacks):
                 sz = random.randrange(int(imgsz * 0.5), int(imgsz * 1.5) + gs) // gs * gs  # 大小
                 sf = sz / max(imgs.shape[2:])  # 缩放因子
                 if sf != 1:
-                    ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # 新形状（拉伸到 gs 倍数）
+                    [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # 新形状（拉伸到 gs 倍数）
                     imgs = nn.functional
 
         # 结束 epoch ----------------------------------------------------------------------------------------------------
@@ -442,7 +438,7 @@ def train(hyp, opt, device, callbacks):
 
 
 def parse_opt(known=False):
-    """解析YOLOv5训练、验证和测试的命令行参数。
+    """解析YOLOv5训练、验证和测试的命令行参数。.
 
     参数：
         known (bool, 可选)：如果为True，仅解析已知参数，忽略未知参数。默认值为False。
@@ -516,7 +512,7 @@ def parse_opt(known=False):
 
 
 def main(opt, callbacks=Callbacks()):
-    """使用指定选项和可选回调函数运行训练或超参数进化的主入口点。
+    """使用指定选项和可选回调函数运行训练或超参数进化的主入口点。.
 
     参数：
         opt (argparse.Namespace)：为YOLOv5训练和进化解析的命令行参数。
@@ -785,7 +781,7 @@ def main(opt, callbacks=Callbacks()):
 
 
 def generate_individual(input_ranges, individual_length):
-    """在指定范围内生成具有随机超参数的个体。
+    """在指定范围内生成具有随机超参数的个体。.
 
     参数：
         input_ranges (list[tuple[float, float]]): 元组列表，每个元组包含对应基因（超参数）的上下界。
@@ -813,7 +809,7 @@ def generate_individual(input_ranges, individual_length):
 
 
 def run(**kwargs):
-    """使用指定选项执行YOLOv5训练，可通过关键字参数进行可选覆盖。
+    """使用指定选项执行YOLOv5训练，可通过关键字参数进行可选覆盖。.
 
     参数：
         weights (str, 可选): 初始权重路径。默认为 ROOT / 'yolov5s.pt'。

@@ -321,7 +321,7 @@ def run(
 
 
 def parse_opt():
-    """解析 YOLOv5 检测的命令行参数，允许自定义推理选项和模型配置。
+    """解析 YOLOv5 检测的命令行参数，允许自定义推理选项和模型配置。.
 
     参数:
         --weights (str | list[str], 可选): 模型路径或 Triton URL。默认值为 ROOT / 'yolov5s.pt'。
@@ -404,7 +404,7 @@ def parse_opt():
 
 
 def main(opt):
-    """根据提供的命令行参数执行 YOLOv5 模型推理，并在运行前验证依赖项。
+    """根据提供的命令行参数执行 YOLOv5 模型推理，并在运行前验证依赖项。.
 
     参数:
         opt (argparse.Namespace): YOLOv5 检测的命令行参数，详见函数 `parse_opt`。
