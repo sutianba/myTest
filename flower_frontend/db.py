@@ -515,7 +515,7 @@ class SQLDatabaseManager:
         
         try:
             cursor.execute('''
-            SELECT p.*, u.username FROM posts p
+            SELECT p.*, u.username, u.role FROM posts p
             JOIN users u ON p.user_id = u.id
             WHERE p.id = %s
             ''', (post_id,))
@@ -648,9 +648,8 @@ class SQLDatabaseManager:
         try:
             # 先查询一级评论
             cursor.execute('''
-            SELECT c.*, u.username, r.name as role FROM comments c
+            SELECT c.*, u.username, u.role FROM comments c
             JOIN users u ON c.user_id = u.id
-            LEFT JOIN roles r ON u.role_id = r.id
             WHERE c.post_id = %s AND c.parent_comment_id IS NULL
             ORDER BY c.floor_number ASC
             ''', (post_id,))
@@ -661,9 +660,8 @@ class SQLDatabaseManager:
                 comment_dict = dict(comment)
                 # 查询该评论的回复
                 cursor.execute('''
-                SELECT c.*, u.username, r.name as role, ru.username as reply_to_username FROM comments c
+                SELECT c.*, u.username, u.role, ru.username as reply_to_username FROM comments c
                 JOIN users u ON c.user_id = u.id
-                LEFT JOIN roles r ON u.role_id = r.id
                 LEFT JOIN users ru ON c.reply_to_user_id = ru.id
                 WHERE c.parent_comment_id = %s
                 ORDER BY c.created_at ASC

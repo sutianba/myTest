@@ -2083,7 +2083,10 @@
                             <td>${item.username}</td>
                             <td>${content}</td>
                             <td>${item.likes_count}</td>
-                            <td>${item.comments_count}</td>
+                            <td>
+                                ${item.comments_count} 
+                                ${item.comments_count > 0 ? `<button class="btn btn-sm btn-info" onclick="viewPostReplies(${item.id})"><i class="fa fa-comments"></i> 查看</button>` : ''}
+                            </td>
                             <td>${date}</td>
                             <td>
                                 ${isDeleted ? 
@@ -2104,7 +2107,7 @@
 
         // 删除帖子
         function deletePost(id) {
-            if (!confirm('确定要删除此帖子吗?')) return;
+            if (!window.confirm('确定要删除此帖子吗?')) return;
             
             const token = localStorage.getItem('token');
             fetch(`/api/posts/${id}`, {
@@ -2114,17 +2117,17 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('帖子已删除');
+                    window.alert('帖子已删除');
                     loadPosts();
                 } else {
-                    alert('删除失败: ' + data.error);
+                    window.alert('删除失败: ' + data.error);
                 }
             });
         }
 
         // 恢复帖子
         function restorePost(id) {
-            if (!confirm('确定要恢复此帖子吗?')) return;
+            if (!window.confirm('确定要恢复此帖子吗?')) return;
             
             const token = localStorage.getItem('token');
             fetch(`/api/posts/${id}/restore`, {
@@ -2137,11 +2140,274 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('帖子已恢复');
+                    window.alert('帖子已恢复');
                     loadPosts();
                 } else {
-                    alert('恢复失败: ' + data.error);
+                    window.alert('恢复失败: ' + data.error);
                 }
+            });
+        }
+
+        // 查看帖子回复
+        function viewPostReplies(postId) {
+            const token = localStorage.getItem('token');
+            
+            // 创建模态框
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.id = 'replies-modal';
+            modal.innerHTML = `
+                <div class="modal-content" style="width: 80%; max-width: 800px; max-height: 80vh; overflow-y: auto; background-color: white; padding: 20px; border-radius: 8px;">
+                    <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="color: #333; margin: 0;">帖子回复管理</h3>
+                        <button class="btn btn-sm btn-danger" onclick="document.getElementById('replies-modal').remove()"><i class="fa fa-times"></i> 关闭</button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="replies-content" style="padding: 10px;">
+                            <p class="loading">加载中...</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.style.display = 'flex';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.zIndex = '9999';
+            
+            const repliesContent = document.getElementById('replies-content');
+            
+            // 先加载帖子详情
+            fetch(`/api/posts/${postId}`, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(postData => {
+                console.log('帖子数据:', postData);
+                if (postData.success) {
+                    const post = postData.post;
+                    const postDate = formatDate(post.created_at);
+                    const postIsAdmin = post.role && (post.role === 'admin' || post.role === 'super_admin');
+                    const postAdminBadge = postIsAdmin ? '<span class="admin-badge">管理员</span>' : '';
+                    
+                    let html = `
+                        <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                <h4 style="color: #333; margin: 0;">帖子正文</h4>
+                                <span style="color: #666; font-size: 12px;">${postDate}</span>
+                            </div>
+                            <div style="display: flex; margin-bottom: 15px;">
+                                <span><strong style="color: #333;">${post.username}</strong> ${postAdminBadge}</span>
+                            </div>
+                            <div style="margin-bottom: 10px; color: #333;">${post.content}</div>
+                            ${post.image_url ? `<img src="${post.image_url}" style="max-width: 100%; max-height: 300px; margin-top: 10px; border-radius: 4px;">` : ''}
+                            <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+                                <h5 style="color: #333; margin: 0 0 10px 0;">管理员回复</h5>
+                                <textarea id="admin-reply-${postId}" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; min-height: 100px; font-size: 14px;"></textarea>
+                                <div style="margin-top: 10px; text-align: right;">
+                                    <button class="btn btn-primary" onclick="submitAdminReply(${postId})"><i class="fa fa-paper-plane"></i> 发送回复</button>
+                                </div>
+                            </div>
+                        </div>
+                        <h4 style="color: #333; margin: 0 0 15px 0;">回复列表</h4>
+                    `;
+                    
+                    // 加载回复
+                    return fetch(`/api/posts/${postId}/comments`, {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('评论数据:', data);
+                        if (data.success) {
+                            const comments = data.comments;
+                            if (comments.length === 0) {
+                                html += '<p style="color: #666;">暂无回复</p>';
+                            } else {
+                                comments.forEach(comment => {
+                                    const date = formatDate(comment.created_at);
+                                    const isAdmin = comment.role && (comment.role === 'admin' || comment.role === 'super_admin');
+                                    const adminBadge = isAdmin ? '<span class="admin-badge">管理员</span>' : '';
+                                    
+                                    html += `
+                            <div style="border-bottom: 1px solid #ddd; padding: 15px; background-color: #ffffff; margin-bottom: 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <span><strong style="color: #333;">${comment.username}</strong> ${adminBadge} ${comment.floor_number ? `(${comment.floor_number}楼)` : ''}</span>
+                                    <div style="display: flex; gap: 10px;">
+                                        <span style="color: #666; font-size: 12px;">${date}</span>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteComment(${comment.id}, ${postId})">删除</button>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 10px; color: #333;">${comment.content}</div>
+                                <div style="margin-top: 15px; border-top: 1px solid #f0f0f0; padding-top: 10px;">
+                                    <h6 style="color: #666; margin: 0 0 5px 0;">回复此评论</h6>
+                                    <textarea id="reply-to-${comment.id}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; min-height: 80px; font-size: 14px;"></textarea>
+                                    <div style="margin-top: 5px; text-align: right;">
+                                        <button class="btn btn-sm btn-primary" onclick="replyToComment(${postId}, ${comment.id})"><i class="fa fa-reply"></i> 回复</button>
+                                    </div>
+                                </div>
+                                `;
+                                    
+                                    // 显示回复的回复
+                                    if (comment.replies && comment.replies.length > 0) {
+                                        html += '<div style="margin-left: 30px; margin-top: 15px;">';
+                                        comment.replies.forEach(reply => {
+                                            const replyDate = formatDate(reply.created_at);
+                                            const replyIsAdmin = reply.role && (reply.role === 'admin' || reply.role === 'super_admin');
+                                            const replyAdminBadge = replyIsAdmin ? '<span class="admin-badge">管理员</span>' : '';
+                                            
+                                            html += `
+                                                <div style="border-left: 2px solid #4a90e2; padding: 10px; margin-bottom: 10px; background-color: #f9f9f9; border-radius: 4px;">
+                                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                                        <span><strong style="color: #333;">${reply.username}</strong> ${replyAdminBadge} 回复 ${reply.reply_to_username || '楼主'}</span>
+                                                        <div style="display: flex; gap: 10px;">
+                                                            <span style="color: #666; font-size: 12px;">${replyDate}</span>
+                                                            <button class="btn btn-sm btn-danger" onclick="deleteComment(${reply.id}, ${postId})"><i class="fa fa-trash"></i></button>
+                                                        </div>
+                                                    </div>
+                                                    <div style="color: #333;">${reply.content}</div>
+                                                </div>
+                                            `;
+                                        });
+                                        html += '</div>';
+                                    }
+                                    
+                                    html += '</div>';
+                                });
+                            }
+                        } else {
+                            html += '<p style="color: red;">加载回复失败: ' + data.error + '</p>';
+                        }
+                        
+                        console.log('生成的HTML:', html);
+                        repliesContent.innerHTML = html;
+                    });
+                } else {
+                    repliesContent.innerHTML = '<p style="color: red;">加载帖子失败: ' + postData.error + '</p>';
+                }
+            })
+            .catch(error => {
+                console.error('加载失败:', error);
+                repliesContent.innerHTML = '<p style="color: red;">加载失败，请稍后重试</p>';
+            });
+        }
+
+        // 删除评论
+        function deleteComment(commentId, postId) {
+            if (!window.confirm('确定要删除此评论吗?')) return;
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/comments/${commentId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.alert('评论已删除');
+                    // 重新加载回复
+                    const modal = document.getElementById('replies-modal');
+                    if (modal) {
+                        modal.remove();
+                    }
+                    viewPostReplies(postId);
+                } else {
+                    window.alert('删除失败: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('删除评论失败:', error);
+                window.alert('删除失败，请稍后重试');
+            });
+        }
+
+        // 管理员回复帖子
+        function submitAdminReply(postId) {
+            const content = document.getElementById(`admin-reply-${postId}`).value.trim();
+            if (!content) {
+                window.alert('回复内容不能为空');
+                return;
+            }
+            
+            const token = localStorage.getItem('token');
+            fetch('/api/comments', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({
+                    post_id: postId,
+                    content: content,
+                    parent_comment_id: null
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.alert('回复成功');
+                    document.getElementById(`admin-reply-${postId}`).value = '';
+                    // 重新加载回复
+                    const modal = document.getElementById('replies-modal');
+                    if (modal) {
+                        modal.remove();
+                    }
+                    viewPostReplies(postId);
+                } else {
+                    window.alert('回复失败: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('回复失败:', error);
+                window.alert('回复失败，请稍后重试');
+            });
+        }
+
+        // 回复评论
+        function replyToComment(postId, commentId) {
+            const content = document.getElementById(`reply-to-${commentId}`).value.trim();
+            if (!content) {
+                window.alert('回复内容不能为空');
+                return;
+            }
+            
+            const token = localStorage.getItem('token');
+            fetch('/api/comments', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({
+                    post_id: postId,
+                    content: content,
+                    parent_comment_id: commentId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.alert('回复成功');
+                    document.getElementById(`reply-to-${commentId}`).value = '';
+                    // 重新加载回复
+                    const modal = document.getElementById('replies-modal');
+                    if (modal) {
+                        modal.remove();
+                    }
+                    viewPostReplies(postId);
+                } else {
+                    window.alert('回复失败: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('回复失败:', error);
+                window.alert('回复失败，请稍后重试');
             });
         }
 
