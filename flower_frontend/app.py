@@ -1,43 +1,85 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # 你可以在 http://127.0.0.1:5000 网站进行查看
-import os
-import sys
 import base64
 import io
-from flask import Flask, request, jsonify, send_from_directory, g
-from flask_cors import CORS
-
-# 导入图片EXIF信息提取所需模块
-from PIL import Image
-from PIL.ExifTags import TAGS
-import exifread
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+import os
 import time
+
+import exifread
 
 # 导入数据库操作模块
 from db import (
-    create_user, get_user_by_username, get_user_by_id, verify_password,
-    create_post, get_posts, get_post_by_id, update_post, delete_post,
-    create_comment, get_comments_by_post_id, delete_comment,
-    like_post, unlike_post, is_post_liked_by_user,
-    follow_user, unfollow_user, is_following, get_user_following, get_user_followers,
+    add_image_to_album,
     check_user_permission,
+    create_album,
+    create_announcement,
+    create_comment,
+    create_feedback,
+    create_post,
     # 超级管理员端函数
-    create_system_log, get_system_logs, record_traffic, get_traffic_stats, get_traffic_by_endpoint,
-    record_server_status, get_server_status, get_latest_server_metrics,
-    record_admin_operation, get_admin_operations, get_all_admins, update_user_role, get_system_summary,
+    create_system_log,
+    create_user,
+    delete_album,
+    delete_album_image,
+    delete_announcement,
+    delete_comment,
+    delete_feedback,
+    delete_post,
+    delete_recognition_result,
+    empty_recycle_bin,
+    follow_user,
+    get_admin_operations,
+    get_album_by_id,
+    get_album_categories,
+    get_album_images,
+    get_all_admins,
+    get_all_feedback,
+    get_announcements,
+    get_comments_by_post_id,
+    get_feedback_by_id,
+    get_latest_server_metrics,
+    get_post_by_id,
+    get_posts,
+    get_recycle_bin_items,
+    get_server_status,
+    get_system_logs,
+    get_system_summary,
+    get_traffic_by_endpoint,
+    get_traffic_stats,
+    get_user_albums,
+    get_user_by_id,
+    get_user_by_username,
+    get_user_feedback,
+    get_user_followers,
+    get_user_following,
+    get_user_recognition_history,
+    is_following,
+    is_post_liked_by_user,
+    like_post,
+    move_to_recycle_bin,
+    permanently_delete,
+    record_admin_operation,
+    record_traffic,
+    respond_feedback,
+    restore_from_recycle_bin,
+    unfollow_user,
+    unlike_post,
+    update_album,
+    update_announcement,
+    update_post,
     # 用户端新功能
-    update_user_profile, get_user_recognition_history, delete_recognition_result,
-    create_album, get_user_albums, get_album_by_id, update_album, delete_album,
-    add_image_to_album, get_album_images, delete_album_image, get_album_categories,
-    create_feedback, get_user_feedback, get_feedback_by_id, delete_feedback,
-    get_all_feedback, respond_feedback,
-    create_announcement, get_announcements, update_announcement, delete_announcement,
-    move_to_recycle_bin, get_recycle_bin_items, restore_from_recycle_bin,
-    permanently_delete, empty_recycle_bin
+    update_user_profile,
+    update_user_role,
+    verify_password,
 )
+from flask import Flask, g, jsonify, request, send_from_directory
+from flask_cors import CORS
+from geopy.exc import GeocoderServiceError, GeocoderTimedOut
+from geopy.geocoders import Nominatim
+
+# 导入图片EXIF信息提取所需模块
+from PIL import Image
 
 app = Flask(__name__)
 CORS(app)  # 启用CORS以允许前端访问
@@ -46,29 +88,30 @@ CORS(app)  # 启用CORS以允许前端访问
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # JWT配置
-app.config['SECRET_KEY'] = 'flower_recognition_secret_key'
-app.config['JWT_EXPIRATION_DELTA'] = 3600  # JWT过期时间（秒）
+app.config["SECRET_KEY"] = "flower_recognition_secret_key"
+app.config["JWT_EXPIRATION_DELTA"] = 3600  # JWT过期时间（秒）
 
 # JWT相关导入
 import jwt
-from werkzeug.security import generate_password_hash, check_password_hash
 
 # 加载YOLOv5模型
 import torch
+from werkzeug.security import generate_password_hash
 
 # 使用正确路径加载模型
 flower_model = None
 try:
     # 使用BASE_DIR构建绝对路径
-    yolo_path = os.path.join(BASE_DIR, '..')
-    model_path = os.path.join(BASE_DIR, '..', 'testflowers.pt')
-    flower_model = torch.hub.load(yolo_path, 'custom', path=model_path, source='local', force_reload=True)
+    yolo_path = os.path.join(BASE_DIR, "..")
+    model_path = os.path.join(BASE_DIR, "..", "testflowers.pt")
+    flower_model = torch.hub.load(yolo_path, "custom", path=model_path, source="local", force_reload=True)
     flower_model.conf = 0.5  # 提高置信度阈值，只保留高置信度结果
-    flower_model.iou = 0.5   # 提高NMS IOU阈值，更严格地过滤重叠边界框
+    flower_model.iou = 0.5  # 提高NMS IOU阈值，更严格地过滤重叠边界框
     print("成功加载YOLOv5花卉识别模型")
 except Exception as e:
     print(f"无法加载YOLOv5模型: {e}")
     print("使用模拟模型进行测试...")
+
     # 创建一个模拟模型类，用于测试
     class MockFlowerModel:
         def __call__(self, image):
@@ -78,216 +121,225 @@ except Exception as e:
                     class MockPandas:
                         @property
                         def xyxy(self):
-                            return [type('obj', (object,), {'to_dict': lambda self, orient: []})()]
+                            return [type("obj", (object,), {"to_dict": lambda self, orient: []})()]
+
                     return MockPandas()
+
             return MockResults()
+
     flower_model = MockFlowerModel()
     flower_model.conf = 0.5
     flower_model.iou = 0.5
 
+
 # JWT工具函数
 def generate_jwt(user_id, username):
-    """生成JWT令牌"""
-    payload = {
-        'user_id': user_id,
-        'username': username,
-        'exp': time.time() + app.config['JWT_EXPIRATION_DELTA']
-    }
-    token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
+    """生成JWT令牌."""
+    payload = {"user_id": user_id, "username": username, "exp": time.time() + app.config["JWT_EXPIRATION_DELTA"]}
+    token = jwt.encode(payload, app.config["SECRET_KEY"], algorithm="HS256")
     return token
 
+
 def verify_jwt(token):
-    """验证JWT令牌"""
+    """验证JWT令牌."""
     try:
-        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        payload = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
         return payload
     except jwt.ExpiredSignatureError:
         return None
     except jwt.InvalidTokenError:
         return None
 
+
 # 认证中间件
 def auth_required(f):
-    """认证装饰器"""
+    """认证装饰器."""
+
     def decorated_function(*args, **kwargs):
-        token = request.headers.get('Authorization')
+        token = request.headers.get("Authorization")
         if not token:
-            return jsonify({'success': False, 'error': '未提供认证令牌'}), 401
-        
+            return jsonify({"success": False, "error": "未提供认证令牌"}), 401
+
         # 移除Bearer前缀
-        if token.startswith('Bearer '):
+        if token.startswith("Bearer "):
             token = token[7:]
-        
+
         payload = verify_jwt(token)
         if not payload:
-            return jsonify({'success': False, 'error': '无效或过期的认证令牌'}), 401
-        
+            return jsonify({"success": False, "error": "无效或过期的认证令牌"}), 401
+
         # 将用户信息存储到g对象
-        g.user_id = payload['user_id']
-        g.username = payload['username']
-        
+        g.user_id = payload["user_id"]
+        g.username = payload["username"]
+
         return f(*args, **kwargs)
+
     decorated_function.__name__ = f.__name__
     return decorated_function
+
 
 # 权限验证中间件
 def permission_required(permission):
-    """权限验证装饰器"""
+    """权限验证装饰器."""
+
     def decorator(f):
         def decorated_function(*args, **kwargs):
-            token = request.headers.get('Authorization')
+            token = request.headers.get("Authorization")
             if not token:
-                return jsonify({'success': False, 'error': '未提供认证令牌'}), 401
-            
-            if token.startswith('Bearer '):
+                return jsonify({"success": False, "error": "未提供认证令牌"}), 401
+
+            if token.startswith("Bearer "):
                 token = token[7:]
-            
+
             payload = verify_jwt(token)
             if not payload:
-                return jsonify({'success': False, 'error': '无效或过期的认证令牌'}), 401
-            
-            g.user_id = payload['user_id']
-            g.username = payload['username']
-            g.role = payload.get('role', 'user')
-            
+                return jsonify({"success": False, "error": "无效或过期的认证令牌"}), 401
+
+            g.user_id = payload["user_id"]
+            g.username = payload["username"]
+            g.role = payload.get("role", "user")
+
             if not check_user_permission(g.user_id, permission):
-                return jsonify({'success': False, 'error': '权限不足'}), 403
-            
+                return jsonify({"success": False, "error": "权限不足"}), 403
+
             return f(*args, **kwargs)
+
         decorated_function.__name__ = f.__name__
         return decorated_function
+
     return decorator
 
+
 def admin_required(f):
-    """管理员权限装饰器"""
+    """管理员权限装饰器."""
+
     def decorated_function(*args, **kwargs):
-        token = request.headers.get('Authorization')
+        token = request.headers.get("Authorization")
         if not token:
-            return jsonify({'success': False, 'error': '未提供认证令牌'}), 401
-        
-        if token.startswith('Bearer '):
+            return jsonify({"success": False, "error": "未提供认证令牌"}), 401
+
+        if token.startswith("Bearer "):
             token = token[7:]
-        
+
         payload = verify_jwt(token)
         if not payload:
-            return jsonify({'success': False, 'error': '无效或过期的认证令牌'}), 401
-        
-        g.user_id = payload['user_id']
-        g.username = payload['username']
-        g.role = payload.get('role', 'user')
-        
+            return jsonify({"success": False, "error": "无效或过期的认证令牌"}), 401
+
+        g.user_id = payload["user_id"]
+        g.username = payload["username"]
+        g.role = payload.get("role", "user")
+
         user_role = g.role
-        if user_role not in ['super_admin', 'admin']:
-            return jsonify({'success': False, 'error': '需要管理员权限'}), 403
-        
+        if user_role not in ["super_admin", "admin"]:
+            return jsonify({"success": False, "error": "需要管理员权限"}), 403
+
         return f(*args, **kwargs)
+
     decorated_function.__name__ = f.__name__
     return decorated_function
 
-@app.route('/')
-def index():
-    """返回前端页面"""
-    return send_from_directory(BASE_DIR, 'index.html')
 
-@app.route('/<path:filename>')
+@app.route("/")
+def index():
+    """返回前端页面."""
+    return send_from_directory(BASE_DIR, "index.html")
+
+
+@app.route("/<path:filename>")
 def serve_file(filename):
-    """返回指定的文件"""
+    """返回指定的文件."""
     return send_from_directory(BASE_DIR, filename)
 
-@app.route('/api/detect', methods=['POST'])
+
+@app.route("/api/detect", methods=["POST"])
 def detect_flower():
-    """花卉识别API接口"""
+    """花卉识别API接口."""
     try:
         data = request.get_json()
-        
+
         user_id = None
-        token = request.headers.get('Authorization')
+        token = request.headers.get("Authorization")
         if token:
-            if token.startswith('Bearer '):
+            if token.startswith("Bearer "):
                 token = token[7:]
             payload = verify_jwt(token)
             if payload:
-                user_id = payload.get('user_id')
-        
-        save_to_album = data.get('save_to_album', False)
-        
-        if 'image' in data:
-            image_data = data['image']
+                user_id = payload.get("user_id")
+
+        save_to_album = data.get("save_to_album", False)
+
+        if "image" in data:
+            image_data = data["image"]
             results = process_single_image(image_data, user_id, save_to_album)
-            return jsonify({'success': True, 'results': results})
-        elif 'images' in data:
-            images_data = data['images']
+            return jsonify({"success": True, "results": results})
+        elif "images" in data:
+            images_data = data["images"]
             all_results = []
-            
+
             for i, image_data in enumerate(images_data):
                 results = process_single_image(image_data, user_id, save_to_album)
-                all_results.append({
-                    'image_index': i,
-                    'results': results
-                })
-            
-            return jsonify({'success': True, 'all_results': all_results})
+                all_results.append({"image_index": i, "results": results})
+
+            return jsonify({"success": True, "all_results": all_results})
         else:
-            return jsonify({'success': False, 'error': '缺少图片数据'}), 400
+            return jsonify({"success": False, "error": "缺少图片数据"}), 400
 
     except Exception as e:
-        print(f"识别过程中发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"识别过程中发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 def convert_to_decimal(coord, ref):
-    """将EXIF格式的经纬度转换为十进制格式"""
+    """将EXIF格式的经纬度转换为十进制格式."""
     # coord通常是一个包含三个元素的列表：度、分、秒
     d, m, s = 0, 0, 0
-    
+
     # 处理exifread返回的格式
-    if hasattr(coord, 'values'):
+    if hasattr(coord, "values"):
         coord_values = coord.values
     else:
         coord_values = coord
-    
+
     if len(coord_values) >= 3:
         # 处理度
-        if hasattr(coord_values[0], 'num') and hasattr(coord_values[0], 'den'):
+        if hasattr(coord_values[0], "num") and hasattr(coord_values[0], "den"):
             d = coord_values[0].num / coord_values[0].den
         else:
             d = float(coord_values[0])
-        
+
         # 处理分
-        if hasattr(coord_values[1], 'num') and hasattr(coord_values[1], 'den'):
+        if hasattr(coord_values[1], "num") and hasattr(coord_values[1], "den"):
             m = coord_values[1].num / coord_values[1].den
         else:
             m = float(coord_values[1])
-        
+
         # 处理秒
-        if hasattr(coord_values[2], 'num') and hasattr(coord_values[2], 'den'):
+        if hasattr(coord_values[2], "num") and hasattr(coord_values[2], "den"):
             s = coord_values[2].num / coord_values[2].den
         else:
             s = float(coord_values[2])
-    
+
     # 计算十进制坐标
     decimal = d + (m / 60.0) + (s / 3600.0)
-    
+
     # 根据参考方向调整符号
-    if ref in ['S', 'W']:
+    if ref in ["S", "W"]:
         decimal = -decimal
-    
+
     return decimal
 
 
 def get_address_from_coordinates(lat, lon, max_retries=3):
-    """
-    通过经纬度获取地址信息
-    使用geopy和Nominatim服务进行逆地理编码
+    """通过经纬度获取地址信息 使用geopy和Nominatim服务进行逆地理编码.
     """
     geolocator = Nominatim(user_agent="flower_recognition_app", timeout=10)
-    
+
     # 重试机制
     for attempt in range(max_retries):
         try:
-            location = geolocator.reverse((lat, lon), language='zh-CN')
+            location = geolocator.reverse((lat, lon), language="zh-CN")
             if location:
-                return location.raw.get('address', {})
+                return location.raw.get("address", {})
             return None
         except GeocoderTimedOut:
             print(f"地理编码请求超时，第 {attempt + 1} 次尝试...")
@@ -298,24 +350,24 @@ def get_address_from_coordinates(lat, lon, max_retries=3):
         except Exception as e:
             print(f"获取地址信息时出错: {e}")
             break
-    
+
     print("多次尝试后仍无法获取地址信息")
     return None
 
 
 def format_address(address):
-    """格式化地址信息，提取关键部分"""
+    """格式化地址信息，提取关键部分."""
     if not address:
         return "地址信息不可用"
-    
+
     # 尝试提取关键地址组件
-    country = address.get('country', '未知国家')
-    province = address.get('state', '') or address.get('province', '') or '未知省份'
-    city = address.get('city', '') or address.get('district', '') or '未知城市'
-    town = address.get('town', '') or address.get('county', '') or ''
-    street = address.get('road', '') or address.get('street', '') or ''
-    number = address.get('house_number', '')
-    
+    country = address.get("country", "未知国家")
+    province = address.get("state", "") or address.get("province", "") or "未知省份"
+    city = address.get("city", "") or address.get("district", "") or "未知城市"
+    town = address.get("town", "") or address.get("county", "") or ""
+    street = address.get("road", "") or address.get("street", "") or ""
+    number = address.get("house_number", "")
+
     # 构建完整地址
     address_parts = [country, province, city]
     if town:
@@ -324,103 +376,94 @@ def format_address(address):
         address_parts.append(street)
         if number:
             address_parts.append(number)
-    
+
     # 移除空字符串并连接
-    return '，'.join(filter(None, address_parts))
+    return "，".join(filter(None, address_parts))
 
 
 def process_single_image(image_data, user_id=None, save_to_album=False):
-    """处理单个图片的识别"""
+    """处理单个图片的识别."""
     saved_album_info = None
-    
+
     # 移除base64头部
-    if image_data.startswith('data:image/'):
-        image_data = image_data.split(',')[1]
+    if image_data.startswith("data:image/"):
+        image_data = image_data.split(",")[1]
 
     # 解码base64图片数据
     image_bytes = base64.b64decode(image_data)
     image = Image.open(io.BytesIO(image_bytes))
     # 调整图片大小以提高处理速度
     image = image.resize((640, 640))
-    
+
     # 提取图片EXIF信息
     image_info = {
-        'date_time': "未知",
-        'location': {
-            'has_location': False,
-            'latitude': None,
-            'longitude': None,
-            'formatted_address': "无GPS信息",
-            'raw_gps': None
+        "date_time": "未知",
+        "location": {
+            "has_location": False,
+            "latitude": None,
+            "longitude": None,
+            "formatted_address": "无GPS信息",
+            "raw_gps": None,
         },
-        'camera_info': {
-            'make': "未知",
-            'model': "未知"
-        },
-        'image_details': {
-            'width': image.width,
-            'height': image.height
-        }
+        "camera_info": {"make": "未知", "model": "未知"},
+        "image_details": {"width": image.width, "height": image.height},
     }
-    
+
     try:
         # 创建临时文件保存图片
         temp_file_path = "temp_image.jpg"
         with open(temp_file_path, "wb") as temp_file:
             temp_file.write(image_bytes)
-        
+
         # 使用exifread提取EXIF信息
-        with open(temp_file_path, 'rb') as f:
+        with open(temp_file_path, "rb") as f:
             exif_tags = exifread.process_file(f)
-            
+
             # 获取拍摄时间
-            if 'Image DateTime' in exif_tags:
-                image_info['date_time'] = str(exif_tags['Image DateTime'])
-            elif 'EXIF DateTimeOriginal' in exif_tags:
-                image_info['date_time'] = str(exif_tags['EXIF DateTimeOriginal'])
-            elif 'EXIF DateTimeDigitized' in exif_tags:
-                image_info['date_time'] = str(exif_tags['EXIF DateTimeDigitized'])
-        
+            if "Image DateTime" in exif_tags:
+                image_info["date_time"] = str(exif_tags["Image DateTime"])
+            elif "EXIF DateTimeOriginal" in exif_tags:
+                image_info["date_time"] = str(exif_tags["EXIF DateTimeOriginal"])
+            elif "EXIF DateTimeDigitized" in exif_tags:
+                image_info["date_time"] = str(exif_tags["EXIF DateTimeDigitized"])
+
         # 获取相机信息
-        if 'Image Make' in exif_tags:
-            image_info['camera_info']['make'] = str(exif_tags['Image Make'])
-        if 'Image Model' in exif_tags:
-            image_info['camera_info']['model'] = str(exif_tags['Image Model'])
-        
+        if "Image Make" in exif_tags:
+            image_info["camera_info"]["make"] = str(exif_tags["Image Make"])
+        if "Image Model" in exif_tags:
+            image_info["camera_info"]["model"] = str(exif_tags["Image Model"])
+
         # 获取GPS位置信息
-        if all(key in exif_tags for key in ['GPS GPSLongitudeRef', 'GPS GPSLongitude', 
-                                           'GPS GPSLatitudeRef', 'GPS GPSLatitude']):
+        if all(
+            key in exif_tags
+            for key in ["GPS GPSLongitudeRef", "GPS GPSLongitude", "GPS GPSLatitudeRef", "GPS GPSLatitude"]
+        ):
             try:
                 # 获取原始的经纬度信息
-                lon_ref = exif_tags['GPS GPSLongitudeRef'].printable
-                lon = exif_tags['GPS GPSLongitude']
-                lat_ref = exif_tags['GPS GPSLatitudeRef'].printable
-                lat = exif_tags['GPS GPSLatitude']
-                
+                lon_ref = exif_tags["GPS GPSLongitudeRef"].printable
+                lon = exif_tags["GPS GPSLongitude"]
+                lat_ref = exif_tags["GPS GPSLatitudeRef"].printable
+                lat = exif_tags["GPS GPSLatitude"]
+
                 # 转换为十进制格式
                 dec_lat = convert_to_decimal(lat, lat_ref)
                 dec_lon = convert_to_decimal(lon, lon_ref)
-                
+
                 # 获取地址信息
                 address = get_address_from_coordinates(dec_lat, dec_lon)
                 formatted_address = format_address(address)
-                
+
                 # 更新位置信息
-                image_info['location'] = {
-                    'has_location': True,
-                    'latitude': dec_lat,
-                    'longitude': dec_lon,
-                    'formatted_address': formatted_address,
-                    'raw_gps': {
-                        'lat_ref': lat_ref,
-                        'lat': str(lat),
-                        'lon_ref': lon_ref,
-                        'lon': str(lon)
-                    }
+                image_info["location"] = {
+                    "has_location": True,
+                    "latitude": dec_lat,
+                    "longitude": dec_lon,
+                    "formatted_address": formatted_address,
+                    "raw_gps": {"lat_ref": lat_ref, "lat": str(lat), "lon_ref": lon_ref, "lon": str(lon)},
                 }
             except Exception as e:
                 print(f"处理GPS信息时出错: {e}")
-        
+
         # 删除临时文件
         os.remove(temp_file_path)
     except Exception as e:
@@ -428,1129 +471,1189 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
 
     # 使用YOLOv5模型进行花卉识别
     model_results = flower_model(image)
-    
+
     # 解析识别结果
     results = []
-    for result in model_results.pandas().xyxy[0].to_dict(orient='records'):
-        results.append({
-            'name': result['name'],
-            'confidence': round(result['confidence'], 4),
-            'bbox': [
-                int(result['xmin']),
-                int(result['ymin']),
-                int(result['xmax']),
-                int(result['ymax'])
-            ]
-        })
-    
+    for result in model_results.pandas().xyxy[0].to_dict(orient="records"):
+        results.append(
+            {
+                "name": result["name"],
+                "confidence": round(result["confidence"], 4),
+                "bbox": [int(result["xmin"]), int(result["ymin"]), int(result["xmax"]), int(result["ymax"])],
+            }
+        )
+
     # 处理识别结果：只保留置信度最高的结果
     detection_results = []
     if results:
         # 按置信度降序排序
-        results.sort(key=lambda x: x['confidence'], reverse=True)
+        results.sort(key=lambda x: x["confidence"], reverse=True)
         # 只添加置信度最高的结果
-        detection_results.append({
-            'name': results[0]['name'],
-            'confidence': float(results[0]['confidence']),
-            'bbox': results[0]['bbox']
-        })
+        detection_results.append(
+            {"name": results[0]["name"], "confidence": float(results[0]["confidence"]), "bbox": results[0]["bbox"]}
+        )
     else:
         # 如果没有识别到任何结果，返回空列表
         detection_results = []
-    
+
     # 返回包含识别结果和EXIF信息的响应
-    return_result = {
-        'detections': detection_results,
-        'exif_info': image_info
-    }
-    
+    return_result = {"detections": detection_results, "exif_info": image_info}
+
     if save_to_album and user_id and detection_results:
         try:
-            flower_name = detection_results[0]['name']
-            confidence = detection_results[0]['confidence']
-            
+            flower_name = detection_results[0]["name"]
+            confidence = detection_results[0]["confidence"]
+
             albums = get_user_albums(user_id, flower_name)
-            
+
             if albums:
                 album = albums[0]
             else:
                 album_id = create_album(user_id, f"{flower_name}相册", flower_name)
                 album = get_album_by_id(album_id, user_id)
-            
+
             if album:
                 timestamp = int(time.time())
                 image_filename = f"recognition_{user_id}_{timestamp}.jpg"
-                uploads_dir = os.path.join(BASE_DIR, 'static', 'uploads')
+                uploads_dir = os.path.join(BASE_DIR, "static", "uploads")
                 os.makedirs(uploads_dir, exist_ok=True)
                 image_path = os.path.join(uploads_dir, image_filename)
-                
-                with open(image_path, 'wb') as f:
+
+                with open(image_path, "wb") as f:
                     f.write(image_bytes)
-                
+
                 relative_path = f"/static/uploads/{image_filename}"
-                
+
                 result_id = save_recognition_result(user_id, relative_path, flower_name, confidence)
-                
-                add_image_to_album(album['id'], user_id, relative_path, flower_name, confidence, result_id)
-                
+
+                add_image_to_album(album["id"], user_id, relative_path, flower_name, confidence, result_id)
+
                 saved_album_info = {
-                    'album_id': album['id'],
-                    'album_name': album['name'],
-                    'category': album['category'],
-                    'image_path': relative_path
+                    "album_id": album["id"],
+                    "album_name": album["name"],
+                    "category": album["category"],
+                    "image_path": relative_path,
                 }
-                
-                return_result['saved_to_album'] = saved_album_info
+
+                return_result["saved_to_album"] = saved_album_info
         except Exception as e:
             print(f"保存到相册失败: {e}")
-            return_result['save_error'] = str(e)
-    
+            return_result["save_error"] = str(e)
+
     return return_result
 
+
 # 认证相关API
-@app.route('/api/auth/register', methods=['POST'])
+@app.route("/api/auth/register", methods=["POST"])
 def register():
-    """用户注册"""
+    """用户注册."""
     try:
         data = request.get_json()
-        username = data.get('username')
-        password = data.get('password')
-        email = data.get('email')
-        
+        username = data.get("username")
+        password = data.get("password")
+        email = data.get("email")
+
         if not username or not password or not email:
-            return jsonify({'success': False, 'error': '缺少必要参数'}), 400
-        
+            return jsonify({"success": False, "error": "缺少必要参数"}), 400
+
         # 检查用户名是否已存在
         if get_user_by_username(username):
-            return jsonify({'success': False, 'error': '用户名已存在'}), 400
-        
+            return jsonify({"success": False, "error": "用户名已存在"}), 400
+
         # 创建用户
         user_id = create_user(username, email, password)
-        
+
         # 生成JWT令牌
         token = generate_jwt(user_id, username)
-        
-        return jsonify({'success': True, 'user_id': user_id, 'username': username, 'token': token})
-    except Exception as e:
-        print(f"注册过程中发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/auth/login', methods=['POST'])
+        return jsonify({"success": True, "user_id": user_id, "username": username, "token": token})
+    except Exception as e:
+        print(f"注册过程中发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/auth/login", methods=["POST"])
 def login():
-    """用户登录"""
+    """用户登录."""
     try:
         data = request.get_json()
-        username = data.get('username')
-        password = data.get('password')
-        
+        username = data.get("username")
+        password = data.get("password")
+
         if not username or not password:
-            return jsonify({'success': False, 'error': '缺少必要参数'}), 400
-        
+            return jsonify({"success": False, "error": "缺少必要参数"}), 400
+
         # 获取用户
         user = get_user_by_username(username)
         if not user:
-            return jsonify({'success': False, 'error': '用户名或密码错误'}), 401
-        
+            return jsonify({"success": False, "error": "用户名或密码错误"}), 401
+
         # 验证密码
-        if not verify_password(user['password_hash'], password):
-            return jsonify({'success': False, 'error': '用户名或密码错误'}), 401
-        
+        if not verify_password(user["password_hash"], password):
+            return jsonify({"success": False, "error": "用户名或密码错误"}), 401
+
         # 生成JWT令牌
-        token = generate_jwt(user['id'], user['username'])
-        
-        return jsonify({'success': True, 'user_id': user['id'], 'username': user['username'], 'token': token})
+        token = generate_jwt(user["id"], user["username"])
+
+        return jsonify({"success": True, "user_id": user["id"], "username": user["username"], "token": token})
     except Exception as e:
-        print(f"登录过程中发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"登录过程中发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # 帖子相关API
-@app.route('/api/posts', methods=['GET'])
+@app.route("/api/posts", methods=["GET"])
 def get_posts_api():
-    """获取帖子列表"""
+    """获取帖子列表."""
     try:
-        limit = int(request.args.get('limit', 20))
-        offset = int(request.args.get('offset', 0))
-        
-        posts = get_posts(limit, offset)
-        return jsonify({'success': True, 'posts': posts})
-    except Exception as e:
-        print(f"获取帖子列表时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        limit = int(request.args.get("limit", 20))
+        offset = int(request.args.get("offset", 0))
 
-@app.route('/api/posts/<int:post_id>', methods=['GET'])
+        posts = get_posts(limit, offset)
+        return jsonify({"success": True, "posts": posts})
+    except Exception as e:
+        print(f"获取帖子列表时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/posts/<int:post_id>", methods=["GET"])
 def get_post_api(post_id):
-    """获取帖子详情"""
+    """获取帖子详情."""
     try:
         post = get_post_by_id(post_id)
         if not post:
-            return jsonify({'success': False, 'error': '帖子不存在'}), 404
-        
-        return jsonify({'success': True, 'post': post})
-    except Exception as e:
-        print(f"获取帖子详情时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({"success": False, "error": "帖子不存在"}), 404
 
-@app.route('/api/posts', methods=['POST'])
+        return jsonify({"success": True, "post": post})
+    except Exception as e:
+        print(f"获取帖子详情时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/posts", methods=["POST"])
 @auth_required
-@permission_required('create_posts')
+@permission_required("create_posts")
 def create_post_api():
-    """创建帖子"""
+    """创建帖子."""
     try:
         data = request.get_json()
-        content = data.get('content')
-        image_url = data.get('image_url')
-        
-        if not content:
-            return jsonify({'success': False, 'error': '帖子内容不能为空'}), 400
-        
-        post_id = create_post(g.user_id, content, image_url)
-        
-        return jsonify({'success': True, 'post_id': post_id})
-    except Exception as e:
-        print(f"创建帖子时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        content = data.get("content")
+        image_url = data.get("image_url")
 
-@app.route('/api/posts/<int:post_id>', methods=['PUT'])
+        if not content:
+            return jsonify({"success": False, "error": "帖子内容不能为空"}), 400
+
+        post_id = create_post(g.user_id, content, image_url)
+
+        return jsonify({"success": True, "post_id": post_id})
+    except Exception as e:
+        print(f"创建帖子时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/posts/<int:post_id>", methods=["PUT"])
 @auth_required
 def update_post_api(post_id):
-    """更新帖子"""
+    """更新帖子."""
     try:
         data = request.get_json()
-        content = data.get('content')
-        image_url = data.get('image_url')
-        
+        content = data.get("content")
+        image_url = data.get("image_url")
+
         if not content:
-            return jsonify({'success': False, 'error': '帖子内容不能为空'}), 400
-        
+            return jsonify({"success": False, "error": "帖子内容不能为空"}), 400
+
         # 获取帖子信息
         post = get_post_by_id(post_id)
         if not post:
-            return jsonify({'success': False, 'error': '帖子不存在'}), 404
-        
-        # 检查权限（只有帖子作者可以更新）
-        if post['user_id'] != g.user_id:
-            return jsonify({'success': False, 'error': '无权限更新此帖子'}), 403
-        
-        update_post(post_id, content, image_url)
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"更新帖子时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({"success": False, "error": "帖子不存在"}), 404
 
-@app.route('/api/posts/<int:post_id>', methods=['DELETE'])
+        # 检查权限（只有帖子作者可以更新）
+        if post["user_id"] != g.user_id:
+            return jsonify({"success": False, "error": "无权限更新此帖子"}), 403
+
+        update_post(post_id, content, image_url)
+
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"更新帖子时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/posts/<int:post_id>", methods=["DELETE"])
 @auth_required
 def delete_post_api(post_id):
-    """删除帖子"""
+    """删除帖子."""
     try:
         post = get_post_by_id(post_id)
         if not post:
-            return jsonify({'success': False, 'error': '帖子不存在'}), 404
-        
-        is_admin = g.role in ['super_admin', 'admin']
-        if post['user_id'] != g.user_id and not is_admin:
-            return jsonify({'success': False, 'error': '无权限删除此帖子'}), 403
-        
-        reason = '管理员删除' if is_admin and post['user_id'] != g.user_id else '用户删除'
-        move_to_recycle_bin(g.user_id if not is_admin else post['user_id'], 'post', post_id, {'content': post['content'], 'image_url': post.get('image_url'), 'delete_reason': reason})
+            return jsonify({"success": False, "error": "帖子不存在"}), 404
+
+        is_admin = g.role in ["super_admin", "admin"]
+        if post["user_id"] != g.user_id and not is_admin:
+            return jsonify({"success": False, "error": "无权限删除此帖子"}), 403
+
+        reason = "管理员删除" if is_admin and post["user_id"] != g.user_id else "用户删除"
+        move_to_recycle_bin(
+            g.user_id if not is_admin else post["user_id"],
+            "post",
+            post_id,
+            {"content": post["content"], "image_url": post.get("image_url"), "delete_reason": reason},
+        )
         delete_post(post_id)
-        
-        if is_admin and post['user_id'] != g.user_id:
+
+        if is_admin and post["user_id"] != g.user_id:
             ip_address = request.remote_addr
-            record_admin_operation(g.user_id, g.username, 'delete_post', 'post', post_id, f'删除用户帖子: {post["content"][:30]}...', ip_address)
-        
-        return jsonify({'success': True, 'message': '帖子已移入回收站'})
+            record_admin_operation(
+                g.user_id,
+                g.username,
+                "delete_post",
+                "post",
+                post_id,
+                f"删除用户帖子: {post['content'][:30]}...",
+                ip_address,
+            )
+
+        return jsonify({"success": True, "message": "帖子已移入回收站"})
     except Exception as e:
-        print(f"删除帖子时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"删除帖子时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # 评论相关API
-@app.route('/api/posts/<int:post_id>/comments', methods=['GET'])
+@app.route("/api/posts/<int:post_id>/comments", methods=["GET"])
 def get_comments_api(post_id):
-    """获取帖子评论"""
+    """获取帖子评论."""
     try:
         comments = get_comments_by_post_id(post_id)
-        return jsonify({'success': True, 'comments': comments})
+        return jsonify({"success": True, "comments": comments})
     except Exception as e:
-        print(f"获取评论时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"获取评论时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/posts/<int:post_id>/comments', methods=['POST'])
+
+@app.route("/api/posts/<int:post_id>/comments", methods=["POST"])
 @auth_required
-@permission_required('comment_posts')
+@permission_required("comment_posts")
 def create_comment_api(post_id):
-    """创建评论"""
+    """创建评论."""
     try:
         data = request.get_json()
-        content = data.get('content')
-        
+        content = data.get("content")
+
         if not content:
-            return jsonify({'success': False, 'error': '评论内容不能为空'}), 400
-        
+            return jsonify({"success": False, "error": "评论内容不能为空"}), 400
+
         # 检查帖子是否存在
         post = get_post_by_id(post_id)
         if not post:
-            return jsonify({'success': False, 'error': '帖子不存在'}), 404
-        
-        comment_id = create_comment(post_id, g.user_id, content)
-        
-        return jsonify({'success': True, 'comment_id': comment_id})
-    except Exception as e:
-        print(f"创建评论时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({"success": False, "error": "帖子不存在"}), 404
 
-@app.route('/api/comments/<int:comment_id>', methods=['DELETE'])
+        comment_id = create_comment(post_id, g.user_id, content)
+
+        return jsonify({"success": True, "comment_id": comment_id})
+    except Exception as e:
+        print(f"创建评论时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/comments/<int:comment_id>", methods=["DELETE"])
 @auth_required
 def delete_comment_api(comment_id):
-    """删除评论"""
+    """删除评论."""
     try:
         # 这里简化处理，实际应该检查评论是否存在以及用户是否有权限删除
         delete_comment(comment_id)
-        
-        return jsonify({'success': True})
+
+        return jsonify({"success": True})
     except Exception as e:
-        print(f"删除评论时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"删除评论时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # 点赞相关API
-@app.route('/api/posts/<int:post_id>/like', methods=['POST'])
+@app.route("/api/posts/<int:post_id>/like", methods=["POST"])
 @auth_required
 def like_post_api(post_id):
-    """点赞帖子"""
+    """点赞帖子."""
     try:
         # 检查帖子是否存在
         post = get_post_by_id(post_id)
         if not post:
-            return jsonify({'success': False, 'error': '帖子不存在'}), 404
-        
-        like_post(post_id, g.user_id)
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"点赞时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({"success": False, "error": "帖子不存在"}), 404
 
-@app.route('/api/posts/<int:post_id>/unlike', methods=['POST'])
+        like_post(post_id, g.user_id)
+
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"点赞时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/posts/<int:post_id>/unlike", methods=["POST"])
 @auth_required
 def unlike_post_api(post_id):
-    """取消点赞"""
+    """取消点赞."""
     try:
         # 检查帖子是否存在
         post = get_post_by_id(post_id)
         if not post:
-            return jsonify({'success': False, 'error': '帖子不存在'}), 404
-        
-        unlike_post(post_id, g.user_id)
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"取消点赞时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({"success": False, "error": "帖子不存在"}), 404
 
-@app.route('/api/posts/<int:post_id>/is_liked', methods=['GET'])
+        unlike_post(post_id, g.user_id)
+
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"取消点赞时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/posts/<int:post_id>/is_liked", methods=["GET"])
 @auth_required
 def is_post_liked_api(post_id):
-    """检查帖子是否被当前用户点赞"""
+    """检查帖子是否被当前用户点赞."""
     try:
         is_liked = is_post_liked_by_user(post_id, g.user_id)
-        
-        return jsonify({'success': True, 'is_liked': is_liked})
+
+        return jsonify({"success": True, "is_liked": is_liked})
     except Exception as e:
-        print(f"检查点赞状态时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"检查点赞状态时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # 关注相关API
-@app.route('/api/users/<int:user_id>/follow', methods=['POST'])
+@app.route("/api/users/<int:user_id>/follow", methods=["POST"])
 @auth_required
 def follow_user_api(user_id):
-    """关注用户"""
+    """关注用户."""
     try:
         # 不能关注自己
         if user_id == g.user_id:
-            return jsonify({'success': False, 'error': '不能关注自己'}), 400
-        
-        follow_user(g.user_id, user_id)
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"关注用户时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({"success": False, "error": "不能关注自己"}), 400
 
-@app.route('/api/users/<int:user_id>/unfollow', methods=['POST'])
+        follow_user(g.user_id, user_id)
+
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"关注用户时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/users/<int:user_id>/unfollow", methods=["POST"])
 @auth_required
 def unfollow_user_api(user_id):
-    """取消关注用户"""
+    """取消关注用户."""
     try:
         unfollow_user(g.user_id, user_id)
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"取消关注时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/users/<int:user_id>/is_following', methods=['GET'])
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"取消关注时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/users/<int:user_id>/is_following", methods=["GET"])
 @auth_required
 def is_following_api(user_id):
-    """检查是否关注了指定用户"""
+    """检查是否关注了指定用户."""
     try:
         is_following_status = is_following(g.user_id, user_id)
-        
-        return jsonify({'success': True, 'is_following': is_following_status})
-    except Exception as e:
-        print(f"检查关注状态时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/users/<int:user_id>/following', methods=['GET'])
+        return jsonify({"success": True, "is_following": is_following_status})
+    except Exception as e:
+        print(f"检查关注状态时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/users/<int:user_id>/following", methods=["GET"])
 def get_user_following_api(user_id):
-    """获取用户关注的人"""
+    """获取用户关注的人."""
     try:
         following = get_user_following(user_id)
-        
-        return jsonify({'success': True, 'following': following})
-    except Exception as e:
-        print(f"获取关注列表时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/users/<int:user_id>/followers', methods=['GET'])
+        return jsonify({"success": True, "following": following})
+    except Exception as e:
+        print(f"获取关注列表时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/users/<int:user_id>/followers", methods=["GET"])
 def get_user_followers_api(user_id):
-    """获取用户的粉丝"""
+    """获取用户的粉丝."""
     try:
         followers = get_user_followers(user_id)
-        
-        return jsonify({'success': True, 'followers': followers})
+
+        return jsonify({"success": True, "followers": followers})
     except Exception as e:
-        print(f"获取粉丝列表时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"获取粉丝列表时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # ========================================
 # 超级管理员端API接口
 # ========================================
 
-@app.route('/api/admin/system/summary', methods=['GET'])
+
+@app.route("/api/admin/system/summary", methods=["GET"])
 @auth_required
-@permission_required('super_admin')
+@permission_required("super_admin")
 def get_system_summary_api():
-    """获取系统概要统计"""
+    """获取系统概要统计."""
     try:
         summary = get_system_summary()
-        return jsonify({'success': True, 'summary': summary})
+        return jsonify({"success": True, "summary": summary})
     except Exception as e:
-        print(f"获取系统概要统计时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"获取系统概要统计时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/admin/system/logs', methods=['GET'])
+
+@app.route("/api/admin/system/logs", methods=["GET"])
 @auth_required
-@permission_required('view_system_logs')
+@permission_required("view_system_logs")
 def get_system_logs_api():
-    """获取系统日志"""
+    """获取系统日志."""
     try:
-        limit = int(request.args.get('limit', 100))
-        offset = int(request.args.get('offset', 0))
-        log_level = request.args.get('log_level')
-        module = request.args.get('module')
-        start_time = request.args.get('start_time', type=int)
-        end_time = request.args.get('end_time', type=int)
-        
+        limit = int(request.args.get("limit", 100))
+        offset = int(request.args.get("offset", 0))
+        log_level = request.args.get("log_level")
+        module = request.args.get("module")
+        start_time = request.args.get("start_time", type=int)
+        end_time = request.args.get("end_time", type=int)
+
         logs = get_system_logs(limit, offset, log_level, module, start_time, end_time)
-        return jsonify({'success': True, 'logs': logs})
+        return jsonify({"success": True, "logs": logs})
     except Exception as e:
-        print(f"获取系统日志时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"获取系统日志时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/admin/system/traffic', methods=['GET'])
+
+@app.route("/api/admin/system/traffic", methods=["GET"])
 @auth_required
-@permission_required('view_traffic_stats')
+@permission_required("view_traffic_stats")
 def get_traffic_stats_api():
-    """获取流量统计"""
+    """获取流量统计."""
     try:
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
-        limit = int(request.args.get('limit', 100))
-        
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        limit = int(request.args.get("limit", 100))
+
         stats = get_traffic_stats(start_date, end_date, limit)
-        return jsonify({'success': True, 'stats': stats})
+        return jsonify({"success": True, "stats": stats})
     except Exception as e:
-        print(f"获取流量统计时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"获取流量统计时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/admin/system/traffic/endpoints', methods=['GET'])
+
+@app.route("/api/admin/system/traffic/endpoints", methods=["GET"])
 @auth_required
-@permission_required('view_traffic_stats')
+@permission_required("view_traffic_stats")
 def get_traffic_by_endpoint_api():
-    """按端点获取流量统计"""
+    """按端点获取流量统计."""
     try:
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
-        limit = int(request.args.get('limit', 20))
-        
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        limit = int(request.args.get("limit", 20))
+
         stats = get_traffic_by_endpoint(start_date, end_date, limit)
-        return jsonify({'success': True, 'stats': stats})
+        return jsonify({"success": True, "stats": stats})
     except Exception as e:
-        print(f"获取端点流量统计时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"获取端点流量统计时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/admin/server/status', methods=['GET'])
+
+@app.route("/api/admin/server/status", methods=["GET"])
 @auth_required
-@permission_required('monitor_server')
+@permission_required("monitor_server")
 def get_server_status_api():
-    """获取服务器状态"""
+    """获取服务器状态."""
     try:
-        metric_name = request.args.get('metric_name')
-        limit = int(request.args.get('limit', 100))
-        
-        status = get_server_status(metric_name, limit)
-        return jsonify({'success': True, 'status': status})
-    except Exception as e:
-        print(f"获取服务器状态时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        metric_name = request.args.get("metric_name")
+        limit = int(request.args.get("limit", 100))
 
-@app.route('/api/admin/server/metrics', methods=['GET'])
+        status = get_server_status(metric_name, limit)
+        return jsonify({"success": True, "status": status})
+    except Exception as e:
+        print(f"获取服务器状态时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/server/metrics", methods=["GET"])
 @auth_required
-@permission_required('monitor_server')
+@permission_required("monitor_server")
 def get_latest_server_metrics_api():
-    """获取最新服务器指标"""
+    """获取最新服务器指标."""
     try:
         metrics = get_latest_server_metrics()
-        return jsonify({'success': True, 'metrics': metrics})
+        return jsonify({"success": True, "metrics": metrics})
     except Exception as e:
-        print(f"获取最新服务器指标时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"获取最新服务器指标时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/admin/admins', methods=['GET'])
+
+@app.route("/api/admin/admins", methods=["GET"])
 @auth_required
-@permission_required('manage_admins')
+@permission_required("manage_admins")
 def get_all_admins_api():
-    """获取所有管理员"""
+    """获取所有管理员."""
     try:
         admins = get_all_admins()
-        return jsonify({'success': True, 'admins': admins})
+        return jsonify({"success": True, "admins": admins})
     except Exception as e:
-        print(f"获取管理员列表时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"获取管理员列表时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/admin/admins/<int:user_id>/role', methods=['PUT'])
+
+@app.route("/api/admin/admins/<int:user_id>/role", methods=["PUT"])
 @auth_required
-@permission_required('manage_admins')
+@permission_required("manage_admins")
 def update_user_role_api(user_id):
-    """更新用户角色"""
+    """更新用户角色."""
     try:
         data = request.get_json()
-        role_name = data.get('role_name')
-        
+        role_name = data.get("role_name")
+
         if not role_name:
-            return jsonify({'success': False, 'error': '缺少角色名称'}), 400
-        
-        success = update_user_role(user_id, role_name)
-        
+            return jsonify({"success": False, "error": "缺少角色名称"}), 400
+
+        update_user_role(user_id, role_name)
+
         # 记录管理员操作
         ip_address = request.remote_addr
-        record_admin_operation(g.user_id, g.username, 'update_role', 'user', user_id, f'更新用户角色为 {role_name}', ip_address)
-        
-        return jsonify({'success': True, 'message': '角色更新成功'})
-    except Exception as e:
-        print(f"更新用户角色时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        record_admin_operation(
+            g.user_id, g.username, "update_role", "user", user_id, f"更新用户角色为 {role_name}", ip_address
+        )
 
-@app.route('/api/admin/operations', methods=['GET'])
+        return jsonify({"success": True, "message": "角色更新成功"})
+    except Exception as e:
+        print(f"更新用户角色时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/operations", methods=["GET"])
 @auth_required
-@permission_required('manage_admins')
+@permission_required("manage_admins")
 def get_admin_operations_api():
-    """获取管理员操作记录"""
+    """获取管理员操作记录."""
     try:
-        admin_id = request.args.get('admin_id', type=int)
-        operation_type = request.args.get('operation_type')
-        limit = int(request.args.get('limit', 100))
-        offset = int(request.args.get('offset', 0))
-        
-        operations = get_admin_operations(admin_id, operation_type, limit, offset)
-        return jsonify({'success': True, 'operations': operations})
-    except Exception as e:
-        print(f"获取管理员操作记录时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        admin_id = request.args.get("admin_id", type=int)
+        operation_type = request.args.get("operation_type")
+        limit = int(request.args.get("limit", 100))
+        offset = int(request.args.get("offset", 0))
 
-@app.route('/api/user/profile', methods=['GET'])
+        operations = get_admin_operations(admin_id, operation_type, limit, offset)
+        return jsonify({"success": True, "operations": operations})
+    except Exception as e:
+        print(f"获取管理员操作记录时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/user/profile", methods=["GET"])
 @auth_required
 def get_user_profile():
-    """获取当前用户个人信息"""
+    """获取当前用户个人信息."""
     try:
         user = get_user_by_id(g.user_id)
         if not user:
-            return jsonify({'success': False, 'error': '用户不存在'}), 404
-        
-        return jsonify({
-            'success': True,
-            'user': {
-                'id': user['id'],
-                'username': user['username'],
-                'email': user['email'],
-                'created_at': user['created_at']
-            }
-        })
-    except Exception as e:
-        print(f"获取用户信息时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({"success": False, "error": "用户不存在"}), 404
 
-@app.route('/api/user/profile', methods=['PUT'])
+        return jsonify(
+            {
+                "success": True,
+                "user": {
+                    "id": user["id"],
+                    "username": user["username"],
+                    "email": user["email"],
+                    "created_at": user["created_at"],
+                },
+            }
+        )
+    except Exception as e:
+        print(f"获取用户信息时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/user/profile", methods=["PUT"])
 @auth_required
 def update_user_profile_api():
-    """更新当前用户个人信息"""
+    """更新当前用户个人信息."""
     try:
         data = request.get_json()
-        email = data.get('email')
-        password = data.get('password')
-        
+        email = data.get("email")
+        password = data.get("password")
+
         password_hash = None
         if password:
             password_hash = generate_password_hash(password)
-        
-        success = update_user_profile(g.user_id, email=email, password_hash=password_hash)
-        
-        if success:
-            return jsonify({'success': True, 'message': '个人信息更新成功'})
-        else:
-            return jsonify({'success': False, 'error': '更新失败'})
-    except Exception as e:
-        print(f"更新用户信息时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/recognition/history', methods=['GET'])
+        success = update_user_profile(g.user_id, email=email, password_hash=password_hash)
+
+        if success:
+            return jsonify({"success": True, "message": "个人信息更新成功"})
+        else:
+            return jsonify({"success": False, "error": "更新失败"})
+    except Exception as e:
+        print(f"更新用户信息时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/recognition/history", methods=["GET"])
 @auth_required
 def get_recognition_history():
-    """获取用户历史识别记录"""
+    """获取用户历史识别记录."""
     try:
-        limit = int(request.args.get('limit', 20))
-        offset = int(request.args.get('offset', 0))
-        
-        results, total = get_user_recognition_history(g.user_id, limit, offset)
-        
-        return jsonify({
-            'success': True,
-            'results': results,
-            'total': total
-        })
-    except Exception as e:
-        print(f"获取历史识别记录时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        limit = int(request.args.get("limit", 20))
+        offset = int(request.args.get("offset", 0))
 
-@app.route('/api/recognition/results/<int:result_id>', methods=['DELETE'])
+        results, total = get_user_recognition_history(g.user_id, limit, offset)
+
+        return jsonify({"success": True, "results": results, "total": total})
+    except Exception as e:
+        print(f"获取历史识别记录时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/recognition/results/<int:result_id>", methods=["DELETE"])
 @auth_required
 def delete_recognition_result_api(result_id):
-    """删除识别记录"""
+    """删除识别记录."""
     try:
         results, _ = get_user_recognition_history(g.user_id)
         result_info = None
         for r in results:
-            if r['id'] == result_id:
+            if r["id"] == result_id:
                 result_info = r
                 break
-        
-        if result_info:
-            move_to_recycle_bin(g.user_id, 'recognition', result_id, {
-                'image_path': result_info.get('image_path'),
-                'result': result_info.get('result'),
-                'confidence': result_info.get('confidence')
-            })
-        
-        success = delete_recognition_result(result_id, g.user_id)
-        
-        if success:
-            return jsonify({'success': True, 'message': '记录已移入回收站'})
-        else:
-            return jsonify({'success': False, 'error': '删除失败或记录不存在'})
-    except Exception as e:
-        print(f"删除识别记录时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/albums', methods=['GET'])
+        if result_info:
+            move_to_recycle_bin(
+                g.user_id,
+                "recognition",
+                result_id,
+                {
+                    "image_path": result_info.get("image_path"),
+                    "result": result_info.get("result"),
+                    "confidence": result_info.get("confidence"),
+                },
+            )
+
+        success = delete_recognition_result(result_id, g.user_id)
+
+        if success:
+            return jsonify({"success": True, "message": "记录已移入回收站"})
+        else:
+            return jsonify({"success": False, "error": "删除失败或记录不存在"})
+    except Exception as e:
+        print(f"删除识别记录时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/albums", methods=["GET"])
 @auth_required
 def get_albums():
-    """获取用户相册列表"""
+    """获取用户相册列表."""
     try:
-        category = request.args.get('category')
-        
-        albums = get_user_albums(g.user_id, category)
-        
-        return jsonify({
-            'success': True,
-            'albums': albums
-        })
-    except Exception as e:
-        print(f"获取相册列表时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        category = request.args.get("category")
 
-@app.route('/api/albums', methods=['POST'])
+        albums = get_user_albums(g.user_id, category)
+
+        return jsonify({"success": True, "albums": albums})
+    except Exception as e:
+        print(f"获取相册列表时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/albums", methods=["POST"])
 @auth_required
 def create_album_api():
-    """创建新相册"""
+    """创建新相册."""
     try:
         data = request.get_json()
-        name = data.get('name')
-        category = data.get('category')
-        cover_image = data.get('cover_image')
-        description = data.get('description')
-        
-        if not name or not category:
-            return jsonify({'success': False, 'error': '相册名称和分类不能为空'}), 400
-        
-        album_id = create_album(g.user_id, name, category, cover_image, description)
-        
-        return jsonify({
-            'success': True,
-            'album_id': album_id,
-            'message': '相册创建成功'
-        })
-    except Exception as e:
-        print(f"创建相册时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        name = data.get("name")
+        category = data.get("category")
+        cover_image = data.get("cover_image")
+        description = data.get("description")
 
-@app.route('/api/albums/<int:album_id>', methods=['GET'])
+        if not name or not category:
+            return jsonify({"success": False, "error": "相册名称和分类不能为空"}), 400
+
+        album_id = create_album(g.user_id, name, category, cover_image, description)
+
+        return jsonify({"success": True, "album_id": album_id, "message": "相册创建成功"})
+    except Exception as e:
+        print(f"创建相册时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/albums/<int:album_id>", methods=["GET"])
 @auth_required
 def get_album_detail(album_id):
-    """获取相册详情"""
+    """获取相册详情."""
     try:
         album = get_album_by_id(album_id, g.user_id)
-        
-        if not album:
-            return jsonify({'success': False, 'error': '相册不存在'}), 404
-        
-        images, total = get_album_images(album_id, g.user_id)
-        
-        return jsonify({
-            'success': True,
-            'album': album,
-            'images': images,
-            'total': total
-        })
-    except Exception as e:
-        print(f"获取相册详情时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/albums/<int:album_id>', methods=['PUT'])
+        if not album:
+            return jsonify({"success": False, "error": "相册不存在"}), 404
+
+        images, total = get_album_images(album_id, g.user_id)
+
+        return jsonify({"success": True, "album": album, "images": images, "total": total})
+    except Exception as e:
+        print(f"获取相册详情时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/albums/<int:album_id>", methods=["PUT"])
 @auth_required
 def update_album_api(album_id):
-    """更新相册信息"""
+    """更新相册信息."""
     try:
         data = request.get_json()
-        name = data.get('name')
-        description = data.get('description')
-        
-        success = update_album(album_id, g.user_id, name, description)
-        
-        if success:
-            return jsonify({'success': True, 'message': '相册更新成功'})
-        else:
-            return jsonify({'success': False, 'error': '更新失败'})
-    except Exception as e:
-        print(f"更新相册时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        name = data.get("name")
+        description = data.get("description")
 
-@app.route('/api/albums/<int:album_id>', methods=['DELETE'])
+        success = update_album(album_id, g.user_id, name, description)
+
+        if success:
+            return jsonify({"success": True, "message": "相册更新成功"})
+        else:
+            return jsonify({"success": False, "error": "更新失败"})
+    except Exception as e:
+        print(f"更新相册时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/albums/<int:album_id>", methods=["DELETE"])
 @auth_required
 def delete_album_api(album_id):
-    """删除相册"""
+    """删除相册."""
     try:
         success = delete_album(album_id, g.user_id)
-        
-        if success:
-            return jsonify({'success': True, 'message': '相册删除成功'})
-        else:
-            return jsonify({'success': False, 'error': '删除失败'})
-    except Exception as e:
-        print(f"删除相册时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/albums/<int:album_id>/images', methods=['POST'])
+        if success:
+            return jsonify({"success": True, "message": "相册删除成功"})
+        else:
+            return jsonify({"success": False, "error": "删除失败"})
+    except Exception as e:
+        print(f"删除相册时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/albums/<int:album_id>/images", methods=["POST"])
 @auth_required
 def add_image_to_album_api(album_id):
-    """添加图片到相册"""
+    """添加图片到相册."""
     try:
         data = request.get_json()
-        image_path = data.get('image_path')
-        flower_name = data.get('flower_name')
-        confidence = data.get('confidence')
-        recognition_result_id = data.get('recognition_result_id')
-        
+        image_path = data.get("image_path")
+        flower_name = data.get("flower_name")
+        confidence = data.get("confidence")
+        recognition_result_id = data.get("recognition_result_id")
+
         if not image_path:
-            return jsonify({'success': False, 'error': '图片路径不能为空'}), 400
-        
+            return jsonify({"success": False, "error": "图片路径不能为空"}), 400
+
         album = get_album_by_id(album_id, g.user_id)
         if not album:
-            return jsonify({'success': False, 'error': '相册不存在'}), 404
-        
-        image_id = add_image_to_album(album_id, g.user_id, image_path, flower_name, confidence, recognition_result_id)
-        
-        return jsonify({
-            'success': True,
-            'image_id': image_id,
-            'message': '图片添加成功'
-        })
-    except Exception as e:
-        print(f"添加图片到相册时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({"success": False, "error": "相册不存在"}), 404
 
-@app.route('/api/albums/<int:album_id>/images/<int:image_id>', methods=['DELETE'])
+        image_id = add_image_to_album(album_id, g.user_id, image_path, flower_name, confidence, recognition_result_id)
+
+        return jsonify({"success": True, "image_id": image_id, "message": "图片添加成功"})
+    except Exception as e:
+        print(f"添加图片到相册时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/albums/<int:album_id>/images/<int:image_id>", methods=["DELETE"])
 @auth_required
 def delete_album_image_api(album_id, image_id):
-    """删除相册中的图片"""
+    """删除相册中的图片."""
     try:
         images, _ = get_album_images(album_id, g.user_id)
         image_info = None
         for img in images:
-            if img['id'] == image_id:
+            if img["id"] == image_id:
                 image_info = img
                 break
-        
-        if image_info:
-            move_to_recycle_bin(g.user_id, 'image', image_id, {
-                'image_path': image_info.get('image_path'),
-                'flower_name': image_info.get('flower_name'),
-                'confidence': image_info.get('confidence')
-            })
-        
-        success = delete_album_image(image_id, album_id, g.user_id)
-        
-        if success:
-            return jsonify({'success': True, 'message': '图片已移入回收站'})
-        else:
-            return jsonify({'success': False, 'error': '删除失败'})
-    except Exception as e:
-        print(f"删除图片时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/albums/categories', methods=['GET'])
+        if image_info:
+            move_to_recycle_bin(
+                g.user_id,
+                "image",
+                image_id,
+                {
+                    "image_path": image_info.get("image_path"),
+                    "flower_name": image_info.get("flower_name"),
+                    "confidence": image_info.get("confidence"),
+                },
+            )
+
+        success = delete_album_image(image_id, album_id, g.user_id)
+
+        if success:
+            return jsonify({"success": True, "message": "图片已移入回收站"})
+        else:
+            return jsonify({"success": False, "error": "删除失败"})
+    except Exception as e:
+        print(f"删除图片时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/albums/categories", methods=["GET"])
 @auth_required
 def get_album_categories_api():
-    """获取相册分类列表"""
+    """获取相册分类列表."""
     try:
         categories = get_album_categories(g.user_id)
-        
-        return jsonify({
-            'success': True,
-            'categories': categories
-        })
-    except Exception as e:
-        print(f"获取相册分类时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/feedback', methods=['POST'])
+        return jsonify({"success": True, "categories": categories})
+    except Exception as e:
+        print(f"获取相册分类时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/feedback", methods=["POST"])
 @auth_required
 def create_feedback_api():
-    """提交用户反馈"""
+    """提交用户反馈."""
     try:
         data = request.get_json()
-        title = data.get('title')
-        content = data.get('content')
-        feedback_type = data.get('feedback_type')
-        
-        if not title or not content or not feedback_type:
-            return jsonify({'success': False, 'error': '标题、内容和类型不能为空'}), 400
-        
-        feedback_id = create_feedback(g.user_id, title, content, feedback_type)
-        
-        return jsonify({
-            'success': True,
-            'feedback_id': feedback_id,
-            'message': '反馈提交成功'
-        })
-    except Exception as e:
-        print(f"提交反馈时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        title = data.get("title")
+        content = data.get("content")
+        feedback_type = data.get("feedback_type")
 
-@app.route('/api/feedback', methods=['GET'])
+        if not title or not content or not feedback_type:
+            return jsonify({"success": False, "error": "标题、内容和类型不能为空"}), 400
+
+        feedback_id = create_feedback(g.user_id, title, content, feedback_type)
+
+        return jsonify({"success": True, "feedback_id": feedback_id, "message": "反馈提交成功"})
+    except Exception as e:
+        print(f"提交反馈时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/feedback", methods=["GET"])
 @auth_required
 def get_feedback_list():
-    """获取用户反馈列表"""
+    """获取用户反馈列表."""
     try:
-        limit = int(request.args.get('limit', 20))
-        offset = int(request.args.get('offset', 0))
-        
-        results, total = get_user_feedback(g.user_id, limit, offset)
-        
-        return jsonify({
-            'success': True,
-            'feedback': results,
-            'total': total
-        })
-    except Exception as e:
-        print(f"获取反馈列表时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        limit = int(request.args.get("limit", 20))
+        offset = int(request.args.get("offset", 0))
 
-@app.route('/api/feedback/<int:feedback_id>', methods=['GET'])
+        results, total = get_user_feedback(g.user_id, limit, offset)
+
+        return jsonify({"success": True, "feedback": results, "total": total})
+    except Exception as e:
+        print(f"获取反馈列表时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/feedback/<int:feedback_id>", methods=["GET"])
 @auth_required
 def get_feedback_detail(feedback_id):
-    """获取反馈详情"""
+    """获取反馈详情."""
     try:
         feedback = get_feedback_by_id(feedback_id, g.user_id)
-        
-        if not feedback:
-            return jsonify({'success': False, 'error': '反馈不存在'}), 404
-        
-        return jsonify({
-            'success': True,
-            'feedback': feedback
-        })
-    except Exception as e:
-        print(f"获取反馈详情时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/feedback/<int:feedback_id>', methods=['DELETE'])
+        if not feedback:
+            return jsonify({"success": False, "error": "反馈不存在"}), 404
+
+        return jsonify({"success": True, "feedback": feedback})
+    except Exception as e:
+        print(f"获取反馈详情时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/feedback/<int:feedback_id>", methods=["DELETE"])
 @auth_required
 def delete_feedback_api(feedback_id):
-    """删除反馈"""
+    """删除反馈."""
     try:
         success = delete_feedback(feedback_id, g.user_id)
-        
+
         if success:
-            return jsonify({'success': True, 'message': '反馈删除成功'})
+            return jsonify({"success": True, "message": "反馈删除成功"})
         else:
-            return jsonify({'success': False, 'error': '删除失败'})
+            return jsonify({"success": False, "error": "删除失败"})
     except Exception as e:
-        print(f"删除反馈时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"删除反馈时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/admin/feedback', methods=['GET'])
+
+@app.route("/api/admin/feedback", methods=["GET"])
 @auth_required
-@permission_required('manage_users')
+@permission_required("manage_users")
 def get_all_feedback_api():
-    """获取所有反馈（管理员）"""
+    """获取所有反馈（管理员）."""
     try:
-        status = request.args.get('status')
-        limit = int(request.args.get('limit', 50))
-        offset = int(request.args.get('offset', 0))
-        
-        results, total = get_all_feedback(status, limit, offset)
-        
-        return jsonify({
-            'success': True,
-            'feedback': results,
-            'total': total
-        })
-    except Exception as e:
-        print(f"获取所有反馈时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        status = request.args.get("status")
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
 
-@app.route('/api/admin/feedback/<int:feedback_id>/respond', methods=['POST'])
+        results, total = get_all_feedback(status, limit, offset)
+
+        return jsonify({"success": True, "feedback": results, "total": total})
+    except Exception as e:
+        print(f"获取所有反馈时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/feedback/<int:feedback_id>/respond", methods=["POST"])
 @auth_required
-@permission_required('manage_users')
+@permission_required("manage_users")
 def respond_feedback_api(feedback_id):
-    """回复反馈（管理员）"""
+    """回复反馈（管理员）."""
     try:
         data = request.get_json()
-        response = data.get('response')
-        
+        response = data.get("response")
+
         if not response:
-            return jsonify({'success': False, 'error': '回复内容不能为空'}), 400
-        
+            return jsonify({"success": False, "error": "回复内容不能为空"}), 400
+
         success = respond_feedback(feedback_id, response)
-        
+
         if success:
             ip_address = request.remote_addr
-            record_admin_operation(g.user_id, g.username, 'respond_feedback', 'feedback', feedback_id, f'回复反馈: {response[:50]}...', ip_address)
-            return jsonify({'success': True, 'message': '回复成功'})
+            record_admin_operation(
+                g.user_id,
+                g.username,
+                "respond_feedback",
+                "feedback",
+                feedback_id,
+                f"回复反馈: {response[:50]}...",
+                ip_address,
+            )
+            return jsonify({"success": True, "message": "回复成功"})
         else:
-            return jsonify({'success': False, 'error': '回复失败'})
+            return jsonify({"success": False, "error": "回复失败"})
     except Exception as e:
-        print(f"回复反馈时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"回复反馈时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/admin/announcements', methods=['POST'])
+
+@app.route("/api/admin/announcements", methods=["POST"])
 @admin_required
 def create_announcement_api():
-    """创建公告（管理员）"""
+    """创建公告（管理员）."""
     try:
         data = request.get_json()
-        title = data.get('title')
-        content = data.get('content')
-        announcement_type = data.get('announcement_type', 'general')
-        
-        if not title or not content:
-            return jsonify({'success': False, 'error': '标题和内容不能为空'}), 400
-        
-        announcement_id = create_announcement(title, content, announcement_type, g.user_id, g.username)
-        
-        ip_address = request.remote_addr
-        record_admin_operation(g.user_id, g.username, 'create_announcement', 'announcement', announcement_id, f'创建公告: {title[:50]}', ip_address)
-        
-        return jsonify({'success': True, 'message': '公告创建成功', 'announcement_id': announcement_id})
-    except Exception as e:
-        print(f"创建公告时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        title = data.get("title")
+        content = data.get("content")
+        announcement_type = data.get("announcement_type", "general")
 
-@app.route('/api/admin/announcements', methods=['GET'])
+        if not title or not content:
+            return jsonify({"success": False, "error": "标题和内容不能为空"}), 400
+
+        announcement_id = create_announcement(title, content, announcement_type, g.user_id, g.username)
+
+        ip_address = request.remote_addr
+        record_admin_operation(
+            g.user_id,
+            g.username,
+            "create_announcement",
+            "announcement",
+            announcement_id,
+            f"创建公告: {title[:50]}",
+            ip_address,
+        )
+
+        return jsonify({"success": True, "message": "公告创建成功", "announcement_id": announcement_id})
+    except Exception as e:
+        print(f"创建公告时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/announcements", methods=["GET"])
 @admin_required
 def get_announcements_api():
-    """获取公告列表（管理员）"""
+    """获取公告列表（管理员）."""
     try:
-        is_active = request.args.get('is_active')
+        is_active = request.args.get("is_active")
         if is_active is not None:
             is_active = int(is_active)
-        limit = int(request.args.get('limit', 50))
-        offset = int(request.args.get('offset', 0))
-        
-        results, total = get_announcements(is_active, limit, offset)
-        
-        return jsonify({
-            'success': True,
-            'announcements': results,
-            'total': total
-        })
-    except Exception as e:
-        print(f"获取公告列表时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
 
-@app.route('/api/admin/announcements/<int:announcement_id>', methods=['PUT'])
+        results, total = get_announcements(is_active, limit, offset)
+
+        return jsonify({"success": True, "announcements": results, "total": total})
+    except Exception as e:
+        print(f"获取公告列表时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/announcements/<int:announcement_id>", methods=["PUT"])
 @admin_required
 def update_announcement_api(announcement_id):
-    """更新公告（管理员）"""
+    """更新公告（管理员）."""
     try:
         data = request.get_json()
-        title = data.get('title')
-        content = data.get('content')
-        announcement_type = data.get('announcement_type', 'general')
-        
+        title = data.get("title")
+        content = data.get("content")
+        announcement_type = data.get("announcement_type", "general")
+
         if not title or not content:
-            return jsonify({'success': False, 'error': '标题和内容不能为空'}), 400
-        
+            return jsonify({"success": False, "error": "标题和内容不能为空"}), 400
+
         success = update_announcement(announcement_id, title, content, announcement_type, g.user_id)
-        
+
         if success:
             ip_address = request.remote_addr
-            record_admin_operation(g.user_id, g.username, 'update_announcement', 'announcement', announcement_id, f'更新公告: {title[:50]}', ip_address)
-            return jsonify({'success': True, 'message': '公告更新成功'})
+            record_admin_operation(
+                g.user_id,
+                g.username,
+                "update_announcement",
+                "announcement",
+                announcement_id,
+                f"更新公告: {title[:50]}",
+                ip_address,
+            )
+            return jsonify({"success": True, "message": "公告更新成功"})
         else:
-            return jsonify({'success': False, 'error': '公告不存在或无权限'}), 404
+            return jsonify({"success": False, "error": "公告不存在或无权限"}), 404
     except Exception as e:
-        print(f"更新公告时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"更新公告时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/admin/announcements/<int:announcement_id>', methods=['DELETE'])
+
+@app.route("/api/admin/announcements/<int:announcement_id>", methods=["DELETE"])
 @admin_required
 def delete_announcement_api(announcement_id):
-    """删除公告（管理员）"""
+    """删除公告（管理员）."""
     try:
         success = delete_announcement(announcement_id, g.user_id)
-        
+
         if success:
             ip_address = request.remote_addr
-            record_admin_operation(g.user_id, g.username, 'delete_announcement', 'announcement', announcement_id, '删除公告', ip_address)
-            return jsonify({'success': True, 'message': '公告删除成功'})
+            record_admin_operation(
+                g.user_id, g.username, "delete_announcement", "announcement", announcement_id, "删除公告", ip_address
+            )
+            return jsonify({"success": True, "message": "公告删除成功"})
         else:
-            return jsonify({'success': False, 'error': '公告不存在或无权限'}), 404
+            return jsonify({"success": False, "error": "公告不存在或无权限"}), 404
     except Exception as e:
-        print(f"删除公告时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"删除公告时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/announcements', methods=['GET'])
+
+@app.route("/api/announcements", methods=["GET"])
 def get_public_announcements():
-    """获取公开公告列表（所有用户可见）"""
+    """获取公开公告列表（所有用户可见）."""
     try:
-        limit = int(request.args.get('limit', 10))
-        offset = int(request.args.get('offset', 0))
-        
-        results, total = get_announcements(is_active=1, limit=limit, offset=offset)
-        
-        return jsonify({
-            'success': True,
-            'announcements': results,
-            'total': total
-        })
-    except Exception as e:
-        print(f"获取公告列表时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        limit = int(request.args.get("limit", 10))
+        offset = int(request.args.get("offset", 0))
 
-@app.route('/api/recycle-bin', methods=['GET'])
+        results, total = get_announcements(is_active=1, limit=limit, offset=offset)
+
+        return jsonify({"success": True, "announcements": results, "total": total})
+    except Exception as e:
+        print(f"获取公告列表时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/recycle-bin", methods=["GET"])
 @auth_required
 def get_recycle_bin():
-    """获取回收站项目列表"""
+    """获取回收站项目列表."""
     try:
-        item_type = request.args.get('item_type')
-        limit = int(request.args.get('limit', 50))
-        offset = int(request.args.get('offset', 0))
-        
-        results, total = get_recycle_bin_items(g.user_id, item_type, limit, offset)
-        
-        return jsonify({
-            'success': True,
-            'items': results,
-            'total': total
-        })
-    except Exception as e:
-        print(f"获取回收站项目时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        item_type = request.args.get("item_type")
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
 
-@app.route('/api/recycle-bin/<int:recycle_id>/restore', methods=['POST'])
+        results, total = get_recycle_bin_items(g.user_id, item_type, limit, offset)
+
+        return jsonify({"success": True, "items": results, "total": total})
+    except Exception as e:
+        print(f"获取回收站项目时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/recycle-bin/<int:recycle_id>/restore", methods=["POST"])
 @auth_required
 def restore_item(recycle_id):
-    """从回收站恢复项目"""
+    """从回收站恢复项目."""
     try:
         success, message = restore_from_recycle_bin(g.user_id, recycle_id)
-        
-        if success:
-            return jsonify({'success': True, 'message': message})
-        else:
-            return jsonify({'success': False, 'error': message}), 404
-    except Exception as e:
-        print(f"恢复项目时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/recycle-bin/<int:recycle_id>', methods=['DELETE'])
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"success": False, "error": message}), 404
+    except Exception as e:
+        print(f"恢复项目时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/recycle-bin/<int:recycle_id>", methods=["DELETE"])
 @auth_required
 def delete_permanently(recycle_id):
-    """永久删除回收站项目"""
+    """永久删除回收站项目."""
     try:
         success, message = permanently_delete(g.user_id, recycle_id)
-        
-        if success:
-            return jsonify({'success': True, 'message': message})
-        else:
-            return jsonify({'success': False, 'error': message}), 404
-    except Exception as e:
-        print(f"永久删除项目时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/recycle-bin/empty', methods=['POST'])
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"success": False, "error": message}), 404
+    except Exception as e:
+        print(f"永久删除项目时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/recycle-bin/empty", methods=["POST"])
 @auth_required
 def empty_recycle_bin_api():
-    """清空回收站"""
+    """清空回收站."""
     try:
         success = empty_recycle_bin(g.user_id)
-        
+
         if success:
-            return jsonify({'success': True, 'message': '回收站已清空'})
+            return jsonify({"success": True, "message": "回收站已清空"})
         else:
-            return jsonify({'success': False, 'error': '清空失败'})
+            return jsonify({"success": False, "error": "清空失败"})
     except Exception as e:
-        print(f"清空回收站时发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"清空回收站时发生错误: {e!s}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # 访问日志中间件
 @app.before_request
 def before_request():
-    """请求前记录访问日志"""
+    """请求前记录访问日志."""
     g.start_time = time.time()
+
 
 @app.after_request
 def after_request(response):
-    """请求后记录访问日志"""
+    """请求后记录访问日志."""
     try:
         response_time = int((time.time() - g.start_time) * 1000)
         endpoint = request.endpoint
         method = request.method
         ip_address = request.remote_addr
-        user_id = g.user_id if hasattr(g, 'user_id') else None
-        
+        user_id = g.user_id if hasattr(g, "user_id") else None
+
         # 记录访问流量
         record_traffic(endpoint, method, ip_address, user_id, response.status_code, response_time)
-        
+
         # 记录系统日志（如果是错误响应）
         if response.status_code >= 400:
-            create_system_log('ERROR', 'API', f'{method} {endpoint} 返回 {response.status_code}', 
-                           user_id, g.username if hasattr(g, 'username') else None, ip_address, request.user_agent.string)
+            create_system_log(
+                "ERROR",
+                "API",
+                f"{method} {endpoint} 返回 {response.status_code}",
+                user_id,
+                g.username if hasattr(g, "username") else None,
+                ip_address,
+                request.user_agent.string,
+            )
     except Exception as e:
-        print(f"记录访问日志时发生错误: {str(e)}")
-    
+        print(f"记录访问日志时发生错误: {e!s}")
+
     return response
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # 启动Flask服务器
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
