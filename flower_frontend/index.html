@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>园艺相册自动分类工具</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/exif-js@2.3.0/exif.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -2382,12 +2383,12 @@
 
     <script>
         // 全局变量
-        let token = localStorage.getItem('auth_token');
+        let token = localStorage.getItem('token');
         let user = JSON.parse(localStorage.getItem('user'));
 
         // 获取token
         function getToken() {
-            return localStorage.getItem('auth_token');
+            return localStorage.getItem('token');
         }
 
         // 获取认证请求头
@@ -2755,13 +2756,11 @@
                 if (data.success) {
                     // 更新全局变量
                     token = data.token;
-                    user = {
-                        id: data.user_id,
-                        username: data.username
-                    };
                     // 保存到localStorage
-                    localStorage.setItem('auth_token', token);
-                    localStorage.setItem('user', JSON.stringify(user));
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user_id', data.user_id);
+                    localStorage.setItem('username', data.username);
+                    localStorage.setItem('role', data.role);
                     // 更新UI状态
                     updateAuthState();
                     // 关闭模态框
@@ -2801,13 +2800,12 @@
                 const data = await response.json();
                 if (data.success) {
                     token = data.token;
-                    user = {
-                        id: data.user_id,
-                        username: data.username,
-                        role: data.role
-                    };
-                    localStorage.setItem('auth_token', token);
-                    localStorage.setItem('user', JSON.stringify(user));
+                    // 保存到localStorage
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user_id', data.user_id);
+                    localStorage.setItem('username', data.username);
+                    localStorage.setItem('role', data.role);
+                    // 更新UI状态
                     updateAuthState();
                     closeModal('registerModal');
                     alert(data.message);
@@ -2855,8 +2853,10 @@
         function handleLogout() {
             token = null;
             user = null;
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            localStorage.removeItem('user_id');
+            localStorage.removeItem('username');
+            localStorage.removeItem('role');
             updateAuthState();
             alert('已退出登录');
         }
@@ -2864,8 +2864,8 @@
         // 更新认证状态
         function updateAuthState() {
             // 每次都从localStorage读取最新的token和user
-            token = localStorage.getItem('auth_token');
-            user = JSON.parse(localStorage.getItem('user'));
+            token = localStorage.getItem('token');
+            const username = localStorage.getItem('username');
             
             const authButtons = document.getElementById('authButtons');
             const userInfo = document.getElementById('userInfo');
@@ -2873,12 +2873,12 @@
             const createPostSection = document.getElementById('createPostSection');
             const saveToAlbum = document.getElementById('saveToAlbum');
 
-            if (user && token) {
+            if (username && token) {
                 authButtons.style.display = 'none';
                 userInfo.style.display = 'flex';
                 userInfo.style.alignItems = 'center';
                 userInfo.style.gap = '15px';
-                usernameDisplay.textContent = user.username;
+                usernameDisplay.textContent = username;
                 createPostSection.style.display = 'block';
                 // 用户已登录，启用保存到相册选项
                 if (saveToAlbum) {
@@ -3040,7 +3040,7 @@
                     cancelBtn.addEventListener('click', cancelListener);
                     
                     // 调用识别API
-                    callRecognitionAPI(imageDataList.map(item => item.imageData), signal)
+                    callRecognitionAPI(imageDataList, signal)
                         .then(resolve)
                         .catch(reject)
                         .finally(() => {
@@ -3067,12 +3067,18 @@
                             : '未识别到花卉');
                     
                     allResults.push({
-                        file: item.file,
-                        imageData: item.imageData,
-                        detections: result.detections,
-                        exif_info: result.exif_info,
-                        saved_to_album: result.saved_to_album
-                    });
+            file: item.file,
+            originalImage: item.imageData.originalImage,
+            aiImage: item.imageData.aiImage,
+            thumbnail: item.imageData.thumbnail,
+            imageData: item.imageData.aiImage, // 保持向后兼容
+            detections: result.detections,
+            exif_info: result.exif_info,
+            saved_to_album: result.saved_to_album,
+            level1_category: result.level1_category,
+            level2_category: result.level2_category,
+            level3_category: result.level3_category
+          });
                     
                     const progress = 30 + ((i + 1) / totalFiles) * 70; // 处理阶段占70%
                     progressBar.style.width = `${progress}%`;
@@ -3103,17 +3109,160 @@
         }
 
         // 读取文件为DataURL
-        function readFileAsDataURL(file) {
+        // 压缩图片函数
+        function compressImage(file, maxWidth = 1920, maxHeight = 1080, quality = 0.7) {
             return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    resolve(e.target.result);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                
+                img.onload = function() {
+                    // 计算压缩后的尺寸
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width *= ratio;
+                        height *= ratio;
+                    }
+                    
+                    // 设置canvas尺寸
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    // 绘制压缩后的图片
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // 转换为base64
+                    canvas.toBlob((blob) => {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            resolve(e.target.result);
+                        };
+                        reader.onerror = function() {
+                            reject(new Error('图片压缩失败'));
+                        };
+                        reader.readAsDataURL(blob);
+                    }, 'image/jpeg', quality);
                 };
-                reader.onerror = function() {
-                    reject(new Error('文件读取失败'));
+                
+                img.onerror = function() {
+                    reject(new Error('图片加载失败'));
                 };
-                reader.readAsDataURL(file);
+                
+                img.src = URL.createObjectURL(file);
             });
+        }
+
+        // 从原图中提取EXIF信息
+        function extractExifFromFile(file) {
+            return new Promise((resolve) => {
+                EXIF.getData(file, function() {
+                    const exif = {};
+                    
+                    // 拍摄时间
+                    const dateTime = EXIF.getTag(this, 'DateTimeOriginal') || 
+                                   EXIF.getTag(this, 'DateTime') || 
+                                   EXIF.getTag(this, 'DateTimeDigitized');
+                    exif.date_time = dateTime || '未获取到';
+                    
+                    // 相机信息
+                    exif.camera_info = {
+                        make: EXIF.getTag(this, 'Make') || '未知',
+                        model: EXIF.getTag(this, 'Model') || '未知'
+                    };
+                    
+                    // GPS信息
+                    const gpsLatitude = EXIF.getTag(this, 'GPSLatitude');
+                    const gpsLatitudeRef = EXIF.getTag(this, 'GPSLatitudeRef');
+                    const gpsLongitude = EXIF.getTag(this, 'GPSLongitude');
+                    const gpsLongitudeRef = EXIF.getTag(this, 'GPSLongitudeRef');
+                    
+                    exif.location = {
+                        has_location: false,
+                        latitude: null,
+                        longitude: null,
+                        formatted_address: '无GPS信息',
+                        raw_gps: null
+                    };
+                    
+                    if (gpsLatitude && gpsLatitudeRef && gpsLongitude && gpsLongitudeRef) {
+                        // 转换GPS坐标为十进制格式
+                        function convertToDecimal(coords, ref) {
+                            const degrees = coords[0];
+                            const minutes = coords[1];
+                            const seconds = coords[2];
+                            let decimal = degrees + minutes/60 + seconds/3600;
+                            if (ref === 'S' || ref === 'W') {
+                                decimal = -decimal;
+                            }
+                            return decimal;
+                        }
+                        
+                        const lat = convertToDecimal(gpsLatitude, gpsLatitudeRef);
+                        const lon = convertToDecimal(gpsLongitude, gpsLongitudeRef);
+                        
+                        exif.location = {
+                            has_location: true,
+                            latitude: lat,
+                            longitude: lon,
+                            formatted_address: 'GPS信息已获取', // 后端会替换为具体地址
+                            raw_gps: {
+                                lat_ref: gpsLatitudeRef,
+                                lat: gpsLatitude,
+                                lon_ref: gpsLongitudeRef,
+                                lon: gpsLongitude
+                            }
+                        };
+                    }
+                    
+                    // 图片尺寸
+                    exif.image_details = {
+                        width: EXIF.getTag(this, 'PixelXDimension') || '未知',
+                        height: EXIF.getTag(this, 'PixelYDimension') || '未知'
+                    };
+                    
+                    resolve(exif);
+                });
+            });
+        }
+
+        // 读取并压缩文件
+        async function readFileAsDataURL(file) {
+            try {
+                // 从原图中提取EXIF信息（在压缩前）
+                const exif = await extractExifFromFile(file);
+                
+                // 生成百度AI用的图（最大边长1920px，画质0.75）
+                const aiImage = await compressImage(file, 1920, 1920, 0.75);
+                
+                // 生成缩略图（640×640）
+                const thumbnail = await compressImage(file, 640, 640, 0.7);
+                
+                // 读取原图为DataURL（用于保存和详情页显示）
+                const originalImage = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        resolve(e.target.result);
+                    };
+                    reader.onerror = function() {
+                        reject(new Error('读取原图失败'));
+                    };
+                    reader.readAsDataURL(file);
+                });
+                
+                // 返回所有图片数据和EXIF信息
+                return {
+                    originalImage: originalImage,
+                    aiImage: aiImage,
+                    thumbnail: thumbnail,
+                    exif: exif,
+                    file: file
+                };
+            } catch (error) {
+                throw error;
+            }
         }
 
         // 调用识别API
@@ -3126,23 +3275,58 @@
             console.log('saveToAlbum.checked =', saveToAlbum);
             console.log('token =', getToken());
             console.log('signal =', signal);
+            console.log('imageData 类型:', Array.isArray(imageData) ? 'array' : typeof imageData);
+            if (Array.isArray(imageData) && imageData.length > 0) {
+                console.log('第一个元素类型:', typeof imageData[0]);
+                if (typeof imageData[0] === 'object') {
+                    console.log('第一个元素包含imageData:', 'imageData' in imageData[0]);
+                    if (imageData[0].imageData) {
+                        console.log('imageData包含aiImage:', 'aiImage' in imageData[0].imageData);
+                        console.log('imageData包含originalImage:', 'originalImage' in imageData[0].imageData);
+                        console.log('imageData包含exif:', 'exif' in imageData[0].imageData);
+                    }
+                }
+            } else if (typeof imageData === 'object') {
+                console.log('imageData 包含aiImage:', 'aiImage' in imageData);
+                console.log('imageData 包含originalImage:', 'originalImage' in imageData);
+                console.log('imageData 包含exif:', 'exif' in imageData);
+            }
             console.log('===================================');
             
             let body;
             if (Array.isArray(imageData)) {
                 // 多图识别
                 body = JSON.stringify({ 
-                    images: imageData,
+                    images: imageData.map(item => {
+                        const imgData = item.imageData;
+                        return (typeof imgData === 'object' && 'aiImage' in imgData) ? imgData.aiImage : imgData;
+                    }),
+                    original_images: imageData.map(item => {
+                        const imgData = item.imageData;
+                        return (typeof imgData === 'object' && 'originalImage' in imgData) ? imgData.originalImage : null;
+                    }),
+                    exif_data: imageData.map(item => {
+                        const imgData = item.imageData;
+                        return (typeof imgData === 'object' && 'exif' in imgData) ? imgData.exif : null;
+                    }),
                     save_to_album: saveToAlbum
                 });
                 console.log('多图识别，save_to_album =', saveToAlbum);
+                console.log('多图识别，exif_data 长度 =', imageData.length);
             } else {
                 // 单图识别
+                const aiImage = typeof imageData === 'object' && 'aiImage' in imageData ? imageData.aiImage : imageData;
+                const originalImage = typeof imageData === 'object' && 'originalImage' in imageData ? imageData.originalImage : null;
+                const exif = typeof imageData === 'object' && 'exif' in imageData ? imageData.exif : null;
+                
                 body = JSON.stringify({ 
-                    image: imageData,
+                    image: aiImage,
+                    original_image: originalImage,
+                    exif_data: exif,
                     save_to_album: saveToAlbum
                 });
                 console.log('单图识别，save_to_album =', saveToAlbum);
+                console.log('单图识别，exif_data =', exif ? '存在' : '不存在');
             }
             
             const headers = {
@@ -3156,24 +3340,45 @@
             }
             
             console.log('正在发送请求到 /api/detect');
-            const response = await fetch('/api/detect', {
-                method: 'POST',
-                headers: headers,
-                body: body,
-                signal: signal // 传递signal参数用于取消请求
-            });
+            
+            // 设置超时处理
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60秒超时
+            
+            try {
+                const response = await fetch('/api/detect', {
+                    method: 'POST',
+                    headers: headers,
+                    body: body,
+                    signal: signal || controller.signal // 传递signal参数用于取消请求
+                });
 
-            console.log('响应状态码:', response.status);
-            const data = await response.json();
-            console.log('响应数据:', data);
-            if (data.success) {
-                if (Array.isArray(imageData)) {
-                    return data.all_results;
-                } else {
-                    return data.results;
+                clearTimeout(timeoutId);
+                console.log('响应状态码:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`服务器错误: ${response.status}`);
                 }
-            } else {
-                throw new Error('识别失败: ' + (data.error || '未知错误'));
+                
+                const data = await response.json();
+                console.log('响应数据:', data);
+                if (data.success) {
+                    if (Array.isArray(imageData)) {
+                        return data.all_results;
+                    } else {
+                        return data.results;
+                    }
+                } else {
+                    throw new Error('识别失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                clearTimeout(timeoutId);
+                console.error('请求错误:', error);
+                if (error.name === 'AbortError') {
+                    throw new Error('识别请求超时，请重试');
+                } else {
+                    throw error;
+                }
             }
         }
 
@@ -3192,7 +3397,8 @@
                 resultContainer.style.marginBottom = '20px';
 
                 const imagePreview = document.createElement('img');
-                imagePreview.src = item.imageData;
+                // 使用缩略图进行页面展示
+                imagePreview.src = item.thumbnail || item.imageData;
                 imagePreview.style.maxWidth = '100%';
                 imagePreview.style.maxHeight = '400px';
                 imagePreview.style.borderRadius = '10px';
@@ -3255,8 +3461,24 @@
                 detectionsDiv.appendChild(detectionsTitle);
                 detectionsDiv.appendChild(detectionsList);
                 
-                // 添加综合分类信息
-                if (item.final_category) {
+                // 添加三级分类信息
+                if (item.level1_category || item.level2_category || item.level3_category) {
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.style.marginTop = '15px';
+                    categoryDiv.style.padding = '15px';
+                    categoryDiv.style.backgroundColor = '#f5f5f5';
+                    categoryDiv.style.borderRadius = '8px';
+                    
+                    const level1 = item.level1_category || '未获取到';
+                    const level2 = item.level2_category || '未获取到';
+                    const level3 = item.level3_category || '未获取到';
+                    
+                    categoryDiv.innerHTML = `
+                        <p><strong>三级分类路径:</strong> ${level1} > ${level2}${level3 ? ' > ' + level3 : ''}</p>
+                    `;
+                    detectionsDiv.appendChild(categoryDiv);
+                } else if (item.final_category) {
+                    // 向后兼容，显示原来的综合分类
                     const categoryDiv = document.createElement('div');
                     categoryDiv.style.marginTop = '15px';
                     categoryDiv.style.padding = '15px';
@@ -3276,7 +3498,11 @@
                     rerunBtn.textContent = '识别中...';
                     
                     try {
-                        const newResults = await callRecognitionAPI(item.imageData);
+                        const newItemData = {
+                            imageData: item.imageData,
+                            exif: item.exif_info
+                        };
+                        const newResults = await callRecognitionAPI(newItemData);
                         const newItem = {
                             detections: newResults.detections,
                             exif_info: newResults.exif_info,
@@ -3289,6 +3515,9 @@
                             location_text: newResults.location_text,
                             region_label: newResults.region_label,
                             final_category: newResults.final_category,
+                            level1_category: newResults.level1_category,
+                            level2_category: newResults.level2_category,
+                            level3_category: newResults.level3_category,
                             imageData: item.imageData,
                             saved_to_album: newResults.saved_to_album
                         };
@@ -3323,8 +3552,24 @@
                                 detectionsDiv.appendChild(detectionItem);
                             });
                             
-                            // 添加综合分类信息
-                            if (newItem.final_category) {
+                            // 添加三级分类信息
+                            if (newItem.level1_category || newItem.level2_category || newItem.level3_category) {
+                                const categoryDiv = document.createElement('div');
+                                categoryDiv.style.marginTop = '15px';
+                                categoryDiv.style.padding = '15px';
+                                categoryDiv.style.backgroundColor = '#f5f5f5';
+                                categoryDiv.style.borderRadius = '8px';
+                                
+                                const level1 = newItem.level1_category || '未获取到';
+                                const level2 = newItem.level2_category || '未获取到';
+                                const level3 = newItem.level3_category || '未获取到';
+                                
+                                categoryDiv.innerHTML = `
+                                    <p><strong>三级分类路径:</strong> ${level1} > ${level2}${level3 ? ' > ' + level3 : ''}</p>
+                                `;
+                                detectionsDiv.appendChild(categoryDiv);
+                            } else if (newItem.final_category) {
+                                // 向后兼容，显示原来的综合分类
                                 const categoryDiv = document.createElement('div');
                                 categoryDiv.style.marginTop = '15px';
                                 categoryDiv.style.padding = '15px';

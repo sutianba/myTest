@@ -397,7 +397,7 @@ class SQLDatabaseManager:
             conn.close()
     
     # 植物花卉识别结果相关操作
-    def save_recognition_result(self, user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None, created_at=None):
+    def save_recognition_result(self, user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, level1_category=None, level2_category=None, level3_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None, created_at=None):
         """保存植物花卉识别结果"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -405,22 +405,26 @@ class SQLDatabaseManager:
         try:
             print(f"[DB] 保存识别结果: user_id={user_id}, image_path={image_path}, result={result}, confidence={confidence}, created_at={created_at}")
             
-            # 处理 created_at 参数，转换为正确的时间格式
-            from datetime import datetime
+            # 处理 created_at 参数，确保是正确的timestamp格式
             if created_at is None:
                 # 没有提供，使用当前时间
-                created_at_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
             elif isinstance(created_at, int):
-                # 是 Unix 时间戳，转换为时间字符串
-                created_at_str = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S')
+                # 是整数时间戳，转换为timestamp格式
+                created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_at))
             else:
-                # 已经是字符串，直接使用
-                created_at_str = created_at
+                # 尝试转换为整数时间戳
+                try:
+                    created_at_int = int(created_at)
+                    created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_at_int))
+                except:
+                    # 转换失败，使用当前时间
+                    created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
             
             cursor.execute('''
-            INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height, created_at_str))
+            INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, level1_category, level2_category, level3_category, camera_make, camera_model, image_width, image_height, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, level1_category, level2_category, level3_category, camera_make, camera_model, image_width, image_height, created_at_str))
             conn.commit()
             result_id = cursor.lastrowid
             print(f"[DB] 识别结果保存成功: result_id={result_id}, created_at={created_at}")
@@ -1736,9 +1740,10 @@ class SQLDatabaseManager:
             print(f"[DB] 相册状态(更新前): name={album_before['name']}, image_count={album_before['image_count']}, cover_image={album_before['cover_image']}")
             
             # 3. 插入图片到相册
+            created_at_int = int(time.time())
             cursor.execute(
                 "INSERT INTO album_images (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (album_id, user_id, image_path, image_name, image_description, recognition_result_id, int(time.time()))
+                (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at_int)
             )
             image_id = cursor.lastrowid
             print(f"[DB] 图片插入成功: image_id={image_id}")
@@ -2549,10 +2554,10 @@ def check_user_permission(user_id, permission_name):
         raise Exception("数据库未初始化")
     return db_manager.check_user_permission(user_id, permission_name)
 
-def save_recognition_result(user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None, created_at=None):
+def save_recognition_result(user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, level1_category=None, level2_category=None, level3_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None, created_at=None):
     if db_manager is None:
         raise Exception("数据库未初始化")
-    return db_manager.save_recognition_result(user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, camera_make, camera_model, image_width, image_height, created_at)
+    return db_manager.save_recognition_result(user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, level1_category, level2_category, level3_category, camera_make, camera_model, image_width, image_height, created_at)
 
 def get_user_recognition_results(user_id):
     if db_manager is None:

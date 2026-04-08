@@ -5,6 +5,7 @@ import os
 import sys
 import base64
 import io
+import requests
 from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
 
@@ -28,6 +29,72 @@ from config import (
 
 # 导入Flask-Mail
 from flask_mail import Mail, Message
+
+# 导入百度AI SDK
+from aip import AipImageClassify
+
+# 百度AI配置信息
+APP_ID = '122755339'
+API_KEY = 'w2omzQOz6C0UM5DgbOG9IY5O'
+SECRET_KEY = 'Mv6NmyRzhkwW2ruJJJdG4rpsTvbwW7SK'
+
+# 百度AI access_token缓存
+BAIDU_ACCESS_TOKEN = None
+BAIDU_TOKEN_EXPIRE_TIME = 0
+
+# 获取百度AI access_token
+def get_baidu_access_token():
+    global BAIDU_ACCESS_TOKEN, BAIDU_TOKEN_EXPIRE_TIME
+    # 若Token未过期，直接返回
+    if BAIDU_ACCESS_TOKEN and time.time() < BAIDU_TOKEN_EXPIRE_TIME:
+        return BAIDU_ACCESS_TOKEN
+    # 重新获取Token
+    token_url = f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={API_KEY}&client_secret={SECRET_KEY}"
+    res = requests.get(token_url, timeout=10)
+    res.raise_for_status()
+    data = res.json()
+    BAIDU_ACCESS_TOKEN = data["access_token"]
+    BAIDU_TOKEN_EXPIRE_TIME = time.time() + data["expires_in"] - 300  # 提前5分钟过期
+    print(f"百度AI Token获取成功，有效期: {data['expires_in']}秒")
+    return BAIDU_ACCESS_TOKEN
+
+# 百度AI植物识别函数
+def baidu_flower_recognize(compressed_bytes):
+    try:
+        access_token = get_baidu_access_token()
+        api_url = f"https://aip.baidubce.com/rest/2.0/image-classify/v1/plant?access_token={access_token}"
+        img_base64 = base64.b64encode(compressed_bytes).decode()
+        # 加15秒超时，避免卡死
+        res = requests.post(api_url, data={"image": img_base64}, timeout=15)
+        res.raise_for_status()
+        return res.json()
+    except requests.exceptions.Timeout:
+        raise Exception("百度AI调用超时，请重试")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"百度AI请求失败: {str(e)}")
+
+# 百度AI通用图像分类函数
+def baidu_image_classify(compressed_bytes):
+    try:
+        access_token = get_baidu_access_token()
+        api_url = f"https://aip.baidubce.com/rest/2.0/image-classify/v2/advanced_general?access_token={access_token}"
+        img_base64 = base64.b64encode(compressed_bytes).decode()
+        # 加15秒超时，避免卡死
+        res = requests.post(api_url, data={"image": img_base64, "baike_num": 0}, timeout=15)
+        res.raise_for_status()
+        return res.json()
+    except requests.exceptions.Timeout:
+        raise Exception("百度AI调用超时，请重试")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"百度AI请求失败: {str(e)}")
+
+# 初始化百度AI客户端
+try:
+    client = AipImageClassify(APP_ID, API_KEY, SECRET_KEY)
+    print("百度AI客户端初始化成功")
+except Exception as e:
+    print(f"百度AI客户端初始化失败: {str(e)}")
+    client = None
 
 # 导入数据库操作模块
 if not TEST_MODE:
@@ -102,6 +169,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # JWT配置 - 从环境变量读取密钥，如无则使用随机生成的密钥
 app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', os.urandom(32).hex())
 app.config['JWT_EXPIRATION_DELTA'] = 60 * 60 * 24 * 365  # JWT过期时间：365天（1年）
+# 限制请求体大小为50MB
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 # JWT相关导入
 import jwt
@@ -421,9 +490,15 @@ def serve_file(filename):
 def detect_flower():
     """植物花卉识别工具 API 接口"""
     try:
-        data = request.get_json()
+        print(f"\n=== /api/detect 请求开始 ===")
+        print(f"请求方法: {request.method}")
+        print(f"请求头: {dict(request.headers)}")
         
-        print(f"\n=== /api/detect 请求信息 ===")
+        data = request.get_json()
+        if data is None:
+            print("错误: 请求数据为空")
+            return jsonify({'success': False, 'error': '请求数据为空'}), 400
+        
         print(f"请求数据：{data}")
         print(f"save_to_album = {data.get('save_to_album', False)}")
         
@@ -432,37 +507,71 @@ def detect_flower():
         if token:
             if token.startswith('Bearer '):
                 token = token[7:]
-            payload = verify_jwt(token)
-            if payload:
-                user_id = payload.get('user_id')
-                print(f"user_id = {user_id}")
+            try:
+                payload = verify_jwt(token)
+                if payload:
+                    user_id = payload.get('user_id')
+                    print(f"user_id = {user_id}")
+            except Exception as e:
+                print(f"JWT验证错误: {str(e)}")
+                return jsonify({'success': False, 'error': 'JWT验证失败，请重新登录'}), 401
         
         save_to_album = data.get('save_to_album', False)
         print(f"解析后的 save_to_album = {save_to_album}")
-        print(f"===========================\n")
+        
+        # 检查save_to_album是否为True但user_id为None
+        if save_to_album and not user_id:
+            print("保存到相册需要登录")
+            return jsonify({'success': False, 'error': '保存到相册需要登录，请先登录'}), 401
         
         if 'image' in data:
             image_data = data['image']
-            results = process_single_image(image_data, user_id, save_to_album)
-            return jsonify({'success': True, 'results': results})
+            original_image_data = data.get('original_image', None)
+            exif_data = data.get('exif_data', None)
+            print(f"处理单张图片: 数据长度={len(image_data) if image_data else 0}, 原图数据={original_image_data is not None}, exif_data={exif_data is not None}")
+            try:
+                results = process_single_image(image_data, user_id, save_to_album, exif_data, original_image_data)
+                print("处理完成，返回结果")
+                return jsonify({'success': True, 'results': results})
+            except Exception as e:
+                print(f"处理单张图片时发生错误: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'error': f'处理图片时发生错误: {str(e)}'}), 500
         elif 'images' in data:
             images_data = data['images']
+            original_images_data = data.get('original_images', [])
+            exif_data_list = data.get('exif_data', [])
+            print(f"处理多张图片: 数量={len(images_data) if images_data else 0}, 原图数据数量={len(original_images_data)}, exif_data_list长度={len(exif_data_list)}")
             all_results = []
             
-            for i, image_data in enumerate(images_data):
-                results = process_single_image(image_data, user_id, save_to_album)
-                all_results.append({
-                    'image_index': i,
-                    'results': results
-                })
-            
-            return jsonify({'success': True, 'all_results': all_results})
+            try:
+                for i, image_data in enumerate(images_data):
+                    print(f"处理第 {i+1} 张图片")
+                    original_image_data = original_images_data[i] if i < len(original_images_data) else None
+                    exif_data = exif_data_list[i] if i < len(exif_data_list) else None
+                    results = process_single_image(image_data, user_id, save_to_album, exif_data, original_image_data)
+                    all_results.append({
+                        'image_index': i,
+                        'results': results
+                    })
+                
+                print("处理完成，返回结果")
+                return jsonify({'success': True, 'all_results': all_results})
+            except Exception as e:
+                print(f"处理多张图片时发生错误: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'error': f'处理图片时发生错误: {str(e)}'}), 500
         else:
+            print("错误: 缺少图片数据")
             return jsonify({'success': False, 'error': '缺少图片数据'}), 400
 
     except Exception as e:
         print(f"识别过程中发生错误: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 
 
 def convert_to_decimal(coord, ref):
@@ -508,7 +617,7 @@ def convert_to_decimal(coord, ref):
 def get_address_from_coordinates(lat, lon, max_retries=3):
     """
     通过经纬度获取地址信息
-    使用geopy和Nominatim服务进行逆地理编码
+    使用高德地图API进行逆地理编码
     添加了缓存机制以加速重复查询
     """
     global address_cache
@@ -521,23 +630,57 @@ def get_address_from_coordinates(lat, lon, max_retries=3):
         print(f"使用缓存的地址信息: {cache_key}")
         return address_cache[cache_key]
     
-    geolocator = Nominatim(user_agent="flower_recognition_app", timeout=10)
+    # 高德地图API密钥（请替换为您自己的密钥）
+    amap_key = "您的高德地图API密钥"
+    
+    # 高德地图逆地理编码API URL
+    url = f"https://restapi.amap.com/v3/geocode/regeo"
     
     # 重试机制
     for attempt in range(max_retries):
         try:
-            location = geolocator.reverse((lat, lon), language='zh-CN')
-            if location:
-                address = location.raw.get('address', {})
+            # 构建请求参数
+            params = {
+                'key': amap_key,
+                'location': f"{lon},{lat}",  # 注意：高德地图API的参数顺序是lon,lat
+                'extensions': 'base',
+                'batch': 'false',
+                'roadlevel': '0'
+            }
+            
+            # 发送请求
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get('status') == '1':
+                # 解析返回结果
+                regeocode = data.get('regeocode', {})
+                address_component = regeocode.get('addressComponent', {})
+                
+                # 构建地址字典，与之前的格式保持一致
+                address = {
+                    'country': address_component.get('country', '中国'),
+                    'province': address_component.get('province', ''),
+                    'city': address_component.get('city', ''),
+                    'district': address_component.get('district', ''),
+                    'township': address_component.get('township', ''),
+                    'road': address_component.get('streetNumber', {}).get('street', ''),
+                    'house_number': address_component.get('streetNumber', {}).get('number', '')
+                }
+                
                 # 存入缓存
                 address_cache[cache_key] = address
                 print(f"地址信息已缓存: {cache_key}")
+                print(f"高德地图API返回地址: {address}")
                 return address
-            return None
-        except GeocoderTimedOut:
+            else:
+                print(f"高德地图API返回错误: {data.get('info', '未知错误')}")
+                return None
+        except requests.exceptions.Timeout:
             print(f"地理编码请求超时，第 {attempt + 1} 次尝试...")
             time.sleep(1)
-        except GeocoderServiceError as e:
+        except requests.exceptions.RequestException as e:
             print(f"地理编码服务错误: {e}，第 {attempt + 1} 次尝试...")
             time.sleep(1)
         except Exception as e:
@@ -546,6 +689,43 @@ def get_address_from_coordinates(lat, lon, max_retries=3):
     
     print("多次尝试后仍无法获取地址信息")
     return None
+
+
+def calculate_categories(flower_name, shoot_time, image_content_type):
+    """
+    计算三级分类
+    入参：识别结果（花卉名称）、EXIF 时间、图片内容类型
+    返回：(level1_category, level2_category, level3_category)
+    """
+    # 一级分类：从EXIF拍摄时间提取，格式为YYYY年MM月DD日
+    level1 = "未获取到"
+    if shoot_time and shoot_time != "未获取到" and shoot_time != "未知":
+        try:
+            # 格式：2024:03:15 10:30:00
+            date_part = shoot_time.split(' ')[0]
+            if ':' in date_part:
+                year, month, day = map(int, date_part.split(':'))
+                level1 = f"{year}年{month}月{day}日"
+                print(f"一级分类: {level1}")
+        except Exception as e:
+            print(f"解析拍摄时间失败: {e}")
+    
+    # 二级分类：根据识别结果判断
+    level2 = "物"
+    if flower_name and flower_name != "未识别" and flower_name != "未知":
+        # 如果有花卉名称，二级分类为花卉
+        level2 = "花卉"
+    else:
+        # 默认为物
+        level2 = "物"
+    
+    # 三级分类：仅当二级是花卉时，填具体花卉名称，否则为空
+    level3 = ""
+    if level2 == "花卉" and flower_name and flower_name != "未识别" and flower_name != "未知":
+        level3 = flower_name
+    
+    print(f"三级分类: {level1} > {level2} > {level3}")
+    return (level1, level2, level3)
 
 
 def format_address(address):
@@ -585,7 +765,7 @@ def get_season(month):
     else:
         return "冬季"
 
-def process_single_image(image_data, user_id=None, save_to_album=False):
+def process_single_image(image_data, user_id=None, save_to_album=False, exif_data=None, original_image_data=None):
     """处理单个图片的识别"""
     print(f"process_single_image called with save_to_album={save_to_album}, user_id={user_id}")
     # 记录识别开始时间
@@ -666,15 +846,21 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
     # 正式模式下的处理
     saved_album_info = None
     
-    # 移除base64头部
+    # 移除base64头部并解码AI识别图
     if image_data.startswith('data:image/'):
         image_data = image_data.split(',')[1]
-
-    # 解码base64图片数据
-    image_bytes = base64.b64decode(image_data)
-    image = Image.open(io.BytesIO(image_bytes))
+    ai_image_bytes = base64.b64decode(image_data)
+    image = Image.open(io.BytesIO(ai_image_bytes))
     # 调整图片大小以提高处理速度
     image = image.resize((640, 640))
+    
+    # 处理原图数据
+    original_image_bytes = ai_image_bytes  # 默认使用AI识别图作为原图
+    if original_image_data:
+        print("使用前端传递的原图数据")
+        if original_image_data.startswith('data:image/'):
+            original_image_data = original_image_data.split(',')[1]
+        original_image_bytes = base64.b64decode(original_image_data)
     
     # 提取图片EXIF信息
     image_info = {
@@ -706,98 +892,194 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
     location_text = "未获取到"
     region_label = "未获取到"
     
-    try:
-        # 创建临时文件保存图片
-        temp_file_path = "temp_image.jpg"
-        with open(temp_file_path, "wb") as temp_file:
-            temp_file.write(image_bytes)
+    # 优先使用前端传递的EXIF数据
+    if exif_data:
+        print("使用前端传递的EXIF数据")
+        # 更新image_info
+        if 'date_time' in exif_data:
+            image_info['date_time'] = exif_data['date_time']
+            shoot_time = exif_data['date_time']
+            print(f"前端传递的拍摄时间: {shoot_time}")
         
-        # 使用exifread提取EXIF信息
-        with open(temp_file_path, 'rb') as f:
-            exif_tags = exifread.process_file(f)
-            
-            # 获取拍摄时间
-            if 'EXIF DateTimeOriginal' in exif_tags:
-                shoot_time = str(exif_tags['EXIF DateTimeOriginal'])
-            elif 'Image DateTime' in exif_tags:
-                shoot_time = str(exif_tags['Image DateTime'])
-            elif 'EXIF DateTimeDigitized' in exif_tags:
-                shoot_time = str(exif_tags['EXIF DateTimeDigitized'])
-            
-            # 解析拍摄时间
-            if shoot_time != "未获取到":
-                try:
-                    # 格式：2024:03:15 10:30:00
-                    date_part = shoot_time.split(' ')[0]
+        if 'camera_info' in exif_data:
+            image_info['camera_info'] = exif_data['camera_info']
+            print(f"前端传递的相机信息: {exif_data['camera_info']}")
+        
+        if 'location' in exif_data:
+            image_info['location'] = exif_data['location']
+            if exif_data['location'].get('has_location', False):
+                latitude = exif_data['location'].get('latitude')
+                longitude = exif_data['location'].get('longitude')
+                # 解析GPS坐标为具体地址
+                if latitude and longitude:
+                    print(f"使用前端传递的GPS坐标进行地址解析: {latitude}, {longitude}")
+                    address = get_address_from_coordinates(latitude, longitude)
+                    if address:
+                        formatted_address = format_address(address)
+                        image_info['location']['formatted_address'] = formatted_address
+                        location_text = formatted_address
+                        print(f"解析到的地址: {formatted_address}")
+                    else:
+                        location_text = exif_data['location'].get('formatted_address', "未获取到")
+                        print(f"地址解析失败，使用默认值: {location_text}")
+                else:
+                    location_text = exif_data['location'].get('formatted_address', "未获取到")
+                    print(f"前端传递的位置信息: {location_text}")
+        
+        if 'image_details' in exif_data:
+            image_info['image_details'] = exif_data['image_details']
+        
+        # 解析拍摄时间
+        if shoot_time != "未获取到" and shoot_time != "未知":
+            try:
+                # 格式：2024:03:15 10:30:00
+                date_part = shoot_time.split(' ')[0]
+                if ':' in date_part:
                     year, month, day = map(int, date_part.split(':'))
                     shoot_year = year
                     shoot_month = month
                     shoot_season = get_season(month)
-                except Exception as e:
-                    print(f"解析时间失败: {e}")
-        
-        # 获取相机信息
-        if 'Image Make' in exif_tags:
-            image_info['camera_info']['make'] = str(exif_tags['Image Make'])
-        if 'Image Model' in exif_tags:
-            image_info['camera_info']['model'] = str(exif_tags['Image Model'])
-        
-        # 获取GPS位置信息
-        if all(key in exif_tags for key in ['GPS GPSLongitudeRef', 'GPS GPSLongitude', 
-                                           'GPS GPSLatitudeRef', 'GPS GPSLatitude']):
-            try:
-                # 获取原始的经纬度信息
-                lon_ref = exif_tags['GPS GPSLongitudeRef'].printable
-                lon = exif_tags['GPS GPSLongitude']
-                lat_ref = exif_tags['GPS GPSLatitudeRef'].printable
-                lat = exif_tags['GPS GPSLatitude']
-                
-                # 转换为十进制格式
-                dec_lat = convert_to_decimal(lat, lat_ref)
-                dec_lon = convert_to_decimal(lon, lon_ref)
-                
-                # 获取地址信息
-                address = get_address_from_coordinates(dec_lat, dec_lon)
-                formatted_address = format_address(address)
-                
-                # 更新位置信息
-                image_info['location'] = {
-                    'has_location': True,
-                    'latitude': dec_lat,
-                    'longitude': dec_lon,
-                    'formatted_address': formatted_address,
-                    'raw_gps': {
-                        'lat_ref': lat_ref,
-                        'lat': str(lat),
-                        'lon_ref': lon_ref,
-                        'lon': str(lon)
-                    }
-                }
-                
-                # 更新分类信息
-                latitude = dec_lat
-                longitude = dec_lon
-                location_text = formatted_address
-                
-                # 简单的区域标签生成
-                if latitude is not None and longitude is not None:
-                    if 32 <= latitude <= 42 and 110 <= longitude <= 122:
-                        region_label = "华北地区"
-                    elif 23 <= latitude <= 32 and 108 <= longitude <= 123:
-                        region_label = "华南地区"
-                    elif 32 <= latitude <= 40 and 105 <= longitude <= 115:
-                        region_label = "西北地区"
-                    elif 42 <= latitude <= 53 and 120 <= longitude <= 135:
-                        region_label = "东北地区"
-                    else:
-                        region_label = "其他地区"
+                    print(f"解析前端传递的时间成功: 年={year}, 月={month}, 季={shoot_season}")
             except Exception as e:
-                print(f"处理GPS信息时出错: {e}")
-        
-        # 删除临时文件
-        os.remove(temp_file_path)
-    except Exception as e:
-        print(f"提取图片EXIF信息失败: {e}")
+                print(f"解析前端传递的时间失败: {e}")
+                # 解析失败时保持初始值
+                shoot_time = "未获取到"
+                shoot_year = None
+                shoot_month = None
+                shoot_season = "未获取到"
+    else:
+        # 前端未传递EXIF数据，从原图提取
+        print("前端未传递EXIF数据，从原图提取")
+        try:
+            # 创建临时文件保存图片
+            temp_file_path = "temp_image.jpg"
+            with open(temp_file_path, "wb") as temp_file:
+                temp_file.write(original_image_bytes)
+            
+            # 使用exifread提取EXIF信息
+            with open(temp_file_path, 'rb') as f:
+                exif_tags = exifread.process_file(f)
+                
+                # 打印所有EXIF标签，用于调试
+                print(f"提取到的EXIF标签: {list(exif_tags.keys())}")
+                
+                # 获取拍摄时间 - 兼容不同相机字段名
+                date_time_fields = ['EXIF DateTimeOriginal', 'Image DateTime', 'EXIF DateTimeDigitized']
+                for field in date_time_fields:
+                    if field in exif_tags:
+                        shoot_time = str(exif_tags[field])
+                        print(f"获取到拍摄时间({field}): {shoot_time}")
+                        break
+                else:
+                    print("未找到拍摄时间EXIF标签")
+                    # 保持初始值，不使用当前时间
+                    shoot_time = "未获取到"
+                    shoot_year = None
+                    shoot_month = None
+                    shoot_season = "未获取到"
+                
+                # 解析拍摄时间
+                if shoot_time != "未获取到":
+                    try:
+                        # 格式：2024:03:15 10:30:00
+                        date_part = shoot_time.split(' ')[0]
+                        if ':' in date_part:
+                            year, month, day = map(int, date_part.split(':'))
+                            shoot_year = year
+                            shoot_month = month
+                            shoot_season = get_season(month)
+                            print(f"解析时间成功: 年={year}, 月={month}, 季={shoot_season}")
+                    except Exception as e:
+                        print(f"解析时间失败: {e}")
+                        # 解析失败时保持初始值，不使用当前时间
+                        shoot_time = "未获取到"
+                        shoot_year = None
+                        shoot_month = None
+                        shoot_season = "未获取到"
+                
+                # 获取相机信息 - 兼容不同相机字段名
+                make_fields = ['Image Make', 'EXIF Make']
+                for field in make_fields:
+                    if field in exif_tags:
+                        image_info['camera_info']['make'] = str(exif_tags[field])
+                        print(f"获取到相机厂商: {image_info['camera_info']['make']}")
+                        break
+                
+                model_fields = ['Image Model', 'EXIF Model']
+                for field in model_fields:
+                    if field in exif_tags:
+                        image_info['camera_info']['model'] = str(exif_tags[field])
+                        print(f"获取到相机型号: {image_info['camera_info']['model']}")
+                        break
+                
+                # 获取GPS位置信息
+                print(f"GPS相关标签: {[k for k in exif_tags if 'GPS' in k]}")
+                gps_fields = ['GPS GPSLongitudeRef', 'GPS GPSLongitude', 'GPS GPSLatitudeRef', 'GPS GPSLatitude']
+                if all(key in exif_tags for key in gps_fields):
+                    try:
+                        # 获取原始的经纬度信息
+                        lon_ref = exif_tags['GPS GPSLongitudeRef'].printable
+                        lon = exif_tags['GPS GPSLongitude']
+                        lat_ref = exif_tags['GPS GPSLatitudeRef'].printable
+                        lat = exif_tags['GPS GPSLatitude']
+                        
+                        # 转换为十进制格式
+                        dec_lat = convert_to_decimal(lat, lat_ref)
+                        dec_lon = convert_to_decimal(lon, lon_ref)
+                        
+                        # 获取地址信息
+                        address = get_address_from_coordinates(dec_lat, dec_lon)
+                        formatted_address = format_address(address)
+                        
+                        # 更新位置信息
+                        image_info['location'] = {
+                            'has_location': True,
+                            'latitude': dec_lat,
+                            'longitude': dec_lon,
+                            'formatted_address': formatted_address,
+                            'raw_gps': {
+                                'lat_ref': lat_ref,
+                                'lat': str(lat),
+                                'lon_ref': lon_ref,
+                                'lon': str(lon)
+                            }
+                        }
+                        
+                        # 更新分类信息
+                        latitude = dec_lat
+                        longitude = dec_lon
+                        location_text = formatted_address
+                        
+                        # 简单的区域标签生成
+                        if latitude is not None and longitude is not None:
+                            if 32 <= latitude <= 42 and 110 <= longitude <= 122:
+                                region_label = "华北地区"
+                            elif 23 <= latitude <= 32 and 108 <= longitude <= 123:
+                                region_label = "华南地区"
+                            elif 32 <= latitude <= 40 and 105 <= longitude <= 115:
+                                region_label = "西北地区"
+                            elif 42 <= latitude <= 53 and 120 <= longitude <= 135:
+                                region_label = "东北地区"
+                            else:
+                                region_label = "其他地区"
+                        print(f"获取到GPS信息: {formatted_address}")
+                    except Exception as e:
+                        print(f"处理GPS信息时出错: {e}")
+                else:
+                    print("未找到完整的GPS信息")
+            
+            # 删除临时文件
+            os.remove(temp_file_path)
+        except Exception as e:
+            print(f"提取图片EXIF信息失败: {e}")
+            import traceback
+            traceback.print_exc()
+            # 出错时保持初始值，不使用当前时间
+            shoot_time = "未获取到"
+            shoot_year = None
+            shoot_month = None
+            shoot_season = "未获取到"
+            print("保持初始值，未获取到拍摄时间")
 
     # 优化：降低图片分辨率以提升识别速度
     # 将图片缩放到最大640px，保持宽高比
@@ -810,25 +1092,9 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
         image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
         print(f"图片已缩放: {original_width}x{original_height} -> {new_width}x{new_height}")
     
-    # 使用YOLOv5模型进行植物花卉识别
-    model_results = flower_model(image)
-    
-    # 解析识别结果
+    # 暂时禁用YOLOv5模型调用，只使用百度AI进行一级分类
+    model_results = None
     results = []
-    for result in model_results.pandas().xyxy[0].to_dict(orient='records'):
-        english_name = result['name']
-        chinese_name = get_flower_name_cn(english_name)
-        results.append({
-            'name': chinese_name,
-            'name_en': english_name,
-            'confidence': round(result['confidence'], 4),
-            'bbox': [
-                int(result['xmin']),
-                int(result['ymin']),
-                int(result['xmax']),
-                int(result['ymax'])
-            ]
-        })
     
     # 处理识别结果：只保留置信度最高的结果
     detection_results = []
@@ -836,30 +1102,214 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
     confidence = 0.0
     classification_tags = []
     final_category = "未识别"
+    print("已禁用YOLOv5模型，只使用百度AI进行一级分类")
     
-    if results:
-        # 按置信度降序排序
-        results.sort(key=lambda x: x['confidence'], reverse=True)
-        # 只添加置信度最高的结果
-        top_result = results[0]
-        detection_results.append({
-            'name': top_result['name'],
-            'name_en': top_result.get('name_en', ''),
-            'confidence': float(top_result['confidence']),
-            'bbox': top_result['bbox']
-        })
-        flower_type = top_result['name']
-        confidence = top_result['confidence']
-        
-        # 生成分类标签
-        classification_tags = [flower_type]
-        if shoot_season != "未获取到":
-            classification_tags.append(shoot_season)
-        if region_label != "未获取到":
-            classification_tags.append(region_label)
-        
-        # 生成最终分类
-        final_category = "-".join(classification_tags)
+    # 调用百度AI进行一级分类
+    primary_category = "物"  # 默认分类
+    try:
+        # 检查百度AI客户端是否初始化成功
+        if client is None:
+            print("百度AI客户端未初始化，使用默认分类")
+            primary_category = "物"
+        else:
+            # 1. 图片预处理：对图片进行压缩，减少内存使用
+            # 进一步压缩图片，确保大小合适
+            max_size = 480  # 进一步减小尺寸，减少内存占用
+            original_width, original_height = image.size
+            if max(original_width, original_height) > max_size:
+                ratio = max_size / max(original_width, original_height)
+                new_width = int(original_width * ratio)
+                new_height = int(original_height * ratio)
+                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                print(f"百度AI分类前图片已进一步缩放: {original_width}x{original_height} -> {new_width}x{new_height}")
+            
+            # 2. 准备图片数据
+            buffered = io.BytesIO()
+            # 保存为JPEG格式，质量设为75，进一步减少文件大小
+            image.save(buffered, format="JPEG", quality=75)
+            image_data = buffered.getvalue()
+            print(f"百度AI分类图片大小: {len(image_data) / 1024:.2f}KB")
+            
+            # 3. 先调用百度AI通用图像分类API，识别一级分类
+            max_retries = 3
+            retry_delay = 1
+            general_response = None
+            
+            for retry in range(max_retries):
+                try:
+                    start_time = time.time()
+                    # 调用通用图像分类API
+                    general_response = baidu_image_classify(image_data)
+                    end_time = time.time()
+                    print(f"百度AI通用分类结果: {general_response}")
+                    print(f"百度AI通用分类耗时: {end_time - start_time:.2f}秒")
+                    break  # 成功获取响应，跳出重试循环
+                except Exception as e:
+                    print(f"百度AI通用分类失败: {str(e)}")
+                    if retry < max_retries - 1:
+                        print(f"正在重试 ({retry + 1}/{max_retries})...")
+                        time.sleep(retry_delay)
+                    else:
+                        # 通用分类失败，继续使用植物识别
+                        break
+            
+            # 4. 处理通用分类结果
+            if general_response and 'result' in general_response and len(general_response['result']) > 0:
+                # 获取第一个分类结果
+                top_general = general_response['result'][0]
+                general_name = top_general.get('keyword', '')
+                general_score = top_general.get('score', 0)
+                
+                print(f"通用分类结果: {general_name}, 置信度: {general_score}")
+                
+                # 检查是否有花卉相关的分类结果
+                is_flower = False
+                for item in general_response['result']:
+                    item_keyword = item.get('keyword', '')
+                    item_score = item.get('score', 0)
+                    # 打印每个分类结果，用于调试
+                    print(f"检查分类结果: {item_keyword}, 置信度: {item_score}")
+                    # 降低置信度阈值，因为屏幕截图的识别置信度通常较低
+                    if item_score > 0.3 and any(keyword in item_keyword for keyword in ['花', '花卉', 'flower', 'blossom', '植物', 'plant']):
+                        is_flower = True
+                        print(f"发现花卉相关分类: {item_keyword}, 置信度: {item_score}")
+                        break
+                # 额外检查root字段，因为有些花卉分类可能在root中
+                if not is_flower:
+                    for item in general_response['result']:
+                        item_root = item.get('root', '')
+                        item_score = item.get('score', 0)
+                        if item_score > 0.3 and any(keyword in item_root for keyword in ['花', '花卉', 'flower', 'blossom', '植物', 'plant']):
+                            is_flower = True
+                            print(f"从root发现花卉相关分类: {item_root}, 置信度: {item_score}")
+                            break
+                
+                # 如果发现花卉相关分类，直接使用植物识别API
+                if is_flower:
+                    print("发现花卉相关分类，使用植物识别API")
+                    # 调用百度AI植物识别API
+                    plant_response = None
+                    
+                    for retry in range(max_retries):
+                        try:
+                            start_time = time.time()
+                            # 启用百度AI调用
+                            plant_response = baidu_flower_recognize(image_data)
+                            end_time = time.time()
+                            print(f"百度AI植物分类结果: {plant_response}")
+                            print(f"百度AI植物分类耗时: {end_time - start_time:.2f}秒")
+                            break  # 成功获取响应，跳出重试循环
+                        except Exception as e:
+                            print(f"百度AI植物分类失败: {str(e)}")
+                            if retry < max_retries - 1:
+                                print(f"正在重试 ({retry + 1}/{max_retries})...")
+                                time.sleep(retry_delay)
+                            else:
+                                raise
+                    
+                    # 处理植物识别结果
+                    if plant_response and 'result' in plant_response and len(plant_response['result']) > 0:
+                        primary_category = "花卉"
+                        # 将植物识别结果添加到detection_results
+                        for item in plant_response['result']:
+                            detection_results.append({
+                                'name': item.get('name', ''),
+                                'confidence': item.get('score', 0),
+                                'bbox': [0, 0, 640, 640],  # 全屏框
+                                'category': 'flower'
+                            })
+                        print(f"添加植物识别结果到detection_results: {detection_results}")
+                    else:
+                        primary_category = "物"
+                else:
+                    # 根据通用分类结果确定一级分类
+                    # 人
+                    if any(keyword in general_name for keyword in ['人', '人物', '人像', 'person', 'people']):
+                        primary_category = "人"
+                    # 建筑
+                    elif any(keyword in general_name for keyword in ['建筑', '建筑物', '建筑结构', 'building', 'architecture']):
+                        primary_category = "建筑"
+                    # 风景
+                    elif any(keyword in general_name for keyword in ['风景', '自然', '山水', 'landscape', 'scenery', 'nature']):
+                        primary_category = "风景"
+                    # 其他都归为物
+                    else:
+                        primary_category = "物"
+            else:
+                # 通用分类失败或无结果，使用植物识别
+                print("通用分类失败，使用植物识别")
+                # 调用百度AI植物识别API
+                plant_response = None
+                
+                for retry in range(max_retries):
+                    try:
+                        start_time = time.time()
+                        # 启用百度AI调用
+                        plant_response = baidu_flower_recognize(image_data)
+                        end_time = time.time()
+                        print(f"百度AI植物分类结果: {plant_response}")
+                        print(f"百度AI植物分类耗时: {end_time - start_time:.2f}秒")
+                        break  # 成功获取响应，跳出重试循环
+                    except Exception as e:
+                        print(f"百度AI植物分类失败: {str(e)}")
+                        if retry < max_retries - 1:
+                            print(f"正在重试 ({retry + 1}/{max_retries})...")
+                            time.sleep(retry_delay)
+                        else:
+                            raise
+                
+                # 处理植物识别结果
+                if plant_response and 'result' in plant_response and len(plant_response['result']) > 0:
+                    primary_category = "花卉"
+                    # 将植物识别结果添加到detection_results
+                    for item in plant_response['result']:
+                        detection_results.append({
+                            'name': item.get('name', ''),
+                            'confidence': item.get('score', 0),
+                            'bbox': [0, 0, 640, 640],  # 全屏框
+                            'category': 'flower'
+                        })
+                    print(f"添加植物识别结果到detection_results: {detection_results}")
+                else:
+                    primary_category = "物"
+    except socket.timeout:
+        print("百度AI分类超时")
+        # 超时失败时，使用默认分类
+        primary_category = "物"
+    except Exception as e:
+        print(f"百度AI分类失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # 其他错误时，使用默认分类
+        primary_category = "物"
+    
+    # 输出最终分类结果
+    print(f"最终一级分类: {primary_category}")
+    
+    # 实现一级分类逻辑，因为已禁用YOLOv5模型
+    # 一级分类：百度AI识别的结果（人、物、建筑、风景、花卉）
+    # 二级分类：与一级分类相同，因为没有YOLOv5的具体识别结果
+    secondary_category = primary_category
+    flower_type = primary_category
+    confidence = 0.0
+    
+    # 生成分类标签
+    classification_tags = [primary_category, secondary_category]
+    if shoot_season != "未获取到":
+        classification_tags.append(shoot_season)
+    if region_label != "未获取到":
+        classification_tags.append(region_label)
+    
+    # 生成最终分类
+    final_category = "-".join(classification_tags)
+    print(f"分类标签: {classification_tags}")
+    print(f"最终分类: {final_category}")
+    
+    # 计算三级分类
+    flower_name = None
+    if detection_results:
+        flower_name = detection_results[0].get('name', '未识别')
+    level1, level2, level3 = calculate_categories(flower_name, shoot_time, None)
     
     # 更新image_info
     image_info['date_time'] = shoot_time
@@ -879,10 +1329,21 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
         'location_text': location_text,
         'region_label': region_label,
         'classification_tags': classification_tags,
-        'final_category': final_category
+        'final_category': final_category,
+        'primary_category': primary_category,
+        'secondary_category': secondary_category,
+        'level1_category': level1,
+        'level2_category': level2,
+        'level3_category': level3
     }
     
     print(f"[DEBUG] 保存检查: save_to_album={save_to_album}, user_id={user_id}, 条件满足={save_to_album and user_id}")
+    
+    # 再次检查save_to_album是否为True但user_id为None
+    if save_to_album and not user_id:
+        print("保存到相册需要登录")
+        return_result['save_error'] = '保存到相册需要登录，请先登录'
+        return return_result
     
     if save_to_album and user_id:
         print(f"开始保存到相册: save_to_album={save_to_album}, user_id={user_id}, detection_results={detection_results}")
@@ -893,13 +1354,17 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
             if detection_results:
                 flower_name = detection_results[0]['name']
                 confidence = detection_results[0]['confidence']
-                final_category = flower_name
+                primary_category = "花卉"
+                secondary_category = flower_name
+                final_category = f"{primary_category}-{secondary_category}"
             else:
-                flower_name = "未知花卉"
+                flower_name = "未识别"
                 confidence = 0.0
-                final_category = "未知"
+                primary_category = "物"
+                secondary_category = "未识别"
+                final_category = f"{primary_category}-{secondary_category}"
             
-            # 2. 保存图片文件
+            # 2. 保存图片文件（使用原始图片数据）
             timestamp = int(time.time())
             image_filename = f"recognition_{user_id}_{timestamp}.jpg"
             uploads_dir = os.path.join(BASE_DIR, 'static', 'uploads', 'recognition')
@@ -907,7 +1372,7 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
             image_path = os.path.join(uploads_dir, image_filename)
             
             with open(image_path, 'wb') as f:
-                f.write(image_bytes)
+                f.write(original_image_bytes)
             
             relative_path = f"/static/uploads/recognition/{image_filename}"
             print(f"保存图片成功, relative_path={relative_path}")
@@ -928,42 +1393,117 @@ def process_single_image(image_data, user_id=None, save_to_album=False):
             result_id = save_recognition_result(
                 user_id,
                 relative_path,
-                flower_name,
+                flower_name,  # result参数
                 confidence,
-                shoot_time=shoot_time,
-                shoot_year=shoot_year,
-                shoot_month=shoot_month,
-                shoot_season=shoot_season,
-                latitude=latitude,
-                longitude=longitude,
-                location_text=location_text,
-                region_label=region_label,
-                final_category=final_category,
-                camera_make=camera_make,
-                camera_model=camera_model,
-                image_width=image_width,
-                image_height=image_height,
-                created_at=recognition_timestamp
+                shoot_time,
+                shoot_year,
+                shoot_month,
+                shoot_season,
+                latitude,
+                longitude,
+                location_text,
+                region_label,
+                final_category,
+                level1,
+                level2,
+                level3,
+                camera_make,
+                camera_model,
+                image_width,
+                image_height,
+                recognition_timestamp
             )
             print(f"保存识别结果成功, result_id={result_id}")
             
             # 4. 处理相册逻辑
             album = None
-            if detection_results:
-                # 有识别结果，尝试按花卉分类保存
-                print(f"获取用户相册: user_id={user_id}, flower_name={flower_name}")
-                albums = get_user_albums(user_id, flower_name)
-                print(f"获取到相册: {albums}")
-                
-                if albums:
-                    album = albums[0]
-                    print(f"使用现有相册: {album}")
-                else:
-                    print(f"创建新相册: user_id={user_id}, name={flower_name}相册, category={flower_name}")
-                    album_id = create_album(user_id, f"{flower_name}相册", flower_name)
-                    print(f"创建相册成功, album_id={album_id}")
-                    album = get_album_by_id(album_id, user_id)
-                    print(f"获取新相册: {album}")
+            # 无论有无识别结果，都按日期创建一级相册
+            print(f"按日期创建一级相册: user_id={user_id}, shoot_time={shoot_time}")
+            if shoot_year and shoot_month and shoot_time:
+                try:
+                    # 从拍摄时间提取完整日期
+                    date_part = shoot_time.split(' ')[0]
+                    if ':' in date_part:
+                        year, month, day = map(int, date_part.split(':'))
+                        # 一级相册：日期相册
+                        date_album_name = f"{year}年{month}月{day}日相册"
+                        date_category = f"{year}年{month}月{day}日"
+                        print(f"创建日期一级相册: user_id={user_id}, name={date_album_name}, category={date_category}")
+                        
+                        # 尝试获取现有日期相册
+                        date_albums = get_user_albums(user_id, date_category)
+                        print(f"获取到日期相册: {date_albums}")
+                        
+                        date_album = None
+                        if date_albums:
+                            date_album = date_albums[0]
+                            print(f"使用现有日期相册: {date_album}")
+                        else:
+                            # 创建新的日期相册
+                            date_album_id = create_album(user_id, date_album_name, date_category)
+                            print(f"创建日期相册成功, album_id={date_album_id}")
+                            date_album = get_album_by_id(date_album_id, user_id)
+                            print(f"获取新日期相册: {date_album}")
+                        
+                        # 二级分类：根据识别结果判断
+                        if detection_results:
+                            # 有识别结果，创建/使用二级分类相册
+                            print(f"有识别结果，创建二级分类相册: level2={level2}")
+                            # 二级相册：分类相册
+                            level2_album_name = f"{date_category} - {level2}"
+                            level2_category = level2
+                            print(f"创建二级分类相册: user_id={user_id}, name={level2_album_name}, category={level2_category}")
+                            
+                            # 尝试获取现有二级分类相册
+                            level2_albums = get_user_albums(user_id, level2_category)
+                            print(f"获取到二级分类相册: {level2_albums}")
+                            
+                            level2_album = None
+                            if level2_albums:
+                                level2_album = level2_albums[0]
+                                print(f"使用现有二级分类相册: {level2_album}")
+                            else:
+                                # 创建新的二级分类相册
+                                level2_album_id = create_album(user_id, level2_album_name, level2_category)
+                                print(f"创建二级分类相册成功, album_id={level2_album_id}")
+                                level2_album = get_album_by_id(level2_album_id, user_id)
+                                print(f"获取新二级分类相册: {level2_album}")
+                            
+                            # 三级分类：仅当二级是花卉时，创建/使用三级分类相册
+                            if level2 == "花卉" and level3:
+                                print(f"二级分类是花卉，创建三级分类相册: level3={level3}")
+                                # 三级相册：花卉名称相册
+                                level3_album_name = f"{date_category} - {level2} - {level3}"
+                                level3_category = level3
+                                print(f"创建三级分类相册: user_id={user_id}, name={level3_album_name}, category={level3_category}")
+                                
+                                # 尝试获取现有三级分类相册
+                                level3_albums = get_user_albums(user_id, level3_category)
+                                print(f"获取到三级分类相册: {level3_albums}")
+                                
+                                if level3_albums:
+                                    album = level3_albums[0]
+                                    print(f"使用现有三级分类相册: {album}")
+                                else:
+                                    # 创建新的三级分类相册
+                                    level3_album_id = create_album(user_id, level3_album_name, level3_category)
+                                    print(f"创建三级分类相册成功, album_id={level3_album_id}")
+                                    album = get_album_by_id(level3_album_id, user_id)
+                                    print(f"获取新三级分类相册: {album}")
+                            else:
+                                # 非花卉或无三级分类，使用二级分类相册
+                                album = level2_album
+                                print(f"使用二级分类相册: {album}")
+                        else:
+                            # 无识别结果，使用日期相册
+                            album = date_album
+                            print(f"无识别结果，使用日期相册: {album}")
+                except Exception as e:
+                    print(f"处理相册逻辑失败: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # 出错时使用默认相册
+                    album = None
             
             # 5. 添加图片到相册（如果没有相册，add_image_to_album会自动创建默认相册）
             album_id = album['id'] if album else None
