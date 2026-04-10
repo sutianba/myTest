@@ -409,10 +409,11 @@ class SQLDatabaseManager:
             
             print(f"[DB] 保存识别结果: user_id={user_id}, image_path={image_path}, result={result}, confidence={confidence}, created_at={created_at}")
             
-            # 处理 created_at 参数，确保是整数时间戳
+            # 处理 created_at 参数，确保是整数时间戳（北京时间，UTC+8）
             if created_at is None:
-                # 没有提供，使用当前时间戳（秒）
-                created_at_int = int(time.time())
+                # 没有提供，使用当前北京时间戳（秒）
+                # 北京时间 = UTC时间 + 8小时
+                created_at_int = int(time.time()) + 8 * 3600
             elif isinstance(created_at, int):
                 # 是整数时间戳，直接使用
                 created_at_int = created_at
@@ -421,10 +422,10 @@ class SQLDatabaseManager:
                 try:
                     created_at_int = int(created_at)
                 except:
-                    # 转换失败，使用当前时间戳
-                    created_at_int = int(time.time())
+                    # 转换失败，使用当前北京时间戳
+                    created_at_int = int(time.time()) + 8 * 3600
             
-            print(f"[DB] 使用的created_at时间戳: {created_at_int}")
+            print(f"[DB] 使用的created_at时间戳(北京时间): {created_at_int}")
             
             try:
                 cursor.execute('''
@@ -1679,16 +1680,16 @@ class SQLDatabaseManager:
                 print(f"[DB] 相册不存在或已被删除: album_id={album_id}")
                 return False
             
-            # 2. 获取相册中的图片数量
+            # 2. 获取相册中的所有图片
             cursor.execute(
-                "SELECT COUNT(*) as count FROM album_images WHERE album_id = %s AND deleted_at IS NULL",
+                "SELECT * FROM album_images WHERE album_id = %s AND deleted_at IS NULL",
                 (album_id,)
             )
-            image_count = cursor.fetchone()['count']
+            images = cursor.fetchall()
+            image_count = len(images)
             
             # 3. 将相册信息保存到回收站
             import json
-            from datetime import datetime
             album_data = {
                 'name': album['name'],
                 'category': album.get('category', ''),
@@ -1704,14 +1705,37 @@ class SQLDatabaseManager:
             recycle_id = cursor.lastrowid
             print(f"[DB] 相册已移入回收站: album_id={album_id}, recycle_id={recycle_id}")
             
-            # 4. 软删除相册（更新 deleted_at 字段）
-            now_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # 4. 将相册中的图片和识别记录保存到回收站
+            for image in images:
+                # 保存图片到回收站
+                image_data = {
+                    'image_name': image.get('image_name', ''),
+                    'image_path': image.get('image_path', ''),
+                    'image_description': image.get('image_description', ''),
+                    'album_id': image.get('album_id', '')
+                }
+                cursor.execute(
+                    "INSERT INTO recycle_bin (user_id, item_type, original_id, item_data, deleted_at) VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, 'image', image['id'], json.dumps(image_data), now)
+                )
+                print(f"[DB] 图片已移入回收站: image_id={image['id']}")
+                
+                # 尝试获取并保存对应的识别记录到回收站
+                try:
+                    # 假设图片路径包含识别结果ID或其他标识符
+                    # 这里简化处理，实际应用中可能需要更复杂的逻辑
+                    # 例如从图片路径中提取识别结果ID，或者通过其他方式关联
+                    pass
+                except Exception as e:
+                    print(f"[DB] 保存识别记录到回收站失败: {str(e)}")
+            
+            # 5. 软删除相册（更新 deleted_at 字段）
             cursor.execute(
                 "UPDATE albums SET deleted_at = %s, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
-                (now, now_datetime, album_id, user_id)
+                (now, now, album_id, user_id)
             )
             
-            # 5. 同时软删除相册中的所有图片
+            # 6. 同时软删除相册中的所有图片
             cursor.execute(
                 "UPDATE album_images SET deleted_at = %s WHERE album_id = %s AND deleted_at IS NULL",
                 (now, album_id)
@@ -1742,16 +1766,15 @@ class SQLDatabaseManager:
             image_name = os.path.basename(image_path)
             image_description = f"{flower_name} - 识别置信度：{confidence:.2f}" if flower_name and confidence else ""
             
-            # 1. 检查是否存在重复的识别结果
-            if recognition_result_id:
-                cursor.execute(
-                    "SELECT id FROM album_images WHERE recognition_result_id = %s AND deleted_at IS NULL",
-                    (recognition_result_id,)
-                )
-                if cursor.fetchone():
-                    # 已存在，避免重复插入
-                    print(f"[DB] 识别结果 {recognition_result_id} 已存在于相册中，跳过重复插入")
-                    return None
+            # 1. 检查是否存在重复的图片（在同一相册中）
+            cursor.execute(
+                "SELECT id FROM album_images WHERE album_id = %s AND image_path = %s AND deleted_at IS NULL",
+                (album_id, image_path)
+            )
+            if cursor.fetchone():
+                # 已存在于该相册，避免重复插入
+                print(f"[DB] 图片 {image_path} 已存在于相册 {album_id} 中，跳过重复插入")
+                return None
             
             # 2. 确保有相册ID，如果没有则创建默认相册
             if not album_id:
@@ -1833,11 +1856,18 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            # 不关联识别结果表，直接查询相册图片
+            # 关联识别结果表，获取完整信息
             cursor.execute("""
                 SELECT 
-                    ai.*
+                    ai.*, 
+                    rr.shoot_time, 
+                    rr.location_text, 
+                    rr.camera_make, 
+                    rr.camera_model, 
+                    rr.image_width, 
+                    rr.image_height
                 FROM album_images ai
+                LEFT JOIN recognition_results rr ON ai.image_path = rr.image_path
                 WHERE ai.album_id = %s AND ai.deleted_at IS NULL
                 ORDER BY ai.created_at DESC
                 LIMIT %s OFFSET %s

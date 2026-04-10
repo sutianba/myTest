@@ -1997,7 +1997,7 @@
     <div class="container">
         <!-- 导航栏 -->
         <nav class="navbar">
-            <a href="#" class="navbar-brand">🌸 植物花卉识别工具</a>
+            <a href="#" class="navbar-brand">🌸 园艺相册自动分类工具</a>
             <ul class="navbar-nav">
                 <li class="nav-item"><a href="#" class="nav-link" data-page="home">首页</a></li>
                 <li class="nav-item"><a href="#" class="nav-link" data-page="community">社区</a></li>
@@ -2037,8 +2037,8 @@
         <!-- 首页 -->
         <div class="page active" id="home">
             <div class="header">
-                <h1>🌸 植物花卉识别工具</h1>
-                <p>上传图片，智能识别花卉种类</p>
+                <h1>🌸 园艺相册自动分类工具</h1>
+                <p>上传图片，智能识别并自动分类到园艺相册</p>
             </div>
 
             <div class="main-content">
@@ -2131,6 +2131,10 @@
                 <div id="albumsOverview" style="display: block;">
                     <!-- 顶部工具栏 -->
                     <div class="albums-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                        <!-- 返回按钮 -->
+                        <button id="backToParentAlbum" style="padding: 8px 16px; border: none; border-radius: 20px; background-color: #1976d2; color: white; cursor: pointer; font-size: 14px; display: none;">
+                            ← 返回上一级
+                        </button>
                         <!-- 搜索框 -->
                         <div style="flex: 1; min-width: 250px;">
                             <input type="text" id="albumSearch" placeholder="搜索相册..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 20px; font-size: 14px;">
@@ -2193,6 +2197,52 @@
             <div class="history-page">
                 <h2>📜 历史识别记录</h2>
                 <p>查看您的历史识别数据</p>
+                
+                <!-- 历史记录导航栏 -->
+                <div class="history-filter-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+                    <!-- 搜索框 -->
+                    <div style="flex: 1; margin-right: 15px;">
+                        <input type="text" id="historySearch" placeholder="搜索历史记录..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 20px; font-size: 14px;">
+                    </div>
+                    
+                    <!-- 分类筛选 -->
+                    <div style="margin-right: 15px;">
+                        <select id="historyCategoryFilter" style="padding: 10px; border: 1px solid #ddd; border-radius: 20px; font-size: 14px; background-color: white;">
+                            <option value="all">所有分类</option>
+                            <option value="人">人</option>
+                            <option value="物">物</option>
+                            <option value="建筑">建筑</option>
+                            <option value="风景">风景</option>
+                            <option value="花">花</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                    
+                    <!-- 批量操作按钮 -->
+                    <div>
+                        <button class="btn btn-danger" id="batchDeleteHistoryBtn" style="padding: 10px 15px; border: none; border-radius: 20px; background-color: #dc3545; color: white; cursor: pointer; font-size: 14px;" disabled>
+                            🗑️ 批量删除
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 批量操作栏 -->
+                <div class="history-batch-bar" id="historyBatchBar" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; display: none;">
+                    <div class="batch-info">
+                        <input type="checkbox" id="selectAllHistory" style="margin-right: 8px;">
+                        <label for="selectAllHistory" style="cursor: pointer;">全选</label>
+                        <span id="historySelectedCount" style="margin-left: 15px; color: #666;">已选择 0 项</span>
+                    </div>
+                    <div class="batch-actions">
+                        <button class="btn btn-secondary" id="cancelBatchDeleteHistoryBtn" style="padding: 8px 15px; border: none; border-radius: 20px; background-color: #6c757d; color: white; cursor: pointer; font-size: 14px; margin-right: 10px;">
+                            ❌ 取消
+                        </button>
+                        <button class="btn btn-danger" id="confirmBatchDeleteHistoryBtn" style="padding: 8px 15px; border: none; border-radius: 20px; background-color: #dc3545; color: white; cursor: pointer; font-size: 14px;">
+                            🗑️ 确认批量删除
+                        </button>
+                    </div>
+                </div>
+                
                 <div id="historyList"></div>
             </div>
         </div>
@@ -3232,7 +3282,7 @@
                             has_location: true,
                             latitude: lat,
                             longitude: lon,
-                            formatted_address: 'GPS信息已获取', // 后端会替换为具体地址
+                            formatted_address: `${lat.toFixed(6)}, ${lon.toFixed(6)}`, // 直接显示GPS坐标
                             raw_gps: {
                                 lat_ref: gpsLatitudeRef,
                                 lat: gpsLatitude,
@@ -3708,7 +3758,7 @@
                 console.log("albums状态:", response.status);
                 
                 if (response.status === 401) {
-                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('token');
                     albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">登录已失效，请重新登录</p>';
                     return;
                 }
@@ -3717,6 +3767,16 @@
                 console.log(data);
                 
                 if (data.success) {
+                    // 提取二级分类
+                    const level2Categories = extractLevel2Categories(data.albums);
+                    // 更新分类过滤器
+                    updateCategoryFilter(level2Categories);
+                    
+                    // 重置相册路径
+                    window.albumPath = [];
+                    // 隐藏返回按钮
+                    document.getElementById('backToParentAlbum').style.display = 'none';
+                    // 显示根级相册
                     displayAlbums(data.albums);
                 } else {
                     albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">加载失败，请稍后重试</p>';
@@ -3726,20 +3786,93 @@
                 albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">服务器异常，请稍后重试</p>';
             }
         }
+        
+        // 提取二级分类
+        function extractLevel2Categories(albums) {
+            // 预设的二级分类
+            const presetCategories = ['人', '物', '建筑', '风景', '花', '其他'];
+            const categories = new Set(presetCategories);
+            
+            // 从现有相册中提取分类，确保不遗漏
+            albums.forEach(album => {
+                // 检查是否是二级相册（有父相册）
+                if (album.parent_id) {
+                    categories.add(album.category);
+                }
+            });
+            
+            return Array.from(categories).sort();
+        }
+        
+        // 更新分类过滤器
+        function updateCategoryFilter(categories) {
+            const filter = document.getElementById('albumCategoryFilter');
+            // 保存当前选中的值
+            const currentValue = filter.value;
+            
+            // 清空现有选项
+            filter.innerHTML = '';
+            // 添加默认选项
+            const allOption = document.createElement('option');
+            allOption.value = 'all';
+            allOption.textContent = '所有分类';
+            filter.appendChild(allOption);
+            
+            // 添加二级分类选项
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                // 保持当前选中的值
+                if (option.value === currentValue) {
+                    option.selected = true;
+                }
+                filter.appendChild(option);
+            });
+        }
 
         // 显示相册
-        function displayAlbums(albums) {
+        function displayAlbums(albums, parentId = null) {
             const albumsList = document.getElementById('albumsList');
             albumsList.innerHTML = '';
 
-            if (albums.length === 0) {
-                albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">暂无相册，识别花卉并保存到相册后将自动创建</p>';
+            // 过滤出当前父相册的子相册
+            let filteredAlbums = albums.filter(album => album.parent_id === parentId);
+            
+            // 应用分类过滤
+            const selectedCategory = document.getElementById('albumCategoryFilter').value;
+            if (selectedCategory !== 'all') {
+                // 过滤出包含选定分类的相册
+                filteredAlbums = filteredAlbums.filter(album => {
+                    // 对于一级相册，检查其子相册是否包含选定分类
+                    if (album.parent_id === null) {
+                        return albums.some(childAlbum => 
+                            childAlbum.parent_id === album.id && 
+                            childAlbum.category === selectedCategory
+                        );
+                    }
+                    // 对于二级及以下相册，直接检查其分类
+                    return album.category === selectedCategory;
+                });
+            }
+
+            if (filteredAlbums.length === 0) {
+                if (parentId === null) {
+                    // 根级相册为空
+                    albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">暂无相册，识别花卉并保存到相册后将自动创建</p>';
+                } else {
+                    // 子相册为空
+                    albumsList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #999;">该相册下暂无子相册</p>';
+                }
                 return;
             }
 
-            albums.forEach(album => {
+            filteredAlbums.forEach(album => {
                 // 确定相册类型（系统分类或用户自定义）
                 const isSystemAlbum = album.category && album.category !== 'custom';
+                
+                // 检查当前相册是否有子相册
+                const hasChildAlbums = albums.some(a => a.parent_id === album.id);
                 
                 // 创建相册卡片
                 const albumCard = document.createElement('div');
@@ -3770,7 +3903,8 @@
                 if (coverImage && coverImage.startsWith('/')) {
                     coverImage = window.location.origin + coverImage;
                 }
-                const updatedAt = new Date(album.updated_at).toLocaleString();
+                // 确保 updated_at 是数字并转换为毫秒级时间戳
+                const updatedAt = new Date(parseInt(album.updated_at) * 1000).toLocaleString();
                 
                 albumCard.innerHTML = `
                     <div style="height: 180px; overflow: hidden; position: relative;">
@@ -3782,6 +3916,9 @@
                             onmouseout="this.style.backgroundColor='rgba(220, 53, 69, 0.9)';">
                             ×
                         </button>
+                        ${hasChildAlbums ? 
+                            '<div style="position: absolute; bottom: 10px; right: 10px; padding: 4px 12px; background-color: rgba(0, 0, 0, 0.7); color: white; border-radius: 15px; font-size: 12px;">有子相册</div>' : ''
+                        }
                     </div>
                     <div style="padding: 15px;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
@@ -3798,12 +3935,49 @@
                 
                 // 点击卡片查看详情
                 albumCard.onclick = function() {
-                    viewAlbumDetail(album.id);
+                    if (hasChildAlbums) {
+                        // 有子相册，显示子相册
+                        displayAlbums(albums, album.id);
+                        // 保存当前相册路径
+                        if (!window.albumPath) {
+                            window.albumPath = [];
+                        }
+                        window.albumPath.push({ id: album.id, name: album.name });
+                        // 显示返回按钮
+                        document.getElementById('backToParentAlbum').style.display = 'block';
+                    } else {
+                        // 无子相册，显示相册详情
+                        viewAlbumDetail(album.id);
+                    }
                 };
                 
                 albumsList.appendChild(albumCard);
             });
         }
+        
+        // 初始化返回按钮
+        document.getElementById('backToParentAlbum').onclick = function() {
+            if (window.albumPath && window.albumPath.length > 0) {
+                // 移除当前相册
+                window.albumPath.pop();
+                // 获取父相册ID
+                const parentId = window.albumPath.length > 0 ? window.albumPath[window.albumPath.length - 1].id : null;
+                // 重新加载相册
+                loadAlbums();
+                // 如果回到根级，隐藏返回按钮
+                if (window.albumPath.length === 0) {
+                    document.getElementById('backToParentAlbum').style.display = 'none';
+                }
+            }
+        };
+        
+        // 分类过滤器变化事件
+        document.getElementById('albumCategoryFilter').addEventListener('change', function() {
+            const selectedCategory = this.value;
+            console.log('Selected category:', selectedCategory);
+            // 重新加载相册，应用过滤
+            loadAlbums();
+        });
         
         // 查看相册详情
         async function viewAlbumDetail(albumId) {
@@ -3829,7 +4003,7 @@
                 console.log('响应状态码:', response.status);
                 
                 if (response.status === 401) {
-                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('token');
                     alert('登录已失效，请重新登录');
                     return;
                 }
@@ -3888,6 +4062,7 @@
 
             if (images && images.length > 0) {
                 images.forEach(img => {
+                    console.log('图片信息:', img); // 添加这行代码来查看图片信息
                     const card = createAlbumImageCard(img, albumId);
                     imagesGrid.appendChild(card);
                 });
@@ -3910,10 +4085,15 @@
             // 解析花卉名称和置信度
             const imageDescription = img.image_description || '';
             const parts = imageDescription.split(' - ');
-            const flowerName = parts[0] || '未知花卉';
+            let flowerName = parts[0] || '';
             let confidence = '';
             if (parts.length > 1 && parts[1].includes('置信度：')) {
                 confidence = parts[1].split('置信度：')[1];
+            }
+            
+            // 如果没有花卉名称，使用当前相册的分类作为名称
+            if (!flowerName || flowerName === '未知花卉') {
+                flowerName = window.currentAlbum?.category || '未分类';
             }
 
             // 处理图片路径
@@ -3994,11 +4174,39 @@
         
         // 删除相册
         async function deleteAlbum(albumId, albumName) {
-            if (!confirm(`确定要删除相册 "${albumName}" 吗？\n\n注意：删除相册将同时删除相册中的所有图片，此操作不可恢复！`)) {
+            console.log(`[DEBUG] deleteAlbum 函数开始执行: albumId=${albumId}, albumName=${albumName}`);
+            
+            // 显示确认对话框
+            console.log('[DEBUG] 准备显示确认对话框');
+            
+            // 处理 confirm 可能返回 Promise 的情况
+            let userConfirmed;
+            try {
+                const confirmResult = window.confirm(`确定要删除相册 "${albumName}" 吗？\n\n注意：删除相册将同时删除相册中的所有图片，此操作不可恢复！`);
+                
+                // 检查是否是 Promise
+                if (confirmResult instanceof Promise) {
+                    console.log('[DEBUG] confirm 返回的是 Promise');
+                    userConfirmed = await confirmResult;
+                } else {
+                    console.log('[DEBUG] confirm 返回的是直接值');
+                    userConfirmed = confirmResult;
+                }
+            } catch (error) {
+                console.error('[DEBUG] confirm 执行出错:', error);
+                // 如果出错，默认取消操作
+                userConfirmed = false;
+            }
+            
+            console.log(`[DEBUG] 最终确认结果: ${userConfirmed}`);
+            
+            // 如果用户点击取消，直接返回，不执行删除操作
+            if (!userConfirmed) {
+                console.log('[DEBUG] 用户点击了取消，函数返回');
                 return;
             }
             
-            console.log(`[DEBUG] 开始删除相册: albumId=${albumId}, albumName=${albumName}`);
+            console.log(`[DEBUG] 用户点击了确认，开始执行删除操作: albumId=${albumId}, albumName=${albumName}`);
             
             try {
                 const token = getToken();
@@ -4069,7 +4277,7 @@
             select.innerHTML = '<option value="">请选择目标相册...</option>';
 
             try {
-                const token = localStorage.getItem('auth_token');
+                const token = getToken();
                 if (!token) return;
 
                 const response = await fetch('/api/albums', {
@@ -4109,7 +4317,7 @@
             }
 
             try {
-                const token = localStorage.getItem('auth_token');
+                const token = getToken();
                 if (!token) {
                     alert('请先登录');
                     return;
@@ -4161,12 +4369,33 @@
                 return;
             }
             
-            if (!confirm('确定要删除这张图片吗？')) {
+            // 处理 confirm 可能返回 Promise 的情况
+            let userConfirmed;
+            try {
+                const confirmResult = window.confirm('确定要删除这张图片吗？');
+                
+                // 检查是否是 Promise
+                if (confirmResult instanceof Promise) {
+                    console.log('[DEBUG] confirm 返回的是 Promise');
+                    userConfirmed = await confirmResult;
+                } else {
+                    console.log('[DEBUG] confirm 返回的是直接值');
+                    userConfirmed = confirmResult;
+                }
+            } catch (error) {
+                console.error('[DEBUG] confirm 执行出错:', error);
+                // 如果出错，默认取消操作
+                userConfirmed = false;
+            }
+            
+            // 如果用户点击取消，直接返回，不执行删除操作
+            if (!userConfirmed) {
+                console.log('[DEBUG] 用户点击了取消，函数返回');
                 return;
             }
             
             try {
-                const token = localStorage.getItem('auth_token');
+                const token = getToken();
                 if (!token) {
                     alert('请先登录');
                     return;
@@ -4315,18 +4544,190 @@
                 return;
             }
 
+            // 应用搜索和分类筛选
+            let filteredResults = results;
+            
+            // 搜索筛选
+            const searchTerm = document.getElementById('historySearch').value.toLowerCase();
+            if (searchTerm) {
+                filteredResults = filteredResults.filter(item => {
+                    const result = (item.result || '').toLowerCase();
+                    const location = (item.location_text || '').toLowerCase();
+                    // 模拟识别路径的格式，用于搜索
+                    const createdAt = item.created_at ? new Date(item.created_at * 1000).toLocaleString() : '';
+                    const recognitionDate = createdAt.split(' ')[0];
+                    let category = '其他';
+                    if (result.includes('花') || result.includes('植物') || result.includes('向日葵') || result.includes('玫瑰') || result.includes('牡丹')) {
+                        category = '花卉';
+                    } else if (result.includes('人') || result.includes('人物')) {
+                        category = '人';
+                    } else if (result.includes('建筑') || result.includes('楼') || result.includes('房')) {
+                        category = '建筑';
+                    } else if (result.includes('风景') || result.includes('山') || result.includes('水') || result.includes('自然')) {
+                        category = '风景';
+                    } else if (result.includes('物') || result.includes('物品') || result.includes('物体')) {
+                        category = '物';
+                    }
+                    const recognitionPath = `${recognitionDate} - ${category} - ${result}`.toLowerCase();
+                    return result.includes(searchTerm) || location.includes(searchTerm) || recognitionPath.includes(searchTerm);
+                });
+            }
+            
+            // 分类筛选
+            const selectedCategory = document.getElementById('historyCategoryFilter').value;
+            if (selectedCategory !== 'all') {
+                filteredResults = filteredResults.filter(item => {
+                    const result = item.result || '';
+                    return result.includes(selectedCategory);
+                });
+            }
+
+            if (filteredResults.length === 0) {
+                historyList.innerHTML = `
+                    <div class="history-empty">
+                        <div class="empty-icon">🔍</div>
+                        <p>没有找到匹配的记录</p>
+                        <span class="empty-tip">尝试调整搜索条件或分类</span>
+                    </div>
+                `;
+                return;
+            }
+
             // 创建网格容器
             const grid = document.createElement('div');
             grid.className = 'history-grid';
 
-            results.forEach(item => {
+            filteredResults.forEach(item => {
                 const card = createHistoryCard(item);
                 grid.appendChild(card);
             });
 
             historyList.appendChild(grid);
+            
+            // 添加复选框事件监听器
+            addHistoryCheckboxListeners();
         }
+        
+        // 添加历史记录复选框事件监听器
+        function addHistoryCheckboxListeners() {
+            const checkboxes = document.querySelectorAll('.history-checkbox');
+            const selectAllCheckbox = document.getElementById('selectAllHistory');
+            const batchDeleteBtn = document.getElementById('batchDeleteHistoryBtn');
+            const historyBatchBar = document.getElementById('historyBatchBar');
+            const historySelectedCount = document.getElementById('historySelectedCount');
+            
+            // 单个复选框事件
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateBatchDeleteState);
+            });
+            
+            // 全选复选框事件
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function() {
+                    const isChecked = this.checked;
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = isChecked;
+                    });
+                    updateBatchDeleteState();
+                });
+            }
+            
+            // 批量删除按钮事件
+            if (batchDeleteBtn) {
+                batchDeleteBtn.addEventListener('click', function() {
+                    console.log('批量删除按钮被点击，进入批量删除模式');
+                    isBatchDeleteMode = true;
+                    loadHistory();
+                    if (historyBatchBar) {
+                        historyBatchBar.style.display = 'flex';
+                    }
+                });
+            }
+            
+            // 确认批量删除按钮事件
+            const confirmBatchDeleteBtn = document.getElementById('confirmBatchDeleteHistoryBtn');
+            if (confirmBatchDeleteBtn) {
+                confirmBatchDeleteBtn.addEventListener('click', async function() {
+                    const selectedIds = getSelectedHistoryIds();
+                    if (selectedIds.length === 0) {
+                        alert('请先选择要删除的记录');
+                        return;
+                    }
+                    
+                    if (confirm('确定要删除选中的 ' + selectedIds.length + ' 条记录吗？')) {
+                        for (const id of selectedIds) {
+                            await deleteHistoryItem(id, { showConfirm: false, reloadAfterDelete: false });
+                        }
+                        // 退出批量删除模式
+                        isBatchDeleteMode = false;
+                        // 重新加载历史记录
+                        loadHistory();
+                        // 隐藏批量操作栏
+                        if (historyBatchBar) {
+                            historyBatchBar.style.display = 'none';
+                        }
+                    }
+                });
+            }
+            
+            // 取消批量删除按钮事件
+            const cancelBatchDeleteBtn = document.getElementById('cancelBatchDeleteHistoryBtn');
+            if (cancelBatchDeleteBtn) {
+                cancelBatchDeleteBtn.addEventListener('click', function() {
+                    console.log('取消按钮被点击，退出批量删除模式');
+                    // 退出批量删除模式
+                    isBatchDeleteMode = false;
+                    // 重新加载历史记录
+                    loadHistory();
+                    // 隐藏批量操作栏
+                    if (historyBatchBar) {
+                        historyBatchBar.style.display = 'none';
+                    }
+                });
+            }
+            
+            // 更新批量删除按钮状态
+            function updateBatchDeleteState() {
+                const selectedIds = getSelectedHistoryIds();
+                const count = selectedIds.length;
+                
+                if (batchDeleteBtn) {
+                    batchDeleteBtn.disabled = false; // 始终启用批量删除按钮
+                }
+                
+                if (historySelectedCount) {
+                    historySelectedCount.textContent = `已选择 ${count} 项`;
+                }
+                
+                if (selectAllCheckbox) {
+                    selectAllCheckbox.checked = count > 0 && count === checkboxes.length;
+                }
+            }
+            
+            // 获取选中的历史记录ID
+            function getSelectedHistoryIds() {
+                const selectedIds = [];
+                checkboxes.forEach(checkbox => {
+                    if (checkbox.checked) {
+                        selectedIds.push(parseInt(checkbox.dataset.id));
+                    }
+                });
+                return selectedIds;
+            }
+        }
+        
+        // 搜索和分类筛选事件
+        document.getElementById('historySearch').addEventListener('input', function() {
+            loadHistory();
+        });
+        
+        document.getElementById('historyCategoryFilter').addEventListener('change', function() {
+            loadHistory();
+        });
 
+        // 批量删除模式状态
+        let isBatchDeleteMode = false;
+        
         // 创建历史记录卡片
         function createHistoryCard(item) {
             const card = document.createElement('div');
@@ -4336,7 +4737,7 @@
             const imagePath = item.image_path || '';
             const result = item.result || '未知';
             const confidence = item.confidence ? (item.confidence * 100).toFixed(1) + '%' : '-';
-            const createdAt = item.created_at ? new Date(item.created_at).toLocaleString() : '-';
+            const createdAt = item.created_at ? new Date(item.created_at * 1000).toLocaleString() : '-';
 
             // 拍摄信息
             const shootTime = item.shoot_time || '-';
@@ -4352,8 +4753,40 @@
             const imageWidth = item.image_width || '-';
             const imageHeight = item.image_height || '-';
             const imageSize = (item.image_width && item.image_height) ? `${item.image_width} × ${item.image_height}` : '-';
+            
+            // 识别路径（类似相册标题格式）
+            const recognitionDate = createdAt.split(' ')[0]; // 提取日期部分
+            // 尝试从结果中提取分类和具体识别内容
+            let category = '其他';
+            let specificResult = result;
+            
+            // 简单的分类逻辑
+            if (result.includes('花') || result.includes('植物') || result.includes('向日葵') || result.includes('玫瑰') || result.includes('牡丹')) {
+                category = '花卉';
+            } else if (result.includes('人') || result.includes('人物')) {
+                category = '人';
+            } else if (result.includes('建筑') || result.includes('楼') || result.includes('房')) {
+                category = '建筑';
+            } else if (result.includes('风景') || result.includes('山') || result.includes('水') || result.includes('自然')) {
+                category = '风景';
+            } else if (result.includes('物') || result.includes('物品') || result.includes('物体')) {
+                category = '物';
+            }
+            
+            const recognitionPath = `${recognitionDate} - ${category} - ${specificResult}`;
+
+            // 复选框显示逻辑
+            const checkboxHtml = isBatchDeleteMode ? `
+                <div class="batch-select" style="margin-left: 10px;">
+                    <input type="checkbox" class="history-checkbox" data-id="${item.id}" style="width: 16px; height: 16px;">
+                </div>
+            ` : '';
 
             card.innerHTML = `
+                <div class="history-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    ${checkboxHtml}
+                    <div class="flower-result" style="font-weight: bold; font-size: 16px;">${result}</div>
+                </div>
                 <div class="history-image-section">
                     <div class="history-image" onclick="openImagePreview('${imagePath}')">
                         <img src="${imagePath}" alt="${result}" onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
@@ -4362,7 +4795,6 @@
                         </div>
                     </div>
                     <div class="history-main-info">
-                        <div class="flower-result">${result}</div>
                         <div class="confidence-badge">置信度 ${confidence}</div>
                         <div class="recognize-time">识别时间: ${createdAt}</div>
                     </div>
@@ -4390,6 +4822,15 @@
                             </div>
                         </div>
                     </div>
+                    <div class="detail-section">
+                        <h4>🔍 识别信息</h4>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="label">识别路径:</span>
+                                <span class="value">${recognitionPath}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="history-actions">
@@ -4401,9 +4842,32 @@
             // 删除按钮事件
             const deleteBtn = card.querySelector('.btn-delete');
             deleteBtn.onclick = async function() {
-                if (confirm('确定要删除这条记录吗？')) {
-                    await deleteHistoryItem(item.id);
+                // 处理 confirm 可能返回 Promise 的情况
+                let userConfirmed;
+                try {
+                    const confirmResult = window.confirm('确定要删除这条记录吗？');
+                    
+                    // 检查是否是 Promise
+                    if (confirmResult instanceof Promise) {
+                        console.log('[DEBUG] confirm 返回的是 Promise');
+                        userConfirmed = await confirmResult;
+                    } else {
+                        console.log('[DEBUG] confirm 返回的是直接值');
+                        userConfirmed = confirmResult;
+                    }
+                } catch (error) {
+                    console.error('[DEBUG] confirm 执行出错:', error);
+                    // 如果出错，默认取消操作
+                    userConfirmed = false;
                 }
+                
+                // 如果用户点击取消，直接返回，不执行删除操作
+                if (!userConfirmed) {
+                    console.log('[DEBUG] 用户点击了取消，函数返回');
+                    return;
+                }
+                
+                await deleteHistoryItem(item.id);
             };
 
             // 分享按钮事件
@@ -4453,7 +4917,37 @@
         }
 
         // 删除历史记录
-        async function deleteHistoryItem(id) {
+        async function deleteHistoryItem(id, options = {}) {
+            const { showConfirm = true, reloadAfterDelete = true } = options;
+            
+            // 处理确认对话框
+            if (showConfirm) {
+                // 处理 confirm 可能返回 Promise 的情况
+                let userConfirmed;
+                try {
+                    const confirmResult = window.confirm('确定要删除这条历史记录吗？');
+                    
+                    // 检查是否是 Promise
+                    if (confirmResult instanceof Promise) {
+                        console.log('[DEBUG] confirm 返回的是 Promise');
+                        userConfirmed = await confirmResult;
+                    } else {
+                        console.log('[DEBUG] confirm 返回的是直接值');
+                        userConfirmed = confirmResult;
+                    }
+                } catch (error) {
+                    console.error('[DEBUG] confirm 执行出错:', error);
+                    // 如果出错，默认取消操作
+                    userConfirmed = false;
+                }
+                
+                // 如果用户点击取消，直接返回，不执行删除操作
+                if (!userConfirmed) {
+                    console.log('[DEBUG] 用户点击了取消，函数返回');
+                    return;
+                }
+            }
+            
             try {
                 const response = await fetch(`/api/recognition/results/${id}`, {
                     method: 'DELETE',
@@ -4461,13 +4955,21 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert(data.message);
-                    loadHistory();
+                    if (showConfirm) {
+                        alert(data.message);
+                    }
+                    if (reloadAfterDelete) {
+                        loadHistory();
+                    }
                 } else {
-                    alert('删除失败');
+                    if (showConfirm) {
+                        alert('删除失败');
+                    }
                 }
             } catch (error) {
-                alert('删除失败');
+                if (showConfirm) {
+                    alert('删除失败');
+                }
             }
         }
 
@@ -4691,9 +5193,32 @@
             const permanentBtn = card.querySelector('.btn-permanent');
             permanentBtn.onclick = async function(e) {
                 e.stopPropagation();
-                if (confirm('确定要永久删除吗？此操作不可恢复！')) {
-                    await permanentDeleteItem(item.id);
+                // 处理 confirm 可能返回 Promise 的情况
+                let userConfirmed;
+                try {
+                    const confirmResult = window.confirm('确定要永久删除吗？此操作不可恢复！');
+                    
+                    // 检查是否是 Promise
+                    if (confirmResult instanceof Promise) {
+                        console.log('[DEBUG] confirm 返回的是 Promise');
+                        userConfirmed = await confirmResult;
+                    } else {
+                        console.log('[DEBUG] confirm 返回的是直接值');
+                        userConfirmed = confirmResult;
+                    }
+                } catch (error) {
+                    console.error('[DEBUG] confirm 执行出错:', error);
+                    // 如果出错，默认取消操作
+                    userConfirmed = false;
                 }
+                
+                // 如果用户点击取消，直接返回，不执行删除操作
+                if (!userConfirmed) {
+                    console.log('[DEBUG] 用户点击了取消，函数返回');
+                    return;
+                }
+                
+                await permanentDeleteItem(item.id);
             };
 
             return card;
@@ -4790,9 +5315,32 @@
             const permanentBtn = card.querySelector('.btn-permanent');
             permanentBtn.onclick = async function(e) {
                 e.stopPropagation();
-                if (confirm('确定要永久删除吗？此操作不可恢复！')) {
-                    await permanentDeleteItem(item.id);
+                // 处理 confirm 可能返回 Promise 的情况
+                let userConfirmed;
+                try {
+                    const confirmResult = window.confirm('确定要永久删除吗？此操作不可恢复！');
+                    
+                    // 检查是否是 Promise
+                    if (confirmResult instanceof Promise) {
+                        console.log('[DEBUG] confirm 返回的是 Promise');
+                        userConfirmed = await confirmResult;
+                    } else {
+                        console.log('[DEBUG] confirm 返回的是直接值');
+                        userConfirmed = confirmResult;
+                    }
+                } catch (error) {
+                    console.error('[DEBUG] confirm 执行出错:', error);
+                    // 如果出错，默认取消操作
+                    userConfirmed = false;
                 }
+                
+                // 如果用户点击取消，直接返回，不执行删除操作
+                if (!userConfirmed) {
+                    console.log('[DEBUG] 用户点击了取消，函数返回');
+                    return;
+                }
+                
+                await permanentDeleteItem(item.id);
             };
 
             return card;
@@ -4991,9 +5539,32 @@
             const permanentBtn = card.querySelector('.btn-permanent');
             permanentBtn.onclick = async function(e) {
                 e.stopPropagation();
-                if (confirm('确定要永久删除吗？此操作不可恢复！')) {
-                    await permanentDeleteItem(item.id);
+                // 处理 confirm 可能返回 Promise 的情况
+                let userConfirmed;
+                try {
+                    const confirmResult = window.confirm('确定要永久删除吗？此操作不可恢复！');
+                    
+                    // 检查是否是 Promise
+                    if (confirmResult instanceof Promise) {
+                        console.log('[DEBUG] confirm 返回的是 Promise');
+                        userConfirmed = await confirmResult;
+                    } else {
+                        console.log('[DEBUG] confirm 返回的是直接值');
+                        userConfirmed = confirmResult;
+                    }
+                } catch (error) {
+                    console.error('[DEBUG] confirm 执行出错:', error);
+                    // 如果出错，默认取消操作
+                    userConfirmed = false;
                 }
+                
+                // 如果用户点击取消，直接返回，不执行删除操作
+                if (!userConfirmed) {
+                    console.log('[DEBUG] 用户点击了取消，函数返回');
+                    return;
+                }
+                
+                await permanentDeleteItem(item.id);
             };
 
             return card;
@@ -5001,6 +5572,31 @@
 
         // 恢复回收站项目
         async function restoreRecycleItem(id) {
+            // 处理 confirm 可能返回 Promise 的情况
+            let userConfirmed;
+            try {
+                const confirmResult = window.confirm('确定要恢复这个项目吗？');
+                
+                // 检查是否是 Promise
+                if (confirmResult instanceof Promise) {
+                    console.log('[DEBUG] confirm 返回的是 Promise');
+                    userConfirmed = await confirmResult;
+                } else {
+                    console.log('[DEBUG] confirm 返回的是直接值');
+                    userConfirmed = confirmResult;
+                }
+            } catch (error) {
+                console.error('[DEBUG] confirm 执行出错:', error);
+                // 如果出错，默认取消操作
+                userConfirmed = false;
+            }
+            
+            // 如果用户点击取消，直接返回，不执行恢复操作
+            if (!userConfirmed) {
+                console.log('[DEBUG] 用户点击了取消，函数返回');
+                return;
+            }
+            
             try {
                 const response = await fetch(`/api/recycle-bin/${id}/restore`, {
                     method: 'POST',
@@ -5020,6 +5616,31 @@
 
         // 永久删除
         async function permanentDeleteItem(id) {
+            // 处理 confirm 可能返回 Promise 的情况
+            let userConfirmed;
+            try {
+                const confirmResult = window.confirm('确定要永久删除这个项目吗？此操作不可恢复！');
+                
+                // 检查是否是 Promise
+                if (confirmResult instanceof Promise) {
+                    console.log('[DEBUG] confirm 返回的是 Promise');
+                    userConfirmed = await confirmResult;
+                } else {
+                    console.log('[DEBUG] confirm 返回的是直接值');
+                    userConfirmed = confirmResult;
+                }
+            } catch (error) {
+                console.error('[DEBUG] confirm 执行出错:', error);
+                // 如果出错，默认取消操作
+                userConfirmed = false;
+            }
+            
+            // 如果用户点击取消，直接返回，不执行删除操作
+            if (!userConfirmed) {
+                console.log('[DEBUG] 用户点击了取消，函数返回');
+                return;
+            }
+            
             try {
                 const response = await fetch(`/api/recycle-bin/${id}`, {
                     method: 'DELETE',
@@ -5094,7 +5715,28 @@
                 alert('请先选择要恢复的项目');
                 return;
             }
-            if (!confirm(`确定要恢复选中的 ${selectedRecycleItems.size} 个项目吗？`)) {
+            // 处理 confirm 可能返回 Promise 的情况
+            let userConfirmed;
+            try {
+                const confirmResult = window.confirm(`确定要恢复选中的 ${selectedRecycleItems.size} 个项目吗？`);
+                
+                // 检查是否是 Promise
+                if (confirmResult instanceof Promise) {
+                    console.log('[DEBUG] confirm 返回的是 Promise');
+                    userConfirmed = await confirmResult;
+                } else {
+                    console.log('[DEBUG] confirm 返回的是直接值');
+                    userConfirmed = confirmResult;
+                }
+            } catch (error) {
+                console.error('[DEBUG] confirm 执行出错:', error);
+                // 如果出错，默认取消操作
+                userConfirmed = false;
+            }
+            
+            // 如果用户点击取消，直接返回，不执行恢复操作
+            if (!userConfirmed) {
+                console.log('[DEBUG] 用户点击了取消，函数返回');
                 return;
             }
             
@@ -5135,7 +5777,28 @@
                 alert('请先选择要删除的项目');
                 return;
             }
-            if (!confirm(`确定要永久删除选中的 ${selectedRecycleItems.size} 个项目吗？此操作不可恢复！`)) {
+            // 处理 confirm 可能返回 Promise 的情况
+            let userConfirmed;
+            try {
+                const confirmResult = window.confirm(`确定要永久删除选中的 ${selectedRecycleItems.size} 个项目吗？此操作不可恢复！`);
+                
+                // 检查是否是 Promise
+                if (confirmResult instanceof Promise) {
+                    console.log('[DEBUG] confirm 返回的是 Promise');
+                    userConfirmed = await confirmResult;
+                } else {
+                    console.log('[DEBUG] confirm 返回的是直接值');
+                    userConfirmed = confirmResult;
+                }
+            } catch (error) {
+                console.error('[DEBUG] confirm 执行出错:', error);
+                // 如果出错，默认取消操作
+                userConfirmed = false;
+            }
+            
+            // 如果用户点击取消，直接返回，不执行删除操作
+            if (!userConfirmed) {
+                console.log('[DEBUG] 用户点击了取消，函数返回');
                 return;
             }
             
@@ -5190,23 +5853,47 @@
                 alert('请先登录');
                 return;
             }
-            if (confirm('确定要清空回收站吗？此操作不可恢复！')) {
-                try {
-                    const response = await fetch('/api/recycle-bin/empty', {
-                        method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + currentToken }
-                    });
-                    const data = await response.json();
-                    if (data.success) {
-                        alert(data.message);
-                        selectedRecycleItems.clear();
-                        loadRecycleBin(currentRecycleFilter);
-                    } else {
-                        alert('清空失败');
-                    }
-                } catch (error) {
+            
+            // 处理 confirm 可能返回 Promise 的情况
+            let userConfirmed;
+            try {
+                const confirmResult = window.confirm('确定要清空回收站吗？此操作不可恢复！');
+                
+                // 检查是否是 Promise
+                if (confirmResult instanceof Promise) {
+                    console.log('[DEBUG] confirm 返回的是 Promise');
+                    userConfirmed = await confirmResult;
+                } else {
+                    console.log('[DEBUG] confirm 返回的是直接值');
+                    userConfirmed = confirmResult;
+                }
+            } catch (error) {
+                console.error('[DEBUG] confirm 执行出错:', error);
+                // 如果出错，默认取消操作
+                userConfirmed = false;
+            }
+            
+            // 如果用户点击取消，直接返回，不执行清空操作
+            if (!userConfirmed) {
+                console.log('[DEBUG] 用户点击了取消，函数返回');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/recycle-bin/empty', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + currentToken }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(data.message);
+                    selectedRecycleItems.clear();
+                    loadRecycleBin(currentRecycleFilter);
+                } else {
                     alert('清空失败');
                 }
+            } catch (error) {
+                alert('清空失败');
             }
         });
 
@@ -6057,7 +6744,30 @@
 
         // 删除反馈
         async function deleteFeedback(feedbackId) {
-            if (!confirm('确定要删除这条反馈吗？')) return;
+            // 处理 confirm 可能返回 Promise 的情况
+            let userConfirmed;
+            try {
+                const confirmResult = window.confirm('确定要删除这条反馈吗？');
+                
+                // 检查是否是 Promise
+                if (confirmResult instanceof Promise) {
+                    console.log('[DEBUG] confirm 返回的是 Promise');
+                    userConfirmed = await confirmResult;
+                } else {
+                    console.log('[DEBUG] confirm 返回的是直接值');
+                    userConfirmed = confirmResult;
+                }
+            } catch (error) {
+                console.error('[DEBUG] confirm 执行出错:', error);
+                // 如果出错，默认取消操作
+                userConfirmed = false;
+            }
+            
+            // 如果用户点击取消，直接返回，不执行删除操作
+            if (!userConfirmed) {
+                console.log('[DEBUG] 用户点击了取消，函数返回');
+                return;
+            }
 
             const currentToken = getToken();
             if (!currentToken) {

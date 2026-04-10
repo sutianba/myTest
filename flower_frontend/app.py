@@ -1376,7 +1376,7 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
             secondary_category = flower_name
             final_category = f"{primary_category}-{secondary_category}"
         else:
-            flower_name = "未识别"
+            flower_name = primary_category  # 使用一级分类作为识别结果
             confidence = 0.0
             primary_category = "物"
             secondary_category = "未识别"
@@ -1478,6 +1478,19 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
             return_result['save_error'] = '保存到相册需要登录，请先登录'
             return return_result
         
+        # 提前添加调试信息，确保能够捕获到问题
+        # return_result['album_debug_info'] = {
+        #     'save_to_album': save_to_album,
+        #     'user_id': user_id,
+        #     'shoot_time': shoot_time,
+        #     'shoot_year': shoot_year,
+        #     'shoot_month': shoot_month,
+        #     'level1': level1,
+        #     'level2': level2,
+        #     'level3': level3
+        # }
+        # print(f"【DEBUG】初始相册调试信息: {return_result['album_debug_info']}")
+        
         try:
             # 4. 处理相册逻辑
             album = None
@@ -1568,9 +1581,57 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
                                     album = level2_album
                                     print(f"使用二级分类相册: {album}")
                             else:
-                                # 无识别结果，使用日期相册
-                                album = date_album
-                                print(f"无识别结果，使用日期相册: {album}")
+                                # 无识别结果，根据level2创建二级分类相册
+                                print(f"无识别结果，创建二级分类相册: level2={level2}")
+                                # 二级相册：分类相册
+                                level2_album_name = f"{date_category} - {level2}"
+                                level2_category = level2
+                                print(f"创建二级分类相册: user_id={user_id}, name={level2_album_name}, category={level2_category}")
+                                
+                                # 尝试获取现有二级分类相册
+                                all_albums = get_user_albums(user_id)
+                                level2_albums = [album for album in all_albums if album['name'] == level2_album_name]
+                                print(f"获取到二级分类相册: {level2_albums}")
+                                
+                                level2_album = None
+                                if level2_albums:
+                                    level2_album = level2_albums[0]
+                                    print(f"使用现有二级分类相册: {level2_album}")
+                                else:
+                                    # 创建新的二级分类相册，parent_id为一级相册ID
+                                    parent_id = date_album['id'] if date_album else None
+                                    level2_album_id = create_album(user_id, level2_album_name, level2_category, parent_id=parent_id)
+                                    print(f"创建二级分类相册成功, album_id={level2_album_id}, parent_id={parent_id}")
+                                    level2_album = get_album_by_id(level2_album_id, user_id)
+                                    print(f"获取新二级分类相册: {level2_album}")
+                                
+                                # 三级分类：创建/使用三级分类相册
+                                if level3:
+                                    print(f"创建三级分类相册: level3={level3}")
+                                    # 三级相册：详细分类相册
+                                    level3_album_name = f"{date_category} - {level2} - {level3}"
+                                    level3_category = level3
+                                    print(f"创建三级分类相册: user_id={user_id}, name={level3_album_name}, category={level3_category}")
+                                    
+                                    # 尝试获取现有三级分类相册
+                                    all_albums = get_user_albums(user_id)
+                                    level3_albums = [album for album in all_albums if album['name'] == level3_album_name]
+                                    print(f"获取到三级分类相册: {level3_albums}")
+                                    
+                                    if level3_albums:
+                                        album = level3_albums[0]
+                                        print(f"使用现有三级分类相册: {album}")
+                                    else:
+                                        # 创建新的三级分类相册，parent_id为二级相册ID
+                                        parent_id = level2_album['id'] if level2_album else None
+                                        level3_album_id = create_album(user_id, level3_album_name, level3_category, parent_id=parent_id)
+                                        print(f"创建三级分类相册成功, album_id={level3_album_id}, parent_id={parent_id}")
+                                        album = get_album_by_id(level3_album_id, user_id)
+                                        print(f"获取新三级分类相册: {album}")
+                                else:
+                                    # 无三级分类，使用二级分类相册
+                                    album = level2_album
+                                    print(f"使用二级分类相册: {album}")
                     except Exception as e:
                         print(f"处理相册逻辑失败: {e}")
                         import traceback
@@ -1579,31 +1640,91 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
                         album = None
                 
                 # 5. 添加图片到相册（如果没有相册，add_image_to_album会自动创建默认相册）
-                album_id = album['id'] if album else None
-                print(f"添加图片到相册: album_id={album_id}, user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}, result_id={result_id}")
-                image_id = add_image_to_album(album_id, user_id, relative_path, flower_name, confidence, result_id)
+                # 确保图片保存到所有级别的相册中：一级（日期）、二级（分类）、三级（具体花卉）
+                print(f"添加图片到所有级别的相册: user_id={user_id}, relative_path={relative_path}")
                 
-                if image_id:
-                    print(f"添加图片到相册成功")
-                    # 获取最终使用的相册信息
-                    if not album:
-                        # 使用了默认相册，获取默认相册信息
-                        from db import get_user_albums as db_get_user_albums
-                        default_albums = db_get_user_albums(user_id, '默认')
-                        if default_albums:
-                            album = default_albums[0]
+                # 添加到一级相册（日期相册）
+                if date_album:
+                    date_album_id = date_album['id']
+                    print(f"添加图片到一级相册: album_id={date_album_id}")
+                    add_image_to_album(date_album_id, user_id, relative_path, flower_name, confidence, result_id)
+                
+                # 添加到二级相册（分类相册）
+                level2_album_id = None
+                # 直接通过名称查找二级相册，确保能找到正确的相册
+                if shoot_year and shoot_month and shoot_time:
+                    date_part = shoot_time.split(' ')[0]
+                    if ':' in date_part:
+                        year, month, day = map(int, date_part.split(':'))
+                        date_category = f"{year}年{month}月{day}日"
+                        level2_album_name = f"{date_category} - {level2}"
+                        # print(f"查找二级相册: name={level2_album_name}")
+                        all_albums = get_user_albums(user_id)
+                        # print(f"所有相册: {[album['name'] for album in all_albums]}")
+                        level2_albums = [album for album in all_albums if album['name'] == level2_album_name]
+                        # print(f"找到的二级相册: {level2_albums}")
+                        if level2_albums:
+                            level2_album = level2_albums[0]
+                            level2_album_id = level2_album['id']
+                            print(f"通过名称查找并添加图片到二级相册: album_id={level2_album_id}")
+                            add_image_to_album(level2_album_id, user_id, relative_path, flower_name, confidence, result_id)
+                        else:
+                            print(f"未找到二级相册: {level2_album_name}")
+                
+                # 添加到三级相册（如果有）
+                album_id = album['id'] if album else None
+                # print(f"添加图片到最终相册: album_id={album_id}")
+                # print(f"album变量: {album}")
+                
+                try:
+                    image_id = add_image_to_album(album_id, user_id, relative_path, flower_name, confidence, result_id)
+                    # print(f"add_image_to_album返回值: {image_id}")
                     
-                    saved_album_info = {
-                        'album_id': album['id'] if album else '默认相册',
-                        'album_name': album['name'] if album else '默认相册',
-                        'category': album['category'] if album else '默认',
-                        'image_path': relative_path
-                    }
-                    
-                    return_result['saved_to_album'] = saved_album_info
-                    print(f"保存到相册完成, saved_album_info={saved_album_info}")
-                else:
-                    print("图片已存在于相册中，跳过保存")
+                    if image_id:
+                        print(f"添加图片到相册成功")
+                        # 获取最终使用的相册信息
+                        if not album:
+                            # 使用了默认相册，获取默认相册信息
+                            from db import get_user_albums as db_get_user_albums
+                            default_albums = db_get_user_albums(user_id, '默认')
+                            if default_albums:
+                                album = default_albums[0]
+                                # print(f"使用默认相册: {album}")
+                        
+                        saved_album_info = {
+                            'album_id': album['id'] if album else '默认相册',
+                            'album_name': album['name'] if album else '默认相册',
+                            'category': album['category'] if album else '默认',
+                            'image_path': relative_path
+                        }
+                        
+                        # 确保 level2_album_name 变量存在
+                        level2_album_name = None
+                        if shoot_year and shoot_month and shoot_time:
+                            date_part = shoot_time.split(' ')[0]
+                            if ':' in date_part:
+                                year, month, day = map(int, date_part.split(':'))
+                                date_category = f"{year}年{month}月{day}日"
+                                level2_album_name = f"{date_category} - {level2}"
+                        
+                        return_result['saved_to_album'] = saved_album_info
+                        # return_result['album_debug_info'] = {
+                        #     'date_album_id': date_album['id'] if date_album else None,
+                        #     'level2_album_id': level2_album_id,
+                        #     'final_album_id': album_id,
+                        #     'date_album_name': date_album['name'] if date_album else None,
+                        #     'level2_album_name': level2_album_name,
+                        #     'final_album_name': album['name'] if album else None
+                        # }
+                        print(f"保存到相册完成, saved_album_info={saved_album_info}")
+                        # print(f"相册调试信息: {return_result['album_debug_info']}")
+                    else:
+                        print("图片已存在于相册中，跳过保存")
+                except Exception as e:
+                    print(f"添加图片到相册时出错: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return_result['save_error'] = str(e)
             else:
                 print("数据库未初始化，跳过处理相册逻辑")
         except Exception as e:
@@ -2674,8 +2795,8 @@ def get_albums():
             # 获取指定父相册的子相册
             albums = get_child_albums(int(parent_id), g.user_id)
         else:
-            # 获取根级相册（parent_id为NULL）
-            albums = get_root_albums(g.user_id)
+            # 获取所有相册，包括根级和子相册，让前端在本地过滤
+            albums = get_user_albums(g.user_id)
         
         return jsonify({
             'success': True,
