@@ -2513,35 +2513,49 @@
         // 设置认证模态框
         function setupAuthModals() {
             // 登录按钮
-            document.getElementById('loginBtn').addEventListener('click', function() {
-                openModal('loginModal');
-            });
+            const loginBtn = document.getElementById('loginBtn');
+            if (loginBtn) {
+                loginBtn.addEventListener('click', function() {
+                    openModal('loginModal');
+                });
+            }
 
             // 注册按钮
-            document.getElementById('registerBtn').addEventListener('click', function() {
-                openModal('registerModal');
-            });
+            const registerBtn = document.getElementById('registerBtn');
+            if (registerBtn) {
+                registerBtn.addEventListener('click', function() {
+                    openModal('registerModal');
+                });
+            }
 
             // 切换到注册
-            document.getElementById('switchToRegister').addEventListener('click', function(e) {
-                e.preventDefault();
-                closeModal('loginModal');
-                openModal('registerModal');
-            });
+            const switchToRegister = document.getElementById('switchToRegister');
+            if (switchToRegister) {
+                switchToRegister.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    closeModal('loginModal');
+                    openModal('registerModal');
+                });
+            }
 
             // 切换到登录
-            document.getElementById('switchToLogin').addEventListener('click', function(e) {
-                e.preventDefault();
-                closeModal('registerModal');
-                openModal('loginModal');
-            });
+            const switchToLogin = document.getElementById('switchToLogin');
+            if (switchToLogin) {
+                switchToLogin.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    closeModal('registerModal');
+                    openModal('loginModal');
+                });
+            }
 
             // 关闭模态框
             const closeButtons = document.querySelectorAll('.close');
             closeButtons.forEach(button => {
                 button.addEventListener('click', function() {
                     const modal = this.closest('.modal');
-                    closeModal(modal.id);
+                    if (modal) {
+                        closeModal(modal.id);
+                    }
                 });
             });
 
@@ -2553,10 +2567,13 @@
             });
 
             // 登录表单提交
-            document.getElementById('loginForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                handleLogin();
-            });
+            const loginForm = document.getElementById('loginForm');
+            if (loginForm) {
+                loginForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    handleLogin();
+                });
+            }
 
             // 角色选择事件监听
             const roleRadios = document.querySelectorAll('input[name="role"]');
@@ -2880,9 +2897,10 @@
                 userInfo.style.gap = '15px';
                 usernameDisplay.textContent = username;
                 createPostSection.style.display = 'block';
-                // 用户已登录，启用保存到相册选项
+                // 用户已登录，启用保存到相册选项并默认勾选
                 if (saveToAlbum) {
                     saveToAlbum.disabled = false;
+                    saveToAlbum.checked = true;
                     saveToAlbum.parentElement.style.opacity = '1';
                 }
             } else {
@@ -2964,6 +2982,13 @@
 
         // 处理多个文件上传
         async function handleMultipleFiles(files) {
+            console.log("🔥【handleMultipleFiles 执行】");
+            
+            console.log(`✅ 选择文件数: ${files.length}`);
+            if (files.length === 0) {
+                alert('请先选择图片文件');
+                return;
+            }
             const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
             
             if (imageFiles.length === 0) {
@@ -3267,8 +3292,14 @@
 
         // 调用识别API
         async function callRecognitionAPI(imageData, signal) {
+            console.log("🔥【callRecognitionAPI 执行】");
             const saveToAlbumElement = document.getElementById('saveToAlbum');
             const saveToAlbum = saveToAlbumElement ? saveToAlbumElement.checked : false;
+            
+            console.log(`save_to_album = ${saveToAlbum}, 图片数 = ${Array.isArray(imageData) ? imageData.length : 1}`);
+            
+            const token = getToken();
+            console.log(`✅ token 存在: ${!!token}`);
             
             console.log('=== callRecognitionAPI 调试信息 ===');
             console.log('saveToAlbum 元素存在:', !!saveToAlbumElement);
@@ -3333,27 +3364,34 @@
                 'Content-Type': 'application/json'
             };
             
-            const token = getToken();
             console.log('获取 token:', token ? token.substring(0, 20) + '...' : 'null');
             if (token) {
                 headers['Authorization'] = 'Bearer ' + token;
             }
             
             console.log('正在发送请求到 /api/detect');
+            console.log("🚀 准备发送 /api/detect 请求");
             
             // 设置超时处理
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60秒超时
+            let timeoutId;
+            // 只有在没有传入signal时才创建新的controller
+            if (!signal) {
+                const controller = new AbortController();
+                signal = controller.signal;
+                timeoutId = setTimeout(() => controller.abort(), 60000); // 60秒超时
+            }
             
             try {
                 const response = await fetch('/api/detect', {
                     method: 'POST',
                     headers: headers,
                     body: body,
-                    signal: signal || controller.signal // 传递signal参数用于取消请求
+                    signal: signal // 使用传入的signal或新创建的signal
                 });
 
-                clearTimeout(timeoutId);
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                }
                 console.log('响应状态码:', response.status);
                 
                 if (!response.ok) {
@@ -3372,7 +3410,9 @@
                     throw new Error('识别失败: ' + (data.error || '未知错误'));
                 }
             } catch (error) {
-                clearTimeout(timeoutId);
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                }
                 console.error('请求错误:', error);
                 if (error.name === 'AbortError') {
                     throw new Error('识别请求超时，请重试');
@@ -3961,7 +4001,7 @@
             console.log(`[DEBUG] 开始删除相册: albumId=${albumId}, albumName=${albumName}`);
             
             try {
-                const token = localStorage.getItem('auth_token');
+                const token = getToken();
                 console.log(`[DEBUG] 使用token: ${token ? token.substring(0, 20) + '...' : 'null'}`);
                 
                 const response = await fetch(`/api/albums/${albumId}`, {

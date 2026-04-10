@@ -228,6 +228,7 @@ CREATE TABLE IF NOT EXISTS announcements (
 CREATE TABLE IF NOT EXISTS albums (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
+    parent_id INT DEFAULT NULL,
     name VARCHAR(100) NOT NULL,
     category VARCHAR(100) NOT NULL,
     cover_image TEXT,
@@ -236,7 +237,8 @@ CREATE TABLE IF NOT EXISTS albums (
     created_at INT NOT NULL,
     updated_at INT NOT NULL,
     deleted_at INT,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id) REFERENCES albums(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 相册图片表

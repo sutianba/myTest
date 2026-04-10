@@ -16,6 +16,7 @@ import exifread
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
+from datetime import datetime
 
 # 地址缓存，用于加速地理编码查询
 address_cache = {}
@@ -116,7 +117,7 @@ if not TEST_MODE:
             get_users, update_any_user_role, reset_user_password,
             # 用户端新功能
             update_user_profile, get_user_recognition_history, delete_recognition_result, save_recognition_result,
-            create_album, get_user_albums, get_album_by_id, update_album, delete_album,
+            create_album, get_user_albums, get_album_by_id, get_child_albums, get_root_albums, update_album, delete_album,
             add_image_to_album, get_album_images, delete_album_image, move_image_to_album, get_album_categories,
             create_feedback, get_user_feedback, get_feedback_by_id, delete_feedback,
             get_all_feedback, respond_feedback,
@@ -490,6 +491,9 @@ def serve_file(filename):
 def detect_flower():
     """植物花卉识别工具 API 接口"""
     try:
+        print("="*60)
+        print("【/api/detect 路由被调用】")
+        print("="*60)
         print(f"\n=== /api/detect 请求开始 ===")
         print(f"请求方法: {request.method}")
         print(f"请求头: {dict(request.headers)}")
@@ -767,6 +771,13 @@ def get_season(month):
 
 def process_single_image(image_data, user_id=None, save_to_album=False, exif_data=None, original_image_data=None):
     """处理单个图片的识别"""
+    # 第一行添加
+    print("="*50)
+    print(f"【process_single_image 执行】save_to_album={save_to_album}, user_id={user_id}")
+    print("="*50)
+    # ↓↓↓ 立刻加这两行 ↓↓↓
+    print(f"【DEBUG】save_to_album = {save_to_album}")
+    print(f"【DEBUG】user_id = {user_id}")
     print(f"process_single_image called with save_to_album={save_to_album}, user_id={user_id}")
     # 记录识别开始时间
     recognition_start_time = time.time()
@@ -942,11 +953,13 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
                     print(f"解析前端传递的时间成功: 年={year}, 月={month}, 季={shoot_season}")
             except Exception as e:
                 print(f"解析前端传递的时间失败: {e}")
-                # 解析失败时保持初始值
-                shoot_time = "未获取到"
-                shoot_year = None
-                shoot_month = None
-                shoot_season = "未获取到"
+                # 解析失败时使用当前时间作为默认值
+                now = datetime.now()
+                shoot_time = f"{now.year}:{now.month:02d}:{now.day:02d} {now.hour:02d}:{now.minute:02d}:{now.second:02d}"
+                shoot_year = now.year
+                shoot_month = now.month
+                shoot_season = get_season(now.month)
+                print(f"使用当前时间作为默认值: {shoot_time}")
     else:
         # 前端未传递EXIF数据，从原图提取
         print("前端未传递EXIF数据，从原图提取")
@@ -972,11 +985,13 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
                         break
                 else:
                     print("未找到拍摄时间EXIF标签")
-                    # 保持初始值，不使用当前时间
-                    shoot_time = "未获取到"
-                    shoot_year = None
-                    shoot_month = None
-                    shoot_season = "未获取到"
+                    # 使用当前时间作为默认值
+                    now = datetime.now()
+                    shoot_time = f"{now.year}:{now.month:02d}:{now.day:02d} {now.hour:02d}:{now.minute:02d}:{now.second:02d}"
+                    shoot_year = now.year
+                    shoot_month = now.month
+                    shoot_season = get_season(now.month)
+                    print(f"使用当前时间作为默认值: {shoot_time}")
                 
                 # 解析拍摄时间
                 if shoot_time != "未获取到":
@@ -991,11 +1006,13 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
                             print(f"解析时间成功: 年={year}, 月={month}, 季={shoot_season}")
                     except Exception as e:
                         print(f"解析时间失败: {e}")
-                        # 解析失败时保持初始值，不使用当前时间
-                        shoot_time = "未获取到"
-                        shoot_year = None
-                        shoot_month = None
-                        shoot_season = "未获取到"
+                        # 解析失败时使用当前时间作为默认值
+                        now = datetime.now()
+                        shoot_time = f"{now.year}:{now.month:02d}:{now.day:02d} {now.hour:02d}:{now.minute:02d}:{now.second:02d}"
+                        shoot_year = now.year
+                        shoot_month = now.month
+                        shoot_season = get_season(now.month)
+                        print(f"使用当前时间作为默认值: {shoot_time}")
                 
                 # 获取相机信息 - 兼容不同相机字段名
                 make_fields = ['Image Make', 'EXIF Make']
@@ -1074,12 +1091,13 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
             print(f"提取图片EXIF信息失败: {e}")
             import traceback
             traceback.print_exc()
-            # 出错时保持初始值，不使用当前时间
-            shoot_time = "未获取到"
-            shoot_year = None
-            shoot_month = None
-            shoot_season = "未获取到"
-            print("保持初始值，未获取到拍摄时间")
+            # 出错时使用当前时间作为默认值
+            now = datetime.now()
+            shoot_time = f"{now.year}:{now.month:02d}:{now.day:02d} {now.hour:02d}:{now.minute:02d}:{now.second:02d}"
+            shoot_year = now.year
+            shoot_month = now.month
+            shoot_season = get_season(now.month)
+            print(f"使用当前时间作为默认值: {shoot_time}")
 
     # 优化：降低图片分辨率以提升识别速度
     # 将图片缩放到最大640px，保持宽高比
@@ -1337,208 +1355,265 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
         'level3_category': level3
     }
     
+    # 强制打印
+    print(f"✅ save_to_album = {save_to_album}, user_id = {user_id}")
+    
     print(f"[DEBUG] 保存检查: save_to_album={save_to_album}, user_id={user_id}, 条件满足={save_to_album and user_id}")
     
-    # 再次检查save_to_album是否为True但user_id为None
-    if save_to_album and not user_id:
-        print("保存到相册需要登录")
-        return_result['save_error'] = '保存到相册需要登录，请先登录'
-        return return_result
+    # 保存识别记录到历史记录（无论是否保存到相册）
+    print("【DEBUG】准备保存识别记录到历史记录")
+    result_id = None
+    relative_path = None
     
-    if save_to_album and user_id:
-        print(f"开始保存到相册: save_to_album={save_to_album}, user_id={user_id}, detection_results={detection_results}")
+    try:
+        # 1. 确定花卉名称和置信度
+        flower_name = None
+        confidence = None
+        if detection_results:
+            flower_name = detection_results[0]['name']
+            confidence = detection_results[0]['confidence']
+            primary_category = "花卉"
+            secondary_category = flower_name
+            final_category = f"{primary_category}-{secondary_category}"
+        else:
+            flower_name = "未识别"
+            confidence = 0.0
+            primary_category = "物"
+            secondary_category = "未识别"
+            final_category = f"{primary_category}-{secondary_category}"
+        
+        # 2. 保存图片文件（使用原始图片数据）
+        timestamp = int(time.time())
+        # 即使user_id为None，也生成一个唯一的文件名
+        image_filename = f"recognition_{user_id or 'guest'}_{timestamp}.jpg"
+        uploads_dir = os.path.join(BASE_DIR, 'static', 'uploads', 'recognition')
+        os.makedirs(uploads_dir, exist_ok=True)
+        image_path = os.path.join(uploads_dir, image_filename)
+        
+        with open(image_path, 'wb') as f:
+            f.write(original_image_bytes)
+        
+        relative_path = f"/static/uploads/recognition/{image_filename}"
+        print(f"保存图片成功, relative_path={relative_path}")
+        
+        # 3. 保存识别结果（使用识别完成时的系统时间）
+        recognition_end_time = time.time()
+        recognition_timestamp = int(recognition_end_time)
+        recognition_duration = recognition_end_time - recognition_start_time
+        print(f"识别完成，耗时: {recognition_duration:.2f}秒, 时间戳: {recognition_timestamp}")
+        print(f"保存识别结果: user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}")
+
+        # 获取相机信息和图片尺寸
+        camera_make = image_info.get('camera_info', {}).get('make')
+        camera_model = image_info.get('camera_info', {}).get('model')
+        image_width = image_info.get('image_details', {}).get('width')
+        image_height = image_info.get('image_details', {}).get('height')
+        
+        # 确保 image_width 和 image_height 是整数类型
+        if image_width == '未知' or image_width is None:
+            image_width = 0
+        else:
+            try:
+                image_width = int(image_width)
+            except:
+                image_width = 0
+        
+        if image_height == '未知' or image_height is None:
+            image_height = 0
+        else:
+            try:
+                image_height = int(image_height)
+            except:
+                image_height = 0
+
+        # 强制执行保存（不管条件）
         try:
-            # 1. 确定花卉名称和置信度
-            flower_name = None
-            confidence = None
-            if detection_results:
-                flower_name = detection_results[0]['name']
-                confidence = detection_results[0]['confidence']
-                primary_category = "花卉"
-                secondary_category = flower_name
-                final_category = f"{primary_category}-{secondary_category}"
+            # 检查数据库是否初始化
+            from db import db_manager
+            if db_manager is None:
+                print("数据库未初始化，跳过保存识别结果")
+                result_id = None
             else:
-                flower_name = "未识别"
-                confidence = 0.0
-                primary_category = "物"
-                secondary_category = "未识别"
-                final_category = f"{primary_category}-{secondary_category}"
-            
-            # 2. 保存图片文件（使用原始图片数据）
-            timestamp = int(time.time())
-            image_filename = f"recognition_{user_id}_{timestamp}.jpg"
-            uploads_dir = os.path.join(BASE_DIR, 'static', 'uploads', 'recognition')
-            os.makedirs(uploads_dir, exist_ok=True)
-            image_path = os.path.join(uploads_dir, image_filename)
-            
-            with open(image_path, 'wb') as f:
-                f.write(original_image_bytes)
-            
-            relative_path = f"/static/uploads/recognition/{image_filename}"
-            print(f"保存图片成功, relative_path={relative_path}")
-            
-            # 3. 保存识别结果（使用识别完成时的系统时间）
-            recognition_end_time = time.time()
-            recognition_timestamp = int(recognition_end_time)
-            recognition_duration = recognition_end_time - recognition_start_time
-            print(f"识别完成，耗时: {recognition_duration:.2f}秒, 时间戳: {recognition_timestamp}")
-            print(f"保存识别结果: user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}")
-
-            # 获取相机信息和图片尺寸
-            camera_make = image_info.get('camera_info', {}).get('make')
-            camera_model = image_info.get('camera_info', {}).get('model')
-            image_width = image_info.get('image_details', {}).get('width')
-            image_height = image_info.get('image_details', {}).get('height')
-
-            result_id = save_recognition_result(
-                user_id,
-                relative_path,
-                flower_name,  # result参数
-                confidence,
-                shoot_time,
-                shoot_year,
-                shoot_month,
-                shoot_season,
-                latitude,
-                longitude,
-                location_text,
-                region_label,
-                final_category,
-                level1,
-                level2,
-                level3,
-                camera_make,
-                camera_model,
-                image_width,
-                image_height,
-                recognition_timestamp
-            )
-            print(f"保存识别结果成功, result_id={result_id}")
-            
+                result_id = save_recognition_result(
+                    user_id,
+                    relative_path,
+                    flower_name,  # result参数
+                    confidence,
+                    shoot_time,
+                    shoot_year,
+                    shoot_month,
+                    shoot_season,
+                    latitude,
+                    longitude,
+                    location_text,
+                    region_label,
+                    final_category,
+                    level1,
+                    level2,
+                    level3,
+                    camera_make,
+                    camera_model,
+                    image_width,
+                    image_height,
+                    recognition_timestamp
+                )
+                print("✅ 识别结果已成功保存到历史记录")
+                print(f"保存识别结果成功, result_id={result_id}")
+        except Exception as e:
+            print(f"❌ 保存失败：{e}")
+            import traceback
+            traceback.print_exc()
+            result_id = None
+    except Exception as e:
+        print(f"保存识别记录时发生错误: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # 处理相册逻辑（仅当save_to_album为True且user_id不为None时）
+    if save_to_album and user_id:
+        print("【DEBUG】准备处理相册逻辑")
+        # 再次检查save_to_album是否为True但user_id为None
+        if not user_id:
+            print("保存到相册需要登录")
+            return_result['save_error'] = '保存到相册需要登录，请先登录'
+            return return_result
+        
+        try:
             # 4. 处理相册逻辑
             album = None
-            # 无论有无识别结果，都按日期创建一级相册
-            print(f"按日期创建一级相册: user_id={user_id}, shoot_time={shoot_time}")
-            if shoot_year and shoot_month and shoot_time:
-                try:
-                    # 从拍摄时间提取完整日期
-                    date_part = shoot_time.split(' ')[0]
-                    if ':' in date_part:
-                        year, month, day = map(int, date_part.split(':'))
-                        # 一级相册：日期相册
-                        date_album_name = f"{year}年{month}月{day}日相册"
-                        date_category = f"{year}年{month}月{day}日"
-                        print(f"创建日期一级相册: user_id={user_id}, name={date_album_name}, category={date_category}")
-                        
-                        # 尝试获取现有日期相册
-                        date_albums = get_user_albums(user_id, date_category)
-                        print(f"获取到日期相册: {date_albums}")
-                        
-                        date_album = None
-                        if date_albums:
-                            date_album = date_albums[0]
-                            print(f"使用现有日期相册: {date_album}")
-                        else:
-                            # 创建新的日期相册
-                            date_album_id = create_album(user_id, date_album_name, date_category)
-                            print(f"创建日期相册成功, album_id={date_album_id}")
-                            date_album = get_album_by_id(date_album_id, user_id)
-                            print(f"获取新日期相册: {date_album}")
-                        
-                        # 二级分类：根据识别结果判断
-                        if detection_results:
-                            # 有识别结果，创建/使用二级分类相册
-                            print(f"有识别结果，创建二级分类相册: level2={level2}")
-                            # 二级相册：分类相册
-                            level2_album_name = f"{date_category} - {level2}"
-                            level2_category = level2
-                            print(f"创建二级分类相册: user_id={user_id}, name={level2_album_name}, category={level2_category}")
+            # 检查数据库是否初始化
+            from db import db_manager
+            if db_manager is not None:
+                # 无论有无识别结果，都按日期创建一级相册
+                print(f"按日期创建一级相册: user_id={user_id}, shoot_time={shoot_time}")
+                if shoot_year and shoot_month and shoot_time:
+                    try:
+                        # 从拍摄时间提取完整日期
+                        date_part = shoot_time.split(' ')[0]
+                        if ':' in date_part:
+                            year, month, day = map(int, date_part.split(':'))
+                            # 一级相册：日期相册
+                            date_album_name = f"{year}年{month}月{day}日相册"
+                            date_category = f"{year}年{month}月{day}日"
+                            print(f"创建日期一级相册: user_id={user_id}, name={date_album_name}, category={date_category}")
                             
-                            # 尝试获取现有二级分类相册
-                            level2_albums = get_user_albums(user_id, level2_category)
-                            print(f"获取到二级分类相册: {level2_albums}")
+                            # 尝试获取现有日期相册（一级）
+                            date_albums = get_user_albums(user_id, date_category)
+                            # 过滤出精确匹配日期的相册
+                            date_albums = [album for album in date_albums if album['name'] == date_album_name]
+                            print(f"获取到日期相册: {date_albums}")
                             
-                            level2_album = None
-                            if level2_albums:
-                                level2_album = level2_albums[0]
-                                print(f"使用现有二级分类相册: {level2_album}")
+                            date_album = None
+                            if date_albums:
+                                date_album = date_albums[0]
+                                print(f"使用现有日期相册: {date_album}")
                             else:
-                                # 创建新的二级分类相册
-                                level2_album_id = create_album(user_id, level2_album_name, level2_category)
-                                print(f"创建二级分类相册成功, album_id={level2_album_id}")
-                                level2_album = get_album_by_id(level2_album_id, user_id)
-                                print(f"获取新二级分类相册: {level2_album}")
+                                # 创建新的日期相册（一级）
+                                date_album_id = create_album(user_id, date_album_name, date_category)
+                                print(f"创建日期相册成功, album_id={date_album_id}")
+                                date_album = get_album_by_id(date_album_id, user_id)
+                                print(f"获取新日期相册: {date_album}")
                             
-                            # 三级分类：仅当二级是花卉时，创建/使用三级分类相册
-                            if level2 == "花卉" and level3:
-                                print(f"二级分类是花卉，创建三级分类相册: level3={level3}")
-                                # 三级相册：花卉名称相册
-                                level3_album_name = f"{date_category} - {level2} - {level3}"
-                                level3_category = level3
-                                print(f"创建三级分类相册: user_id={user_id}, name={level3_album_name}, category={level3_category}")
+                            # 二级分类：根据识别结果判断
+                            if detection_results:
+                                # 有识别结果，创建/使用二级分类相册
+                                print(f"有识别结果，创建二级分类相册: level2={level2}")
+                                # 二级相册：分类相册
+                                level2_album_name = f"{date_category} - {level2}"
+                                level2_category = level2
+                                print(f"创建二级分类相册: user_id={user_id}, name={level2_album_name}, category={level2_category}")
                                 
-                                # 尝试获取现有三级分类相册
-                                level3_albums = get_user_albums(user_id, level3_category)
-                                print(f"获取到三级分类相册: {level3_albums}")
+                                # 尝试获取现有二级分类相册
+                                all_albums = get_user_albums(user_id)
+                                level2_albums = [album for album in all_albums if album['name'] == level2_album_name]
+                                print(f"获取到二级分类相册: {level2_albums}")
                                 
-                                if level3_albums:
-                                    album = level3_albums[0]
-                                    print(f"使用现有三级分类相册: {album}")
+                                level2_album = None
+                                if level2_albums:
+                                    level2_album = level2_albums[0]
+                                    print(f"使用现有二级分类相册: {level2_album}")
                                 else:
-                                    # 创建新的三级分类相册
-                                    level3_album_id = create_album(user_id, level3_album_name, level3_category)
-                                    print(f"创建三级分类相册成功, album_id={level3_album_id}")
-                                    album = get_album_by_id(level3_album_id, user_id)
-                                    print(f"获取新三级分类相册: {album}")
+                                    # 创建新的二级分类相册，parent_id为一级相册ID
+                                    parent_id = date_album['id'] if date_album else None
+                                    level2_album_id = create_album(user_id, level2_album_name, level2_category, parent_id=parent_id)
+                                    print(f"创建二级分类相册成功, album_id={level2_album_id}, parent_id={parent_id}")
+                                    level2_album = get_album_by_id(level2_album_id, user_id)
+                                    print(f"获取新二级分类相册: {level2_album}")
+                                
+                                # 三级分类：仅当二级是花卉时，创建/使用三级分类相册
+                                if level2 == "花卉" and level3:
+                                    print(f"二级分类是花卉，创建三级分类相册: level3={level3}")
+                                    # 三级相册：花卉名称相册
+                                    level3_album_name = f"{date_category} - {level2} - {level3}"
+                                    level3_category = level3
+                                    print(f"创建三级分类相册: user_id={user_id}, name={level3_album_name}, category={level3_category}")
+                                    
+                                    # 尝试获取现有三级分类相册
+                                    all_albums = get_user_albums(user_id)
+                                    level3_albums = [album for album in all_albums if album['name'] == level3_album_name]
+                                    print(f"获取到三级分类相册: {level3_albums}")
+                                    
+                                    if level3_albums:
+                                        album = level3_albums[0]
+                                        print(f"使用现有三级分类相册: {album}")
+                                    else:
+                                        # 创建新的三级分类相册，parent_id为二级相册ID
+                                        parent_id = level2_album['id'] if level2_album else None
+                                        level3_album_id = create_album(user_id, level3_album_name, level3_category, parent_id=parent_id)
+                                        print(f"创建三级分类相册成功, album_id={level3_album_id}, parent_id={parent_id}")
+                                        album = get_album_by_id(level3_album_id, user_id)
+                                        print(f"获取新三级分类相册: {album}")
+                                else:
+                                    # 非花卉或无三级分类，使用二级分类相册
+                                    album = level2_album
+                                    print(f"使用二级分类相册: {album}")
                             else:
-                                # 非花卉或无三级分类，使用二级分类相册
-                                album = level2_album
-                                print(f"使用二级分类相册: {album}")
-                        else:
-                            # 无识别结果，使用日期相册
-                            album = date_album
-                            print(f"无识别结果，使用日期相册: {album}")
-                except Exception as e:
-                    print(f"处理相册逻辑失败: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # 出错时使用默认相册
-                    album = None
-            
-            # 5. 添加图片到相册（如果没有相册，add_image_to_album会自动创建默认相册）
-            album_id = album['id'] if album else None
-            print(f"添加图片到相册: album_id={album_id}, user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}, result_id={result_id}")
-            image_id = add_image_to_album(album_id, user_id, relative_path, flower_name, confidence, result_id)
-            
-            if image_id:
-                print(f"添加图片到相册成功")
-                # 获取最终使用的相册信息
-                if not album:
-                    # 使用了默认相册，获取默认相册信息
-                    from db import get_user_albums as db_get_user_albums
-                    default_albums = db_get_user_albums(user_id, '默认')
-                    if default_albums:
-                        album = default_albums[0]
+                                # 无识别结果，使用日期相册
+                                album = date_album
+                                print(f"无识别结果，使用日期相册: {album}")
+                    except Exception as e:
+                        print(f"处理相册逻辑失败: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # 出错时使用默认相册
+                        album = None
                 
-                saved_album_info = {
-                    'album_id': album['id'] if album else '默认相册',
-                    'album_name': album['name'] if album else '默认相册',
-                    'category': album['category'] if album else '默认',
-                    'image_path': relative_path
-                }
+                # 5. 添加图片到相册（如果没有相册，add_image_to_album会自动创建默认相册）
+                album_id = album['id'] if album else None
+                print(f"添加图片到相册: album_id={album_id}, user_id={user_id}, relative_path={relative_path}, flower_name={flower_name}, confidence={confidence}, result_id={result_id}")
+                image_id = add_image_to_album(album_id, user_id, relative_path, flower_name, confidence, result_id)
                 
-                return_result['saved_to_album'] = saved_album_info
-                print(f"保存到相册完成, saved_album_info={saved_album_info}")
+                if image_id:
+                    print(f"添加图片到相册成功")
+                    # 获取最终使用的相册信息
+                    if not album:
+                        # 使用了默认相册，获取默认相册信息
+                        from db import get_user_albums as db_get_user_albums
+                        default_albums = db_get_user_albums(user_id, '默认')
+                        if default_albums:
+                            album = default_albums[0]
+                    
+                    saved_album_info = {
+                        'album_id': album['id'] if album else '默认相册',
+                        'album_name': album['name'] if album else '默认相册',
+                        'category': album['category'] if album else '默认',
+                        'image_path': relative_path
+                    }
+                    
+                    return_result['saved_to_album'] = saved_album_info
+                    print(f"保存到相册完成, saved_album_info={saved_album_info}")
+                else:
+                    print("图片已存在于相册中，跳过保存")
             else:
-                print("图片已存在于相册中，跳过保存")
+                print("数据库未初始化，跳过处理相册逻辑")
         except Exception as e:
             print(f"保存到相册失败: {e}")
             import traceback
             traceback.print_exc()
             return_result['save_error'] = str(e)
     else:
-        print(f"不保存到相册: save_to_album={save_to_album}, user_id={user_id}")
-    
+        print(f"跳过保存到相册: save_to_album={save_to_album}, user_id={user_id}")
+
     return return_result
 
 # 认证相关API
@@ -2591,11 +2666,16 @@ def delete_recognition_result_api(result_id):
 @app.route('/api/albums', methods=['GET'])
 @auth_required
 def get_albums():
-    """获取用户相册列表"""
+    """获取用户相册列表（支持层级结构）"""
     try:
-        category = request.args.get('category')
+        parent_id = request.args.get('parent_id')
         
-        albums = get_user_albums(g.user_id, category)
+        if parent_id:
+            # 获取指定父相册的子相册
+            albums = get_child_albums(int(parent_id), g.user_id)
+        else:
+            # 获取根级相册（parent_id为NULL）
+            albums = get_root_albums(g.user_id)
         
         return jsonify({
             'success': True,
@@ -3212,7 +3292,7 @@ if __name__ == '__main__':
     try:
         # 启动Flask服务器
         print('启动Flask服务器，监听在0.0.0.0:5000')
-        app.run(host='0.0.0.0', port=5000, debug=True)
+        app.run(host='0.0.0.0', port=5000, debug=False)
     except Exception as e:
         print(f'应用启动失败: {str(e)}')
         import traceback

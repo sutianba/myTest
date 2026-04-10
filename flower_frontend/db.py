@@ -79,9 +79,8 @@ class SQLDatabaseManager:
                     # 跳过SQLite特有语句
                     if statement.startswith('PRAGMA ') or statement.startswith('BEGIN TRANSACTION'):
                         continue
-                    # 跳过CREATE TABLE语句，避免表已存在的错误
-                    if statement.startswith('CREATE TABLE'):
-                        continue
+                    # 允许执行CREATE TABLE语句，使用IF NOT EXISTS确保表存在
+                    # 这样可以确保所有必要的表都被创建
                     # 跳过INSERT IGNORE INTO users语句，避免password_hash字段错误
                     if 'INSERT IGNORE INTO users' in statement:
                         continue
@@ -403,31 +402,42 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
 
         try:
+            # 当user_id为None时，使用0作为默认值
+            if user_id is None:
+                user_id = 0
+                print(f"[DB] user_id为None，使用默认值0")
+            
             print(f"[DB] 保存识别结果: user_id={user_id}, image_path={image_path}, result={result}, confidence={confidence}, created_at={created_at}")
             
-            # 处理 created_at 参数，确保是正确的timestamp格式
+            # 处理 created_at 参数，确保是整数时间戳
             if created_at is None:
-                # 没有提供，使用当前时间
-                created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+                # 没有提供，使用当前时间戳（秒）
+                created_at_int = int(time.time())
             elif isinstance(created_at, int):
-                # 是整数时间戳，转换为timestamp格式
-                created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_at))
+                # 是整数时间戳，直接使用
+                created_at_int = created_at
             else:
                 # 尝试转换为整数时间戳
                 try:
                     created_at_int = int(created_at)
-                    created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_at_int))
                 except:
-                    # 转换失败，使用当前时间
-                    created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+                    # 转换失败，使用当前时间戳
+                    created_at_int = int(time.time())
             
-            cursor.execute('''
-            INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, level1_category, level2_category, level3_category, camera_make, camera_model, image_width, image_height, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, level1_category, level2_category, level3_category, camera_make, camera_model, image_width, image_height, created_at_str))
-            conn.commit()
-            result_id = cursor.lastrowid
-            print(f"[DB] 识别结果保存成功: result_id={result_id}, created_at={created_at}")
+            print(f"[DB] 使用的created_at时间戳: {created_at_int}")
+            
+            try:
+                cursor.execute('''
+                INSERT INTO recognition_results (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, level1_category, level2_category, level3_category, camera_make, camera_model, image_width, image_height, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, level1_category, level2_category, level3_category, camera_make, camera_model, image_width, image_height, created_at_int))
+                conn.commit()
+                result_id = cursor.lastrowid
+                print(f"[DB] 识别结果保存成功: result_id={result_id}, created_at={created_at_int}")
+            except Exception as e:
+                print(f"❌ SQL 插入失败：{e}")
+                conn.rollback()
+                raise
             return result_id
         except Exception as e:
             conn.rollback()
@@ -1489,14 +1499,15 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
+            # 同时查询 user_id 等于当前用户ID和 user_id 等于 0 的记录
             cursor.execute(
-                "SELECT * FROM recognition_results WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                "SELECT * FROM recognition_results WHERE user_id = %s OR user_id = 0 ORDER BY created_at DESC LIMIT %s OFFSET %s",
                 (user_id, limit, offset)
             )
             results = cursor.fetchall()
             
             cursor.execute(
-                "SELECT COUNT(*) as count FROM recognition_results WHERE user_id = %s",
+                "SELECT COUNT(*) as count FROM recognition_results WHERE user_id = %s OR user_id = 0",
                 (user_id,)
             )
             total = cursor.fetchone()['count']
@@ -1525,18 +1536,17 @@ class SQLDatabaseManager:
         finally:
             conn.close()
     
-    def create_album(self, user_id, name, category=None, cover_image=None, description=None):
+    def create_album(self, user_id, name, category=None, cover_image=None, description=None, parent_id=None):
         """创建相册"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            # 使用 datetime 格式适配 timestamp 类型的 created_at 和 updated_at
-            from datetime import datetime
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # 使用整数时间戳（秒）适配 INT 类型的 created_at 和 updated_at
+            now = int(time.time())
             cursor.execute(
-                "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (user_id, name, category, cover_image, description, 0, now, now)
+                "INSERT INTO albums (user_id, parent_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (user_id, parent_id, name, category, cover_image, description, 0, now, now)
             )
             conn.commit()
             return cursor.lastrowid
@@ -1582,6 +1592,38 @@ class SQLDatabaseManager:
             return cursor.fetchone()
         except Exception as e:
             raise Exception(f'获取相册详情失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_child_albums(self, parent_id, user_id):
+        """获取子相册列表（排除已软删除的）"""
+        conn = self.get_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        
+        try:
+            cursor.execute(
+                "SELECT * FROM albums WHERE parent_id = %s AND user_id = %s AND deleted_at IS NULL ORDER BY created_at DESC",
+                (parent_id, user_id)
+            )
+            return cursor.fetchall()
+        except Exception as e:
+            raise Exception(f'获取子相册列表失败: {str(e)}')
+        finally:
+            conn.close()
+    
+    def get_root_albums(self, user_id):
+        """获取根级相册列表（parent_id为NULL，排除已软删除的）"""
+        conn = self.get_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        
+        try:
+            cursor.execute(
+                "SELECT * FROM albums WHERE user_id = %s AND parent_id IS NULL AND deleted_at IS NULL ORDER BY created_at DESC",
+                (user_id,)
+            )
+            return cursor.fetchall()
+        except Exception as e:
+            raise Exception(f'获取根级相册列表失败: {str(e)}')
         finally:
             conn.close()
     
@@ -1722,8 +1764,7 @@ class SQLDatabaseManager:
                 
                 if not default_album:
                     # 创建默认相册
-                    from datetime import datetime
-                    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    now = int(time.time())
                     cursor.execute(
                         "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                         (user_id, '默认相册', '默认', None, '默认相册', 0, now, now)
@@ -1742,17 +1783,17 @@ class SQLDatabaseManager:
             # 3. 插入图片到相册
             created_at_int = int(time.time())
             cursor.execute(
-                "INSERT INTO album_images (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at_int)
+                "INSERT INTO album_images (album_id, user_id, image_path, image_name, image_description, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                (album_id, user_id, image_path, image_name, image_description, created_at_int)
             )
             image_id = cursor.lastrowid
             print(f"[DB] 图片插入成功: image_id={image_id}")
             
             # 4. 更新相册图片数量
-            from datetime import datetime
+            updated_at_int = int(time.time())
             cursor.execute(
                 "UPDATE albums SET image_count = image_count + 1, updated_at = %s WHERE id = %s",
-                (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), album_id)
+                (updated_at_int, album_id)
             )
             print(f"[DB] 相册图片数量已更新: album_id={album_id}")
             
@@ -1792,27 +1833,11 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            # 关联识别结果表获取完整信息
+            # 不关联识别结果表，直接查询相册图片
             cursor.execute("""
                 SELECT 
-                    ai.*,
-                    rr.result as flower_name,
-                    rr.confidence,
-                    rr.shoot_time,
-                    rr.shoot_year,
-                    rr.shoot_month,
-                    rr.shoot_season,
-                    rr.latitude,
-                    rr.longitude,
-                    rr.location_text,
-                    rr.region_label,
-                    rr.camera_make,
-                    rr.camera_model,
-                    rr.image_width,
-                    rr.image_height,
-                    rr.final_category
+                    ai.*
                 FROM album_images ai
-                LEFT JOIN recognition_results rr ON ai.recognition_result_id = rr.id
                 WHERE ai.album_id = %s AND ai.deleted_at IS NULL
                 ORDER BY ai.created_at DESC
                 LIMIT %s OFFSET %s
@@ -2555,8 +2580,12 @@ def check_user_permission(user_id, permission_name):
     return db_manager.check_user_permission(user_id, permission_name)
 
 def save_recognition_result(user_id, image_path, result, confidence, shoot_time=None, shoot_year=None, shoot_month=None, shoot_season=None, latitude=None, longitude=None, location_text=None, region_label=None, final_category=None, level1_category=None, level2_category=None, level3_category=None, camera_make=None, camera_model=None, image_width=None, image_height=None, created_at=None):
+    print("="*50)
+    print(f"【save_recognition_result 执行】user_id={user_id}, result={result}")
+    print("="*50)
     if db_manager is None:
-        raise Exception("数据库未初始化")
+        print("⚠️ 数据库未初始化，跳过保存识别结果")
+        return None
     return db_manager.save_recognition_result(user_id, image_path, result, confidence, shoot_time, shoot_year, shoot_month, shoot_season, latitude, longitude, location_text, region_label, final_category, level1_category, level2_category, level3_category, camera_make, camera_model, image_width, image_height, created_at)
 
 def get_user_recognition_results(user_id):
@@ -2794,44 +2823,64 @@ def delete_recognition_result(result_id, user_id):
         raise Exception("数据库未初始化")
     return db_manager.delete_recognition_result(result_id, user_id)
 
-def create_album(user_id, name, category, cover_image=None, description=None):
+def create_album(user_id, name, category, cover_image=None, description=None, parent_id=None):
     if db_manager is None:
-        raise Exception("数据库未初始化")
-    return db_manager.create_album(user_id, name, category, cover_image, description)
+        print("⚠️ 数据库未初始化，无法创建相册")
+        return None
+    return db_manager.create_album(user_id, name, category, cover_image, description, parent_id)
 
 def get_user_albums(user_id, category=None):
     if db_manager is None:
-        raise Exception("数据库未初始化")
+        print("⚠️ 数据库未初始化，返回空相册列表")
+        return []
     return db_manager.get_user_albums(user_id, category)
 
 def get_album_by_id(album_id, user_id):
     if db_manager is None:
-        raise Exception("数据库未初始化")
+        print("⚠️ 数据库未初始化，无法获取相册")
+        return None
     return db_manager.get_album_by_id(album_id, user_id)
+
+def get_child_albums(parent_id, user_id):
+    if db_manager is None:
+        print("⚠️ 数据库未初始化，返回空子相册列表")
+        return []
+    return db_manager.get_child_albums(parent_id, user_id)
+
+def get_root_albums(user_id):
+    if db_manager is None:
+        print("⚠️ 数据库未初始化，返回空根相册列表")
+        return []
+    return db_manager.get_root_albums(user_id)
 
 def update_album(album_id, user_id, name=None, description=None):
     if db_manager is None:
-        raise Exception("数据库未初始化")
+        print("⚠️ 数据库未初始化，无法更新相册")
+        return False
     return db_manager.update_album(album_id, user_id, name, description)
 
 def delete_album(album_id, user_id):
     if db_manager is None:
-        raise Exception("数据库未初始化")
+        print("⚠️ 数据库未初始化，无法删除相册")
+        return False
     return db_manager.delete_album(album_id, user_id)
 
 def add_image_to_album(album_id, user_id, image_path, flower_name=None, confidence=None, recognition_result_id=None):
     if db_manager is None:
-        raise Exception("数据库未初始化")
+        print("⚠️ 数据库未初始化，无法添加图片到相册")
+        return None
     return db_manager.add_image_to_album(album_id, user_id, image_path, flower_name, confidence, recognition_result_id)
 
 def get_album_images(album_id, user_id, limit=50, offset=0):
     if db_manager is None:
-        raise Exception("数据库未初始化")
+        print("⚠️ 数据库未初始化，返回空图片列表")
+        return [], 0
     return db_manager.get_album_images(album_id, user_id, limit, offset)
 
 def delete_album_image(image_id, album_id, user_id):
     if db_manager is None:
-        raise Exception("数据库未初始化")
+        print("⚠️ 数据库未初始化，无法删除相册图片")
+        return False
     return db_manager.delete_album_image(image_id, album_id, user_id)
 
 def move_image_to_album(image_id, from_album_id, to_album_id, user_id):
