@@ -691,8 +691,17 @@ def get_address_from_coordinates(lat, lon, max_retries=3):
             print(f"获取地址信息时出错: {e}")
             break
     
-    print("多次尝试后仍无法获取地址信息")
-    return None
+    print("多次尝试后仍无法获取地址信息，使用经纬度作为地址")
+    # 当无法获取地址信息时，返回经纬度作为地址
+    return {
+        'country': '中国',
+        'province': f"纬度: {lat}",
+        'city': f"经度: {lon}",
+        'district': '',
+        'township': '',
+        'road': '',
+        'house_number': ''
+    }
 
 
 def calculate_categories(flower_name, shoot_time, image_content_type):
