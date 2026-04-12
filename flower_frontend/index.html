@@ -3282,7 +3282,7 @@
                             has_location: true,
                             latitude: lat,
                             longitude: lon,
-                            formatted_address: `${lat.toFixed(6)}, ${lon.toFixed(6)}`, // 直接显示GPS坐标
+                            formatted_address: 'GPS信息已获取', // 让后端去解析经纬度为省市区信息
                             raw_gps: {
                                 lat_ref: gpsLatitudeRef,
                                 lat: gpsLatitude,
@@ -4109,6 +4109,7 @@
             // 注意：相册图片可能不包含完整的识别信息，需要后续通过 recognition_result_id 获取
             const shootTime = img.shoot_time || '-';
             const locationText = img.location_text || '-';
+            const regionLabel = img.region_label || '-';
             const cameraMake = img.camera_make || '-';
             const cameraModel = img.camera_model || '-';
             const imageWidth = img.image_width || '-';
@@ -4141,6 +4142,10 @@
                             <div class="detail-item">
                                 <span class="label">拍摄地点:</span>
                                 <span class="value">${locationText}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">区域分类:</span>
+                                <span class="value">${regionLabel}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="label">相机:</span>
@@ -4811,6 +4816,10 @@
                             <div class="detail-item">
                                 <span class="label">拍摄地点:</span>
                                 <span class="value">${locationText}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">区域分类:</span>
+                                <span class="value">${regionLabel}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="label">相机:</span>

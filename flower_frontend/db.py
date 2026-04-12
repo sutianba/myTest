@@ -1860,14 +1860,17 @@ class SQLDatabaseManager:
             cursor.execute("""
                 SELECT 
                     ai.*, 
+                    rr.result, 
+                    rr.confidence, 
                     rr.shoot_time, 
                     rr.location_text, 
+                    rr.region_label, 
                     rr.camera_make, 
                     rr.camera_model, 
                     rr.image_width, 
                     rr.image_height
                 FROM album_images ai
-                LEFT JOIN recognition_results rr ON ai.image_path = rr.image_path
+                LEFT JOIN recognition_results rr ON ai.recognition_result_id = rr.id
                 WHERE ai.album_id = %s AND ai.deleted_at IS NULL
                 ORDER BY ai.created_at DESC
                 LIMIT %s OFFSET %s

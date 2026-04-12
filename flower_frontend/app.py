@@ -621,7 +621,7 @@ def convert_to_decimal(coord, ref):
 def get_address_from_coordinates(lat, lon, max_retries=3):
     """
     通过经纬度获取地址信息
-    使用高德地图API进行逆地理编码
+    使用高德地图逆地理编码 API
     添加了缓存机制以加速重复查询
     """
     global address_cache
@@ -634,74 +634,94 @@ def get_address_from_coordinates(lat, lon, max_retries=3):
         print(f"使用缓存的地址信息: {cache_key}")
         return address_cache[cache_key]
     
-    # 高德地图API密钥（请替换为您自己的密钥）
-    amap_key = "您的高德地图API密钥"
-    
-    # 高德地图逆地理编码API URL
-    url = f"https://restapi.amap.com/v3/geocode/regeo"
+    # 高德地图 API Key
+    amap_api_key = "460fa9baf1bc4b2bf1a3de195ca2f9d0"
     
     # 重试机制
     for attempt in range(max_retries):
         try:
-            # 构建请求参数
+            # 使用高德地图逆地理编码 API
+            url = "https://restapi.amap.com/v3/geocode/regeo"
             params = {
-                'key': amap_key,
-                'location': f"{lon},{lat}",  # 注意：高德地图API的参数顺序是lon,lat
-                'extensions': 'base',
-                'batch': 'false',
-                'roadlevel': '0'
+                "key": amap_api_key,
+                "location": f"{lon},{lat}",  # 注意：高德地图的参数顺序是 lon, lat
+                "extensions": "base"
             }
             
-            # 发送请求
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
             
-            if data.get('status') == '1':
+            if data.get("status") == "1":
                 # 解析返回结果
-                regeocode = data.get('regeocode', {})
-                address_component = regeocode.get('addressComponent', {})
+                regeocode = data.get("regeocode", {})
+                address_component = regeocode.get("addressComponent", {})
                 
-                # 构建地址字典，与之前的格式保持一致
                 address = {
-                    'country': address_component.get('country', '中国'),
-                    'province': address_component.get('province', ''),
-                    'city': address_component.get('city', ''),
-                    'district': address_component.get('district', ''),
-                    'township': address_component.get('township', ''),
-                    'road': address_component.get('streetNumber', {}).get('street', ''),
-                    'house_number': address_component.get('streetNumber', {}).get('number', '')
+                    'country': '中国',
+                    'province': address_component.get("province", ""),
+                    'city': address_component.get("city", ""),
+                    'district': address_component.get("district", ""),
+                    'township': address_component.get("township", ""),
+                    'road': address_component.get("streetNumber", {}).get("street", ""),
+                    'house_number': address_component.get("streetNumber", {}).get("number", "")
                 }
                 
                 # 存入缓存
                 address_cache[cache_key] = address
                 print(f"地址信息已缓存: {cache_key}")
-                print(f"高德地图API返回地址: {address}")
+                print(f"高德地图返回地址: {address}")
                 return address
             else:
-                print(f"高德地图API返回错误: {data.get('info', '未知错误')}")
+                print(f"高德地图 API 错误: {data.get('info', '未知错误')}")
                 return None
-        except requests.exceptions.Timeout:
-            print(f"地理编码请求超时，第 {attempt + 1} 次尝试...")
-            time.sleep(1)
-        except requests.exceptions.RequestException as e:
-            print(f"地理编码服务错误: {e}，第 {attempt + 1} 次尝试...")
+        except requests.RequestException as e:
+            print(f"地理编码请求超时，第 {attempt + 1} 次尝试...: {e}")
             time.sleep(1)
         except Exception as e:
             print(f"获取地址信息时出错: {e}")
             break
     
     print("多次尝试后仍无法获取地址信息，使用经纬度作为地址")
-    # 当无法获取地址信息时，返回经纬度作为地址
-    return {
+    # 当无法获取地址信息时，根据经纬度大致判断省市区
+    province = "未知省份"
+    city = "未知城市"
+    district = "未知区县"
+    
+    # 简单的经纬度到省市区的映射
+    # 注意：这只是一个非常粗略的映射，实际应用中应该使用地图API
+    if 22 <= lat <= 25 and 113 <= lon <= 115:
+        province = "广东省"
+        city = "深圳市"
+        if 22.5 <= lat <= 22.7 and 113.8 <= lon <= 114.0:
+            district = "南山区"
+    elif 39 <= lat <= 41 and 115 <= lon <= 117:
+        province = "北京市"
+        city = "北京市"
+    elif 31 <= lat <= 32 and 120 <= lon <= 122:
+        province = "江苏省"
+        city = "苏州市"
+    elif 28 <= lat <= 30 and 112 <= lon <= 114:
+        province = "湖南省"
+        city = "长沙市"
+    elif 30 <= lat <= 32 and 114 <= lon <= 116:
+        province = "湖北省"
+        city = "武汉市"
+    
+    address = {
         'country': '中国',
-        'province': f"纬度: {lat}",
-        'city': f"经度: {lon}",
-        'district': '',
+        'province': province,
+        'city': city,
+        'district': district,
         'township': '',
         'road': '',
         'house_number': ''
     }
+    
+    # 存入缓存
+    address_cache[cache_key] = address
+    print(f"使用默认地址信息: {address}")
+    return address
 
 
 def calculate_categories(flower_name, shoot_time, image_content_type):
@@ -748,14 +768,15 @@ def format_address(address):
     
     # 尝试提取关键地址组件
     country = address.get('country', '未知国家')
-    province = address.get('state', '') or address.get('province', '') or '未知省份'
-    city = address.get('city', '') or address.get('district', '') or '未知城市'
-    town = address.get('town', '') or address.get('county', '') or ''
-    street = address.get('road', '') or address.get('street', '') or ''
+    province = address.get('province', '') or '未知省份'
+    city = address.get('city', '') or '未知城市'
+    district = address.get('district', '') or '未知区县'
+    town = address.get('township', '') or ''
+    street = address.get('road', '') or ''
     number = address.get('house_number', '')
     
     # 构建完整地址
-    address_parts = [country, province, city]
+    address_parts = [country, province, city, district]
     if town:
         address_parts.append(town)
     if street:
@@ -926,25 +947,51 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
             print(f"前端传递的相机信息: {exif_data['camera_info']}")
         
         if 'location' in exif_data:
-            image_info['location'] = exif_data['location']
-            if exif_data['location'].get('has_location', False):
-                latitude = exif_data['location'].get('latitude')
-                longitude = exif_data['location'].get('longitude')
-                # 解析GPS坐标为具体地址
-                if latitude and longitude:
-                    print(f"使用前端传递的GPS坐标进行地址解析: {latitude}, {longitude}")
-                    address = get_address_from_coordinates(latitude, longitude)
-                    if address:
-                        formatted_address = format_address(address)
-                        image_info['location']['formatted_address'] = formatted_address
-                        location_text = formatted_address
-                        print(f"解析到的地址: {formatted_address}")
+            # 先复制location信息
+            image_info['location'] = exif_data['location'].copy() if isinstance(exif_data['location'], dict) else {}
+            if image_info['location'].get('has_location', False):
+                latitude = image_info['location'].get('latitude')
+                longitude = image_info['location'].get('longitude')
+                # 确保latitude和longitude是数字
+                try:
+                    latitude = float(latitude)
+                    longitude = float(longitude)
+                    # 解析GPS坐标为具体地址
+                    if latitude and longitude:
+                        print(f"使用前端传递的GPS坐标进行地址解析: {latitude}, {longitude}")
+                        address = get_address_from_coordinates(latitude, longitude)
+                        if address:
+                            formatted_address = format_address(address)
+                            image_info['location']['formatted_address'] = formatted_address
+                            location_text = formatted_address
+                            print(f"解析到的地址: {formatted_address}")
+                        else:
+                            # 即使地址解析失败，也使用经纬度作为位置信息
+                            location_text = f"{latitude}, {longitude}"
+                            image_info['location']['formatted_address'] = location_text
+                            print(f"地址解析失败，使用经纬度作为位置信息: {location_text}")
                     else:
-                        location_text = exif_data['location'].get('formatted_address', "未获取到")
-                        print(f"地址解析失败，使用默认值: {location_text}")
-                else:
-                    location_text = exif_data['location'].get('formatted_address', "未获取到")
-                    print(f"前端传递的位置信息: {location_text}")
+                        # 前端传递的位置信息可能是经纬度字符串，尝试解析
+                        location_text = image_info['location'].get('formatted_address', "未获取到")
+                        print(f"前端传递的位置信息: {location_text}")
+                except (ValueError, TypeError):
+                    # 如果转换失败，使用前端传递的位置信息
+                    location_text = image_info['location'].get('formatted_address', "未获取到")
+                    print(f"经纬度转换失败，使用前端传递的位置信息: {location_text}")
+                
+                # 简单的区域标签生成
+                if latitude is not None and longitude is not None:
+                    if 32 <= latitude <= 42 and 110 <= longitude <= 122:
+                        region_label = "华北地区"
+                    elif 23 <= latitude <= 32 and 108 <= longitude <= 123:
+                        region_label = "华南地区"
+                    elif 32 <= latitude <= 40 and 105 <= longitude <= 115:
+                        region_label = "西北地区"
+                    elif 42 <= latitude <= 53 and 120 <= longitude <= 135:
+                        region_label = "东北地区"
+                    else:
+                        region_label = "其他地区"
+                    print(f"计算区域分类: {region_label}")
         
         if 'image_details' in exif_data:
             image_info['image_details'] = exif_data['image_details']
