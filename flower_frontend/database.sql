@@ -249,6 +249,7 @@ CREATE TABLE IF NOT EXISTS album_images (
     image_path TEXT NOT NULL,
     image_name VARCHAR(255) NOT NULL,
     image_description TEXT,
+    recognition_result_id INT,
     created_at INT NOT NULL,
     deleted_at INT,
     FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE,

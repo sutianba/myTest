@@ -482,11 +482,6 @@ def index():
     """返回前端页面"""
     return send_from_directory(BASE_DIR, 'index.html')
 
-@app.route('/<path:filename>')
-def serve_file(filename):
-    """返回指定的文件"""
-    return send_from_directory(BASE_DIR, filename)
-
 @app.route('/api/detect', methods=['POST'])
 def detect_flower():
     """植物花卉识别工具 API 接口"""
@@ -3067,6 +3062,112 @@ def move_album_image_api(album_id, image_id):
         print(f"移动图片时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/albums/<int:album_id>/images/batch-delete', methods=['POST'])
+@auth_required
+def batch_delete_album_images_api(album_id):
+    """批量删除相册中的图片"""
+    try:
+        print(f"=== 批量删除图片 API 调用 ===")
+        print(f"album_id: {album_id}")
+        print(f"user_id: {g.user_id}")
+        
+        data = request.get_json()
+        print(f"请求数据: {data}")
+        
+        image_ids = data.get('image_ids', [])
+        print(f"image_ids: {image_ids}")
+        
+        if not image_ids or not isinstance(image_ids, list):
+            print("错误: 请选择要删除的图片")
+            return jsonify({'success': False, 'error': '请选择要删除的图片'}), 400
+        
+        deleted_count = 0
+        for image_id in image_ids:
+            try:
+                print(f"处理图片 ID: {image_id}")
+                # 获取图片信息
+                images, _ = get_album_images(album_id, g.user_id)
+                print(f"获取到 {len(images)} 张图片")
+                
+                image_info = None
+                for img in images:
+                    if img['id'] == image_id:
+                        image_info = img
+                        break
+                
+                if image_info:
+                    print(f"找到图片信息: {image_info}")
+                    # 尝试获取完整的识别信息
+                    recognition_result_id = image_info.get('recognition_result_id')
+                    recognition_info = {}
+
+                    if recognition_result_id:
+                        try:
+                            result = get_recognition_result(recognition_result_id)
+                            if result:
+                                recognition_info = {
+                                    'result': result.get('result'),
+                                    'confidence': result.get('confidence'),
+                                    'shoot_time': result.get('shoot_time'),
+                                    'shoot_year': result.get('shoot_year'),
+                                    'shoot_month': result.get('shoot_month'),
+                                    'shoot_season': result.get('shoot_season'),
+                                    'location_text': result.get('location_text'),
+                                    'region_label': result.get('region_label'),
+                                    'camera_make': result.get('camera_make'),
+                                    'camera_model': result.get('camera_model'),
+                                    'image_width': result.get('image_width'),
+                                    'image_height': result.get('image_height'),
+                                    'final_category': result.get('final_category')
+                                }
+                        except Exception as e:
+                            print(f"获取识别结果信息失败: {e}")
+
+                    # 构建回收站 item_data
+                    recycle_item_data = {
+                        'image_path': image_info.get('image_path'),
+                        'flower_name': image_info.get('flower_name') or recognition_info.get('result', '未知花卉'),
+                        'confidence': image_info.get('confidence') or recognition_info.get('confidence', 0),
+                        'created_at': image_info.get('created_at'),
+                        'album_id': album_id,
+                        'album_name': image_info.get('album_name', '未分类'),
+                        'recognition_result_id': recognition_result_id,
+                        # 添加完整的识别信息
+                        'shoot_time': recognition_info.get('shoot_time'),
+                        'shoot_year': recognition_info.get('shoot_year'),
+                        'shoot_month': recognition_info.get('shoot_month'),
+                        'shoot_season': recognition_info.get('shoot_season'),
+                        'location_text': recognition_info.get('location_text'),
+                        'region_label': recognition_info.get('region_label'),
+                        'camera_make': recognition_info.get('camera_make'),
+                        'camera_model': recognition_info.get('camera_model'),
+                        'image_width': recognition_info.get('image_width'),
+                        'image_height': recognition_info.get('image_height'),
+                        'final_category': recognition_info.get('final_category')
+                    }
+
+                    print(f"移动到回收站: {recycle_item_data}")
+                    move_to_recycle_bin(g.user_id, 'image', image_id, recycle_item_data)
+                    print(f"删除图片: {image_id}")
+                    delete_album_image(image_id, album_id, g.user_id)
+                    deleted_count += 1
+                    print(f"已删除 {deleted_count} 张图片")
+                else:
+                    print(f"未找到图片 ID: {image_id}")
+            except Exception as e:
+                print(f"删除图片 {image_id} 时发生错误: {str(e)}")
+                continue
+        
+        if deleted_count > 0:
+            print(f"成功删除 {deleted_count} 张图片")
+            return jsonify({'success': True, 'message': f'成功删除 {deleted_count} 张图片', 'deleted_count': deleted_count})
+        else:
+            print("删除失败，没有图片被删除")
+            return jsonify({'success': False, 'error': '删除失败，没有图片被删除'})
+    except Exception as e:
+        print(f"批量删除图片时发生错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/albums/categories', methods=['GET'])
 @auth_required
 def get_album_categories_api():
@@ -3463,6 +3564,23 @@ def after_request(response):
         print(f"记录访问日志时发生错误: {str(e)}")
     
     return response
+
+@app.route('/<path:filename>')
+def serve_file(filename):
+    """返回指定的文件"""
+    return send_from_directory(BASE_DIR, filename)
+
+# 全局404错误处理
+@app.errorhandler(404)
+def not_found_error(error):
+    """处理404错误，返回JSON响应"""
+    return jsonify({'success': False, 'error': '请求的资源不存在'}), 404
+
+# 全局500错误处理
+@app.errorhandler(500)
+def internal_error(error):
+    """处理500错误，返回JSON响应"""
+    return jsonify({'success': False, 'error': '服务器内部错误'}), 500
 
 if __name__ == '__main__':
     print('启动应用...')

@@ -4022,7 +4022,7 @@
                     document.getElementById('albumDetailName').textContent = album.name;
                     document.getElementById('albumDetailCategory').textContent = album.category || '未分类';
                     document.getElementById('albumDetailImageCount').textContent = album.image_count || 0;
-                    document.getElementById('albumDetailUpdatedAt').textContent = new Date(album.updated_at).toLocaleString();
+                    document.getElementById('albumDetailUpdatedAt').textContent = new Date(parseInt(album.updated_at) * 1000).toLocaleString();
                     
                     // 设置相册封面
                     const albumCover = document.getElementById('albumCover');
@@ -4054,6 +4054,11 @@
             }
         }
         
+        // 全局变量，存储选中的图片ID
+        let selectedImageIds = [];
+        // 批量选择模式
+        let batchSelectMode = false;
+
         // 显示相册图片
         function displayAlbumImages(images, albumId) {
             console.log('显示相册图片:', { albumId, imageCount: images ? images.length : 0 });
@@ -4061,6 +4066,121 @@
             imagesGrid.innerHTML = '';
 
             if (images && images.length > 0) {
+                // 添加操作栏
+                const actionsBar = document.createElement('div');
+                actionsBar.className = 'actions-bar';
+                actionsBar.style.cssText = `
+                    grid-column: 1 / -1;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 10px 20px;
+                    background-color: #f8f9fa;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                `;
+                
+                // 左侧操作
+                const leftActions = document.createElement('div');
+                leftActions.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+                
+                // 批量选择按钮
+                const batchSelectButton = document.createElement('button');
+                batchSelectButton.textContent = batchSelectMode ? '取消批量选择' : '批量选择';
+                batchSelectButton.style.cssText = `
+                    padding: 8px 16px;
+                    border: none;
+                    border-radius: 4px;
+                    background-color: #007bff;
+                    color: white;
+                    cursor: pointer;
+                    font-size: 14px;
+                    transition: background-color 0.2s;
+                `;
+                batchSelectButton.onmouseover = function() {
+                    this.style.backgroundColor = '#0069d9';
+                };
+                batchSelectButton.onmouseout = function() {
+                    this.style.backgroundColor = '#007bff';
+                };
+                batchSelectButton.onclick = function() {
+                    batchSelectMode = !batchSelectMode;
+                    displayAlbumImages(images, albumId);
+                };
+                
+                leftActions.appendChild(batchSelectButton);
+                
+                // 全选复选框（仅在批量选择模式下显示）
+                if (batchSelectMode) {
+                    const selectAllContainer = document.createElement('div');
+                    selectAllContainer.style.cssText = 'display: flex; align-items: center;';
+                    
+                    const selectAllCheckbox = document.createElement('input');
+                    selectAllCheckbox.type = 'checkbox';
+                    selectAllCheckbox.id = 'selectAllImages';
+                    selectAllCheckbox.style.cssText = 'margin-right: 8px; width: 18px; height: 18px;';
+                    
+                    const selectAllLabel = document.createElement('label');
+                    selectAllLabel.htmlFor = 'selectAllImages';
+                    selectAllLabel.textContent = '全选';
+                    selectAllLabel.style.cssText = 'cursor: pointer; font-size: 14px;';
+                    
+                    selectAllContainer.appendChild(selectAllCheckbox);
+                    selectAllContainer.appendChild(selectAllLabel);
+                    leftActions.appendChild(selectAllContainer);
+                    
+                    // 全选/取消全选事件
+                    selectAllCheckbox.addEventListener('change', function() {
+                        const isChecked = this.checked;
+                        selectedImageIds = [];
+                        
+                        document.querySelectorAll('.image-checkbox').forEach(checkbox => {
+                            checkbox.checked = isChecked;
+                            if (isChecked) {
+                                selectedImageIds.push(parseInt(checkbox.value));
+                            }
+                        });
+                    });
+                }
+                
+                // 右侧操作
+                const rightActions = document.createElement('div');
+                rightActions.style.cssText = 'display: flex; gap: 10px;';
+                
+                // 批量删除按钮（仅在批量选择模式下显示）
+                if (batchSelectMode) {
+                    const batchDeleteButton = document.createElement('button');
+                    batchDeleteButton.className = 'btn btn-danger';
+                    batchDeleteButton.textContent = '批量删除';
+                    batchDeleteButton.style.cssText = `
+                        padding: 8px 16px;
+                        border: none;
+                        border-radius: 4px;
+                        background-color: #dc3545;
+                        color: white;
+                        cursor: pointer;
+                        font-size: 14px;
+                        transition: background-color 0.2s;
+                    `;
+                    batchDeleteButton.onmouseover = function() {
+                        this.style.backgroundColor = '#c82333';
+                    };
+                    batchDeleteButton.onmouseout = function() {
+                        this.style.backgroundColor = '#dc3545';
+                    };
+                    batchDeleteButton.onclick = function() {
+                        batchDeleteImages(albumId);
+                    };
+                    
+                    rightActions.appendChild(batchDeleteButton);
+                }
+                
+                actionsBar.appendChild(leftActions);
+                actionsBar.appendChild(rightActions);
+                
+                imagesGrid.appendChild(actionsBar);
+
                 images.forEach(img => {
                     console.log('图片信息:', img); // 添加这行代码来查看图片信息
                     const card = createAlbumImageCard(img, albumId);
@@ -4074,6 +4194,110 @@
                         <span class="empty-tip">识别的植物会保存在这里</span>
                     </div>
                 `;
+            }
+        }
+
+        // 处理单个图片选择
+        function toggleImageSelection(imageId) {
+            const index = selectedImageIds.indexOf(imageId);
+            if (index > -1) {
+                selectedImageIds.splice(index, 1);
+            } else {
+                selectedImageIds.push(imageId);
+            }
+            
+            // 更新全选复选框状态
+            const totalImages = document.querySelectorAll('.image-checkbox').length;
+            const selectedCount = selectedImageIds.length;
+            const selectAllCheckbox = document.getElementById('selectAllImages');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = selectedCount > 0 && selectedCount === totalImages;
+            }
+        }
+
+        // 批量删除图片
+        async function batchDeleteImages(albumId) {
+            console.log('=== 批量删除图片调试信息 ===');
+            console.log('albumId:', albumId);
+            console.log('selectedImageIds:', selectedImageIds);
+            
+            if (selectedImageIds.length === 0) {
+                alert('请选择要删除的图片');
+                return;
+            }
+            
+            if (!albumId) {
+                alert('相册ID不能为空');
+                return;
+            }
+            
+            // 验证albumId是否为有效的数字
+            const parsedAlbumId = parseInt(albumId);
+            if (isNaN(parsedAlbumId)) {
+                alert('无效的相册ID');
+                return;
+            }
+            
+            if (!confirm(`确定要删除选中的 ${selectedImageIds.length} 张图片吗？`)) {
+                return;
+            }
+            
+            try {
+                const headers = getAuthHeaders();
+                console.log('headers:', headers);
+                
+                if (!headers) {
+                    alert('请先登录后再删除图片');
+                    return;
+                }
+                
+                const url = `/api/albums/${parsedAlbumId}/images/batch-delete`;
+                console.log('请求URL:', url);
+                console.log('请求体:', { image_ids: selectedImageIds });
+                
+                // 使用fetch API发送请求，确保POST方法
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ image_ids: selectedImageIds })
+                });
+                
+                console.log('响应状态码:', response.status);
+                console.log('响应状态文本:', response.statusText);
+                
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    alert('登录已失效，请重新登录');
+                    return;
+                }
+                
+                // 先获取响应文本，检查是否是HTML
+                const responseText = await response.text();
+                console.log('响应文本:', responseText);
+                
+                try {
+                    // 尝试解析JSON
+                    const data = JSON.parse(responseText);
+                    console.log('解析后的响应:', data);
+                    
+                    if (data.success) {
+                        alert(data.message);
+                        // 重新加载相册详情
+                        viewAlbumDetail(parsedAlbumId);
+                        // 清空选中的图片ID
+                        selectedImageIds = [];
+                    } else {
+                        alert('删除失败: ' + (data.error || '未知错误'));
+                    }
+                } catch (error) {
+                    console.error('解析JSON失败:', error);
+                    alert('删除失败: 服务器返回了非JSON响应');
+                }
+            } catch (error) {
+                console.error('批量删除图片失败:', error);
+                alert('删除失败: ' + error.message);
+            } finally {
+                console.log('=== 批量删除图片调试结束 ===');
             }
         }
 
@@ -4118,11 +4342,20 @@
 
             card.innerHTML = `
                 <div class="album-card-image-section">
-                    <div class="album-card-image" onclick="openImagePreview('${imagePath}')">
-                        <img src="${imagePath}" alt="${flowerName}" onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
-                        <div class="image-overlay">
-                            <span class="preview-hint">🔍 查看大图</span>
+                    <div style="position: relative;">
+                        <div class="album-card-image" onclick="openImagePreview('${imagePath}')">
+                            <img src="${imagePath}" alt="${flowerName}" onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
+                            <div class="image-overlay">
+                                <span class="preview-hint">🔍 查看大图</span>
+                            </div>
                         </div>
+                        <!-- 选择复选框（仅在批量选择模式下显示） -->
+                        ${batchSelectMode ? `
+                        <div style="position: absolute; top: 10px; left: 10px; z-index: 10;">
+                            <input type="checkbox" class="image-checkbox" value="${img.id}" onclick="toggleImageSelection(${img.id}); event.stopPropagation();"
+                                   style="width: 18px; height: 18px; cursor: pointer;">
+                        </div>
+                        ` : ''}
                     </div>
                     <div class="album-card-main-info">
                         <div class="flower-result">${flowerName}</div>

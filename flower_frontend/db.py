@@ -1806,8 +1806,8 @@ class SQLDatabaseManager:
             # 3. 插入图片到相册
             created_at_int = int(time.time())
             cursor.execute(
-                "INSERT INTO album_images (album_id, user_id, image_path, image_name, image_description, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                (album_id, user_id, image_path, image_name, image_description, created_at_int)
+                "INSERT INTO album_images (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (album_id, user_id, image_path, image_name, image_description, recognition_result_id, created_at_int)
             )
             image_id = cursor.lastrowid
             print(f"[DB] 图片插入成功: image_id={image_id}")
@@ -1871,15 +1871,15 @@ class SQLDatabaseManager:
                     rr.image_height
                 FROM album_images ai
                 LEFT JOIN recognition_results rr ON ai.recognition_result_id = rr.id
-                WHERE ai.album_id = %s AND ai.deleted_at IS NULL
+                WHERE ai.album_id = %s AND ai.deleted_at IS NULL AND ai.album_id IN (SELECT id FROM albums WHERE user_id = %s)
                 ORDER BY ai.created_at DESC
                 LIMIT %s OFFSET %s
-            """, (album_id, limit, offset))
+            """, (album_id, user_id, limit, offset))
             images = cursor.fetchall()
             
             cursor.execute(
-                "SELECT COUNT(*) as count FROM album_images WHERE album_id = %s AND deleted_at IS NULL",
-                (album_id,)
+                "SELECT COUNT(*) as count FROM album_images WHERE album_id = %s AND deleted_at IS NULL AND album_id IN (SELECT id FROM albums WHERE user_id = %s)",
+                (album_id, user_id)
             )
             total = cursor.fetchone()['count']
             
@@ -2355,15 +2355,71 @@ class SQLDatabaseManager:
             item_data = item.get('item_data')
             
             if item_type == 'image':
-                # 恢复相册图片
+                # 解析item_data获取相册信息
+                import json
+                album_id = None
+                album_name = None
+                if item_data:
+                    try:
+                        data = json.loads(item_data)
+                        album_id = data.get('album_id')
+                        album_name = data.get('album_name')
+                    except json.JSONDecodeError:
+                        pass
+                
+                # 检查图片是否存在
                 cursor.execute(
-                    "UPDATE album_images SET deleted_at = NULL WHERE id = %s",
+                    "SELECT * FROM album_images WHERE id = %s",
                     (original_id,)
                 )
+                image = cursor.fetchone()
+                
+                if image:
+                    # 检查相册是否存在
+                    if album_id:
+                        cursor.execute(
+                            "SELECT * FROM albums WHERE id = %s AND user_id = %s",
+                            (album_id, user_id)
+                        )
+                        album = cursor.fetchone()
+                        
+                        if not album:
+                            # 相册不存在，重新创建
+                            now = int(time.time())
+                            cursor.execute(
+                                "INSERT INTO albums (user_id, name, category, cover_image, description, image_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                                (user_id, album_name or '恢复的相册', '恢复', None, '从回收站恢复的相册', 0, now, now)
+                            )
+                            album_id = cursor.lastrowid
+                            print(f"[DB] 重新创建相册: album_id={album_id}, album_name={album_name}")
+                    
+                    # 恢复图片
+                    if album_id:
+                        # 更新图片的相册ID和删除状态
+                        cursor.execute(
+                            "UPDATE album_images SET deleted_at = NULL, album_id = %s WHERE id = %s",
+                            (album_id, original_id)
+                        )
+                        # 更新相册图片数量
+                        cursor.execute(
+                            "UPDATE albums SET image_count = image_count + 1, updated_at = %s WHERE id = %s",
+                            (int(time.time()), album_id)
+                        )
+                    else:
+                        # 没有相册信息，恢复图片但不更新相册
+                        cursor.execute(
+                            "UPDATE album_images SET deleted_at = NULL WHERE id = %s",
+                            (original_id,)
+                        )
             elif item_type == 'album':
                 # 恢复相册
                 cursor.execute(
                     "UPDATE albums SET deleted_at = NULL WHERE id = %s",
+                    (original_id,)
+                )
+                # 同时恢复相册中的所有图片
+                cursor.execute(
+                    "UPDATE album_images SET deleted_at = NULL WHERE album_id = %s",
                     (original_id,)
                 )
             elif item_type == 'post':
