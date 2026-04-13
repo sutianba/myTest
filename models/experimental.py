@@ -8,8 +8,6 @@ import torch
 import torch.nn as nn
 from ultralytics.utils.patches import torch_load
 
-from utils.downloads import attempt_download
-
 
 class Sum(nn.Module):
     """Weighted sum of 2 or more layers https://arxiv.org/abs/1911.09070."""
@@ -92,12 +90,13 @@ def attempt_load(weights, device=None, inplace=True, fuse=True):
     Example inputs: weights=[a,b,c] or a single model weights=[a] or weights=a.
     """
     import os
-    from pathlib import Path
+
     from models.yolo import Detect, Model
 
     # 处理 Windows 路径兼容性问题
-    if os.name == 'nt':  # Windows 系统
+    if os.name == "nt":  # Windows 系统
         import pathlib
+
         # 临时替换 PosixPath 为 WindowsPath
         posix_backup = pathlib.PosixPath
         try:
@@ -105,8 +104,8 @@ def attempt_load(weights, device=None, inplace=True, fuse=True):
             # 初始化并加载模型
             model = Ensemble()
             for w in weights if isinstance(weights, list) else [weights]:
-                ckpt = torch_load(w, map_location='cpu')  # load
-                model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().fuse().eval())  # FP32 model
+                ckpt = torch_load(w, map_location="cpu")  # load
+                model.append(ckpt["ema" if ckpt.get("ema") else "model"].float().fuse().eval())  # FP32 model
         finally:
             # 恢复原始的 PosixPath
             pathlib.PosixPath = posix_backup
@@ -114,8 +113,8 @@ def attempt_load(weights, device=None, inplace=True, fuse=True):
         # 非 Windows 系统正常加载
         model = Ensemble()
         for w in weights if isinstance(weights, list) else [weights]:
-            ckpt = torch_load(w, map_location='cpu')  # load
-            model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().fuse().eval())  # FP32 model
+            ckpt = torch_load(w, map_location="cpu")  # load
+            model.append(ckpt["ema" if ckpt.get("ema") else "model"].float().fuse().eval())  # FP32 model
 
     # Compatibility updates
     for m in model.modules():
