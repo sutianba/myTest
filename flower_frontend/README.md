@@ -20,8 +20,10 @@
 ## 安装和运行
 
 ### 1. 安装后端依赖
+
 如果安装速度的太慢，可以使用pip的镜像进行下载。速度嗖嗖
 常见镜像网址
+
 ```
 阿里云：https://mirrors.aliyun.com/pypi/simple/
 清华大学：https://pypi.tuna.tsinghua.edu.cn/simple/
@@ -35,7 +37,9 @@
 ```bash
 pip install -r requirements.txt
 ```
+
 阿里云镜像版本
+
 ```bash
 pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
@@ -44,14 +48,19 @@ pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
 在`flower_frontend`目录下运行：
 进入flower_frontend目录
+
 ```
 cd ./flower_frontend
 ```
+
 ./ 表示当前目录下的flower_frontend目录
+
 ```bash
 pip install -r requirements-frontend.txt
 ```
+
 阿里云镜像版本
+
 ```bash
 pip install -r requirements-frontend.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
@@ -113,8 +122,10 @@ flower_frontend/
 
 MIT
 
-----------------------------------
+---
+
 # TODO
- - [ ] 优化【识别分类】的操作，增加识别结果导出功能
- - [ ] 内存配比问题（很困难，优先级往后放）
- - [ ] 【识别分类】图片是略缩图，这个跟内存有关，但是不好放大？有待处理
+
+- [ ] 优化【识别分类】的操作，增加识别结果导出功能
+- [ ] 内存配比问题（很困难，优先级往后放）
+- [ ] 【识别分类】图片是略缩图，这个跟内存有关，但是不好放大？有待处理
