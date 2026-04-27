@@ -3516,7 +3516,6 @@
                 exifContent.innerHTML = `
                     <p><strong>拍摄时间:</strong> ${shootTime}</p>
                     <p><strong>拍摄地点:</strong> ${location}</p>
-                    <p><strong>区域分类:</strong> ${regionLabel}</p>
                     <p><strong>相机:</strong> ${item.exif_info.camera_info.make} ${item.exif_info.camera_info.model}</p>
                     <p><strong>尺寸:</strong> ${item.exif_info.image_details.width} × ${item.exif_info.image_details.height}</p>
                 `;
@@ -3624,7 +3623,6 @@
                             exifDiv.innerHTML = `
                                 <p><strong>拍摄时间:</strong> ${shootTime}</p>
                                 <p><strong>拍摄地点:</strong> ${location}</p>
-                                <p><strong>区域分类:</strong> ${regionLabel}</p>
                                 <p><strong>相机:</strong> ${newItem.exif_info.camera_info.make} ${newItem.exif_info.camera_info.model}</p>
                                 <p><strong>尺寸:</strong> ${newItem.exif_info.image_details.width} × ${newItem.exif_info.image_details.height}</p>
                             `;
@@ -4376,10 +4374,7 @@
                                 <span class="label">拍摄地点:</span>
                                 <span class="value">${locationText}</span>
                             </div>
-                            <div class="detail-item">
-                                <span class="label">区域分类:</span>
-                                <span class="value">${regionLabel}</span>
-                            </div>
+
                             <div class="detail-item">
                                 <span class="label">相机:</span>
                                 <span class="value">${cameraMake} ${cameraModel}</span>
@@ -5050,10 +5045,7 @@
                                 <span class="label">拍摄地点:</span>
                                 <span class="value">${locationText}</span>
                             </div>
-                            <div class="detail-item">
-                                <span class="label">区域分类:</span>
-                                <span class="value">${regionLabel}</span>
-                            </div>
+
                             <div class="detail-item">
                                 <span class="label">相机:</span>
                                 <span class="value">${cameraMake} ${cameraModel}</span>
@@ -5114,45 +5106,105 @@
 
             // 分享按钮事件
             const shareBtn = card.querySelector('.btn-share');
-            shareBtn.onclick = async function() {
+            shareBtn.onclick = function() {
                 const currentToken = getToken();
                 if (!currentToken) {
                     alert('请先登录后再分享');
                     return;
                 }
 
-                const content = `我识别了一种植物：${result}，置信度：${confidence}。拍摄于${locationText}，使用${cameraMake} ${cameraModel}拍摄。`;
-                const topics = '植物,识别,自然';
-                const tags = result;
+                // 创建分享对话框
+                const dialog = document.createElement('div');
+                dialog.className = 'share-dialog';
+                dialog.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 10000;
+                `;
 
-                try {
-                    const response = await fetch('/api/posts', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${currentToken}`
-                        },
-                        body: JSON.stringify({
-                            content,
-                            topics,
-                            tags,
-                            source_type: 'recognition',
-                            source_id: item.id
-                        })
-                    });
+                const dialogContent = document.createElement('div');
+                dialogContent.style.cssText = `
+                    background-color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    width: 90%;
+                    max-width: 500px;
+                    max-height: 80%;
+                    overflow-y: auto;
+                `;
 
-                    const responseText = await response.text();
-                    const data = JSON.parse(responseText);
+                dialogContent.innerHTML = `
+                    <h3>分享到社区</h3>
+                    <div style="margin-bottom: 15px;">
+                        <label for="shareContent" style="display: block; margin-bottom: 5px;">帖子内容</label>
+                        <textarea id="shareContent" rows="4" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+我识别了一种植物：${result}，置信度：${confidence}。拍摄于${locationText}，使用${cameraMake} ${cameraModel}拍摄。
+                        </textarea>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label for="shareTags" style="display: block; margin-bottom: 5px;">标签（用逗号分隔）</label>
+                        <input type="text" id="shareTags" value="${result},植物,识别,自然" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                        <button id="cancelShare" style="padding: 8px 16px; background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">取消</button>
+                        <button id="confirmShare" style="padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">分享</button>
+                    </div>
+                `;
 
-                    if (data.success) {
-                        alert('分享成功！');
-                    } else {
-                        alert('分享失败: ' + data.error);
+                dialog.appendChild(dialogContent);
+                document.body.appendChild(dialog);
+
+                // 取消按钮事件
+                document.getElementById('cancelShare').onclick = function() {
+                    document.body.removeChild(dialog);
+                };
+
+                // 确认分享按钮事件
+                document.getElementById('confirmShare').onclick = async function() {
+                    const content = document.getElementById('shareContent').value.trim();
+                    const tags = document.getElementById('shareTags').value.trim();
+
+                    if (!content) {
+                        alert('帖子内容不能为空');
+                        return;
                     }
-                } catch (error) {
-                    console.error('分享到社区错误:', error);
-                    alert('分享失败，请稍后重试');
-                }
+
+                    try {
+                        const response = await fetch('/api/posts', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${currentToken}`
+                            },
+                            body: JSON.stringify({
+                                content,
+                                tags,
+                                source_type: 'recognition',
+                                source_id: item.id
+                            })
+                        });
+
+                        const responseText = await response.text();
+                        const data = JSON.parse(responseText);
+
+                        if (data.success) {
+                            alert('分享成功！');
+                            document.body.removeChild(dialog);
+                        } else {
+                            alert('分享失败: ' + data.error);
+                        }
+                    } catch (error) {
+                        console.error('分享到社区错误:', error);
+                        alert('分享失败，请稍后重试');
+                    }
+                };
             };
 
             return card;

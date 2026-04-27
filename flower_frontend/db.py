@@ -483,7 +483,7 @@ class SQLDatabaseManager:
             conn.close()
     
     # 帖子相关操作
-    def create_post(self, user_id, content, image_url=None, topics=None, tags=None, source_type=None, source_id=None):
+    def create_post(self, user_id, content, image_url=None, tags=None, source_type=None, source_id=None):
         """创建新帖子"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -491,9 +491,9 @@ class SQLDatabaseManager:
         try:
             now = int(time.time())
             cursor.execute('''
-            INSERT INTO posts (user_id, content, image_url, topics, tags, source_type, source_id, likes_count, comments_count, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (user_id, content, image_url, topics, tags, source_type, source_id, 0, 0, now, now))
+            INSERT INTO posts (user_id, content, image_url, tags, source_type, source_id, likes_count, comments_count, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (user_id, content, image_url, tags, source_type, source_id, 0, 0, now, now))
             
             post_id = cursor.lastrowid
             conn.commit()
@@ -2688,10 +2688,10 @@ def get_recognition_result(result_id):
     return db_manager.get_recognition_result(result_id)
 
 # 帖子相关便捷函数
-def create_post(user_id, content, image_url=None, topics=None, tags=None, source_type=None, source_id=None):
+def create_post(user_id, content, image_url=None, tags=None, source_type=None, source_id=None):
     if db_manager is None:
         raise Exception("数据库未初始化")
-    return db_manager.create_post(user_id, content, image_url, topics, tags, source_type, source_id)
+    return db_manager.create_post(user_id, content, image_url, tags, source_type, source_id)
 
 def get_posts(limit=20, offset=0):
     if db_manager is None:

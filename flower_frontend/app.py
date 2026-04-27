@@ -519,9 +519,9 @@ def detect_flower():
         print(f"解析后的 save_to_album = {save_to_album}")
         
         # 检查save_to_album是否为True但user_id为None
+        # 不返回401错误，而是在处理完成后添加save_error字段
         if save_to_album and not user_id:
             print("保存到相册需要登录")
-            return jsonify({'success': False, 'error': '保存到相册需要登录，请先登录'}), 401
         
         if 'image' in data:
             image_data = data['image']
@@ -766,18 +766,9 @@ def format_address(address):
     province = address.get('province', '') or '未知省份'
     city = address.get('city', '') or '未知城市'
     district = address.get('district', '') or '未知区县'
-    town = address.get('township', '') or ''
-    street = address.get('road', '') or ''
-    number = address.get('house_number', '')
     
-    # 构建完整地址
+    # 构建完整地址，只保留到区一级
     address_parts = [country, province, city, district]
-    if town:
-        address_parts.append(town)
-    if street:
-        address_parts.append(street)
-        if number:
-            address_parts.append(number)
     
     # 移除空字符串并连接
     return '，'.join(filter(None, address_parts))
@@ -872,7 +863,6 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
             'latitude': latitude,
             'longitude': longitude,
             'location_text': location_text,
-            'region_label': region_label,
             'classification_tags': classification_tags,
             'final_category': final_category
         }
@@ -974,16 +964,29 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
                     location_text = image_info['location'].get('formatted_address', "未获取到")
                     print(f"经纬度转换失败，使用前端传递的位置信息: {location_text}")
                 
-                # 简单的区域标签生成
+                # 地理区域分类
                 if latitude is not None and longitude is not None:
+                    # 华北地区: 北京、天津、河北、山西、内蒙古
                     if 32 <= latitude <= 42 and 110 <= longitude <= 122:
                         region_label = "华北地区"
-                    elif 23 <= latitude <= 32 and 108 <= longitude <= 123:
+                    # 华南地区: 广东、广西、海南
+                    elif 18 <= latitude <= 26 and 104 <= longitude <= 117:
                         region_label = "华南地区"
-                    elif 32 <= latitude <= 40 and 105 <= longitude <= 115:
-                        region_label = "西北地区"
+                    # 华中地区: 河南、湖北、湖南
+                    elif 28 <= latitude <= 35 and 108 <= longitude <= 116:
+                        region_label = "华中地区"
+                    # 东北地区: 辽宁、吉林、黑龙江
                     elif 42 <= latitude <= 53 and 120 <= longitude <= 135:
                         region_label = "东北地区"
+                    # 西北地区: 陕西、甘肃、青海、宁夏、新疆
+                    elif 32 <= latitude <= 49 and 73 <= longitude <= 110:
+                        region_label = "西北地区"
+                    # 西南地区: 四川、贵州、云南、西藏、重庆
+                    elif 21 <= latitude <= 35 and 97 <= longitude <= 110:
+                        region_label = "西南地区"
+                    # 华东地区: 上海、江苏、浙江、安徽、福建、江西、山东
+                    elif 23 <= latitude <= 38 and 115 <= longitude <= 123:
+                        region_label = "华东地区"
                     else:
                         region_label = "其他地区"
                     print(f"计算区域分类: {region_label}")
@@ -1366,8 +1369,6 @@ def process_single_image(image_data, user_id=None, save_to_album=False, exif_dat
     classification_tags = [primary_category, secondary_category]
     if shoot_season != "未获取到":
         classification_tags.append(shoot_season)
-    if region_label != "未获取到":
-        classification_tags.append(region_label)
     
     # 生成最终分类
     final_category = "-".join(classification_tags)
@@ -2082,7 +2083,6 @@ def create_post_api():
         data = request.get_json()
         content = data.get('content')
         image_url = data.get('image_url')
-        topics = data.get('topics')
         tags = data.get('tags')
         source_type = data.get('source_type')
         source_id = data.get('source_id')
@@ -2099,7 +2099,7 @@ def create_post_api():
                 if not result or result.get('user_id') != g.user_id:
                     return jsonify({'success': False, 'error': '无权限分享此识别记录'}), 403
         
-        post_id = create_post(g.user_id, content, image_url, topics, tags, source_type, source_id)
+        post_id = create_post(g.user_id, content, image_url, tags, source_type, source_id)
         
         return jsonify({'success': True, 'post_id': post_id})
     except Exception as e:
@@ -2996,7 +2996,6 @@ def delete_album_image_api(album_id, image_id):
                             'shoot_month': result.get('shoot_month'),
                             'shoot_season': result.get('shoot_season'),
                             'location_text': result.get('location_text'),
-                            'region_label': result.get('region_label'),
                             'camera_make': result.get('camera_make'),
                             'camera_model': result.get('camera_model'),
                             'image_width': result.get('image_width'),
@@ -3021,7 +3020,6 @@ def delete_album_image_api(album_id, image_id):
                 'shoot_month': recognition_info.get('shoot_month'),
                 'shoot_season': recognition_info.get('shoot_season'),
                 'location_text': recognition_info.get('location_text'),
-                'region_label': recognition_info.get('region_label'),
                 'camera_make': recognition_info.get('camera_make'),
                 'camera_model': recognition_info.get('camera_model'),
                 'image_width': recognition_info.get('image_width'),
@@ -3138,7 +3136,6 @@ def batch_delete_album_images_api(album_id):
                         'shoot_month': recognition_info.get('shoot_month'),
                         'shoot_season': recognition_info.get('shoot_season'),
                         'location_text': recognition_info.get('location_text'),
-                        'region_label': recognition_info.get('region_label'),
                         'camera_make': recognition_info.get('camera_make'),
                         'camera_model': recognition_info.get('camera_model'),
                         'image_width': recognition_info.get('image_width'),
