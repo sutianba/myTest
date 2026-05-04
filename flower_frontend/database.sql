@@ -112,9 +112,14 @@ CREATE TABLE IF NOT EXISTS comments (
     post_id INT NOT NULL,
     user_id INT NOT NULL,
     content TEXT NOT NULL,
+    parent_comment_id INT DEFAULT NULL,
+    reply_to_user_id INT DEFAULT NULL,
+    floor_number INT DEFAULT NULL,
     created_at INT NOT NULL,
     FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+    FOREIGN KEY (reply_to_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 点赞表
@@ -126,6 +131,17 @@ CREATE TABLE IF NOT EXISTS likes (
     FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE KEY unique_like (post_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 评论点赞表
+CREATE TABLE IF NOT EXISTS comment_likes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    comment_id INT NOT NULL,
+    user_id INT NOT NULL,
+    created_at INT NOT NULL,
+    FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_comment_like (comment_id, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 关注表

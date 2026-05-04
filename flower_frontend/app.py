@@ -2337,16 +2337,19 @@ def like_post_api(post_id):
         return jsonify({'success': False, 'error': '测试模式下不支持点赞功能'}), 503
     
     try:
+        print(f"[DEBUG API] like_post_api called - post_id={post_id}, user_id={g.user_id}")
         # 检查帖子是否存在
         post = get_post_by_id(post_id)
         if not post:
+            print(f"[DEBUG API] 帖子不存在: {post_id}")
             return jsonify({'success': False, 'error': '帖子不存在'}), 404
         
-        like_post(post_id, g.user_id)
+        result = like_post(post_id, g.user_id)
+        print(f"[DEBUG API] like_post result: {result}")
         
         return jsonify({'success': True})
     except Exception as e:
-        print(f"点赞时发生错误: {str(e)}")
+        print(f"[DEBUG API] 点赞时发生错误: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/posts/<int:post_id>/unlike', methods=['POST'])

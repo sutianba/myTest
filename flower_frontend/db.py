@@ -633,7 +633,7 @@ class SQLDatabaseManager:
                 floor_number = count + 1
             
             # 创建评论
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            now = int(time.time())
             cursor.execute('''
             INSERT INTO comments (post_id, user_id, content, parent_comment_id, reply_to_user_id, floor_number, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -739,7 +739,7 @@ class SQLDatabaseManager:
                 return False  # 已经点赞过
             
             # 创建点赞记录
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            now = int(time.time())
             cursor.execute('''
             INSERT INTO comment_likes (comment_id, user_id, created_at)
             VALUES (%s, %s, %s)
@@ -831,7 +831,8 @@ class SQLDatabaseManager:
                 return False  # 已经点赞过
             
             # 创建点赞记录
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            now = int(time.time())
+            print(f"[DEBUG] like_post - post_id={post_id}, user_id={user_id}, created_at={now}, type={type(now)}")
             cursor.execute('''
             INSERT INTO likes (post_id, user_id, created_at)
             VALUES (%s, %s, %s)
@@ -1645,10 +1646,8 @@ class SQLDatabaseManager:
                 params.append(description)
             
             if updates:
-                # 使用 datetime 格式适配 timestamp 类型的 updated_at
-                from datetime import datetime
                 updates.append("updated_at = %s")
-                params.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                params.append(int(time.time()))
                 params.append(album_id)
                 params.append(user_id)
                 
@@ -2179,7 +2178,7 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            now = int(time.time())
             cursor.execute(
                 "INSERT INTO announcements (title, content, announcement_type, is_active, admin_id, admin_username, created_by, created_at, updated_at) VALUES (%s, %s, %s, 1, %s, %s, %s, %s, %s)",
                 (title, content, announcement_type, admin_id, admin_username, admin_id, now, now)
@@ -2248,7 +2247,7 @@ class SQLDatabaseManager:
         cursor = conn.cursor()
         
         try:
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            now = int(time.time())
             cursor.execute(
                 "UPDATE announcements SET title = %s, content = %s, announcement_type = %s, updated_at = %s WHERE id = %s AND admin_id = %s",
                 (title, content, announcement_type, now, announcement_id, admin_id)
